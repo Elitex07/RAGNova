@@ -36,6 +36,14 @@ Every chapter below serves one of these five questions.
 
 ## Chapter list
 
+### Phase 0 — Prerequisites (Day 0 / Day 1 evening)
+
+| Ch | Title | Day | Deliverable |
+|----|-------|-----|-------------|
+| 0 | Getting Started From Absolute Zero | 0 | Working computer: VS Code + Python 3.11 + terminal literacy + **Python primer** + maths refresher |
+
+> **Chapter 0 assumes nothing** — not VS Code, not a terminal, not what a neural network is, not `Σ` notation, not a single line of Python. §A.6 is a complete primer in the exact subset of Python this project uses, ending with three exercises that are real functions from Chapters 6, 7 and 10. Skip it only if you already program in Python and know what a virtual environment is. It is *not* the same as Chapter 5: Chapter 0 asks "can my computer run Python at all?", Chapter 5 asks "can it run this project's AI models?"
+
 ### Phase A — Ideation & Planning (Days 1–4)
 
 | Ch | Title | Day | Deliverable |
@@ -117,6 +125,7 @@ With 2 members: merge Track C into A and B (each owns half the UI).
 
 ## Progress tracker
 
+- [ ] Ch 0 — Getting Started From Absolute Zero *(each member ticks their own)*
 - [ ] Ch 1 — Objective & Problem Identification
 - [ ] Ch 2 — Synopsis & PPT
 - [ ] Ch 3 — Literature Review & Methodology

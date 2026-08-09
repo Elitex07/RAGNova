@@ -1,35 +1,79 @@
 # RAGNova Glossary
 
-Every technical term used in this project, explained simply. Alphabetical. When any chapter uses a word you don't know — look here. If it's missing, add it (that's part of documentation duty).
+Every technical term used in this project, explained plainly. Alphabetical. When a chapter uses a word you don't know, look here. **If it's missing, add it** — growing this file is part of the team's documentation duty.
+
+Section references like *(Ch1 §1.5)* point to where the term is explained in depth.
+
+> **Looking for basic computing terms** — terminal, PATH, pip, virtual environment, Git commit, JSON, API, RAM, GPU, or maths notation like `Σ` and `O(log N)`? Those live in [Chapter 0](chapters/ch00-getting-started-from-zero.md), Parts B, C and D. This glossary covers the project's *domain* vocabulary.
 
 | Term | Plain-English meaning |
 |---|---|
-| **ASR** | Automatic Speech Recognition — software that converts spoken audio into text. Whisper is an ASR model. |
-| **Chunk / Chunking** | Splitting a long document into small pieces (e.g. ~300 words each) before embedding. Needed because (a) embeddings work better on focused text, (b) the LLM prompt has limited space. |
-| **ChromaDB** | An embedded vector database — a Python library that stores vectors and finds nearest neighbors. "Embedded" = runs inside your program, no separate server. |
-| **CLIP** | Contrastive Language-Image Pretraining. A model (OpenAI, 2021) that puts images and text into the *same* vector space, enabling text→image search. |
-| **Context window** | The maximum amount of text an LLM can read at once (its "working memory"). Local models: typically 4k–128k tokens. Limits how many retrieved chunks we can paste into a prompt. |
-| **Cosine similarity** | A number from -1 to 1 measuring how similar two vectors' directions are. 1 = same meaning, 0 = unrelated. The math behind "find nearest vectors." |
-| **Cross-modal search** | Searching one modality with another — e.g. finding images using a text query. |
-| **Embedding** | A list of numbers (vector) representing the *meaning* of text/image/audio, produced by a neural network. Similar meaning → nearby vectors. |
-| **Faster-whisper** | An optimized reimplementation of Whisper that runs faster on CPU. |
-| **Hallucination** | When an LLM confidently generates false information. RAG's main enemy. |
-| **Indexing** | The offline preparation step: parse files → chunk → embed → store in the vector DB. Done once per file; makes later queries fast. |
-| **Inference** | Running a trained model to get outputs (as opposed to training it). |
-| **LLM** | Large Language Model — a neural network trained to predict the next word, capable of answering/summarizing/reasoning. |
+| **ANN (Approximate Nearest Neighbour)** | A family of algorithms that find *almost* the closest vectors, trading a few percent of accuracy for enormous speed. HNSW and IVF are examples. *(Ch1 §1.6.2)* |
+| **ASR** | Automatic Speech Recognition — converting spoken audio into text. Whisper is an ASR model. |
+| **Attention (self-attention)** | The transformer mechanism where every token computes relevance scores against every other token and pulls in a weighted mixture of their information. How a model links a question to a fact stated earlier. Cost grows roughly with the square of sequence length. *(Ch1 §1.1.3)* |
+| **Base model vs Instruct model** | A *base* model only continues text (it was trained purely on next-token prediction). An *instruct* model has been further tuned to follow instructions and answer questions. **Always download the instruct variant.** *(Ch1 §1.1.4)* |
+| **BM25** | A strong classical keyword-ranking algorithm (an improved TF-IDF). Good at exact rare strings like invoice numbers, bad at synonyms. Used in *hybrid search*. *(Ch1 §1.4)* |
+| **BPE (Byte-Pair Encoding)** | The tokenizer algorithm: start from characters, repeatedly merge the most frequent adjacent pair, ending with a fixed vocabulary of sub-word pieces. *(Ch1 §1.1.2)* |
+| **CLAP** | Contrastive Language–Audio Pretraining — the audio analogue of CLIP. Good at *sounds* ("dog barking"), weaker at the semantics of speech. We considered and rejected it in favour of transcription. *(Ch1 §1.7.5)* |
+| **CLIP** | Contrastive Language-Image Pretraining (OpenAI, 2021). Trains an image encoder and a text encoder together on 400M caption–image pairs so both land in **one shared vector space** — which is what makes text→image search possible. *(Ch1 §1.7.2)* |
+| **Chunk / Chunking** | Splitting a long document into small pieces (~300 words) before embedding. Required because embedding models truncate long input, because one vector per chunk should represent one topic, and because prompt space is limited. *(Ch1 §1.5.4)* |
+| **ChromaDB** | Our vector database. "Embedded" means it runs as a library inside our Python program — no separate server to install or administer. Uses HNSW internally. |
+| **Collection** | A named namespace inside ChromaDB. We use two: `text_index` (384-d MiniLM vectors) and `image_index` (512-d CLIP vectors). Vectors from different models must never share a collection. *(Ch1 §1.7.4)* |
+| **Context window** | The maximum number of tokens an LLM can read at once — its working memory. Our 3B model: realistically ~8k tokens. Caps how many retrieved chunks fit in a prompt. |
+| **Contrastive learning** | A training method that pulls "similar" pairs together in vector space and pushes dissimilar pairs apart. The training objective behind both sentence-transformers and CLIP. *(Ch1 §1.5.2, §1.7.2)* |
+| **Cosine similarity** | Measures the angle between two vectors: 1 = same direction/meaning, 0 = unrelated, −1 = opposite. Formula: dot product divided by the product of the magnitudes. Identical in ranking to Euclidean distance once vectors are normalized. *(Ch1 §1.5.3)* |
+| **Cross-modal search** | Searching one modality using another — text query finding images, image query finding documents. The hardest requirement in our problem statement. |
+| **Distributed representation** | Meaning spread across all dimensions of a vector rather than stored in individual interpretable dimensions. Dimension 57 is not "animal-ness." *(Ch1 §1.5.1)* |
+| **Embedding** | A fixed-length list of numbers representing the meaning of text or an image, produced by a neural network, such that similar meanings give vectors pointing in similar directions. |
+| **EXIF** | Metadata embedded in image files — camera, dimensions, timestamp, sometimes GPS. Shown when a user inspects an image citation. |
+| **Faithfulness / groundedness** | Evaluation metric: is every claim in the generated answer actually supported by the cited source chunk? Our primary answer-quality measure. *(Ch1 §1.10)* |
+| **faster-whisper** | A CTranslate2 reimplementation of Whisper, roughly 4× faster on CPU with int8 quantization. What we actually run. |
+| **Fine-tuning** | Continuing training on your own data so knowledge enters the model's weights. Rejected for this project: needs GPUs, must be redone per file, and produces no citations. *(Ch1 §1.3)* |
+| **GGUF** | The file format Ollama/llama.cpp use to store quantized model weights for local inference. |
+| **Gold set** | A hand-built list of test questions paired with the chunk that *should* be retrieved. Built before the system, so evaluation is honest. *(Ch1 §1.10, Ch1 §3.3)* |
+| **Hallucination** | Fluent, confident, false model output. Structural, not a bug — the model must always emit some token, its memory is lossy, and it never saw your files. RAG's main enemy. *(Ch1 §1.2)* |
+| **HNSW** | Hierarchical Navigable Small World — the graph algorithm ChromaDB uses for fast nearest-neighbour search. Long-range links in sparse upper layers get you near the target quickly; dense lower layers refine locally. Roughly O(log N). *(Ch1 §1.6.2)* |
+| **Hybrid search** | Combining keyword scores (BM25) with embedding similarity, typically fused by rank. Fixes embeddings' weakness on rare exact strings. Optional enhancement in Ch 10. *(Ch1 §1.4)* |
+| **Indexing** | The offline preparation phase: parse → chunk → embed → store with metadata. Done once per file; makes queries fast. Contrast with *query time*. *(Ch1 §1.3.1)* |
+| **Inference** | Running a trained model to produce output (as opposed to training it). Everything we do is inference. |
+| **IVF (Inverted File Index)** | Alternative ANN method: cluster vectors with k-means, search only the nearest clusters. Used by FAISS. We use HNSW instead. |
+| **KV cache** | Memory storing attention keys/values for already-processed tokens so they need not be recomputed each generation step. Grows with context length; a real component of the RAM budget. *(Ch1 §1.9.2)* |
+| **Lazy loading** | Loading a heavy model into RAM only when first needed, and releasing it after. Our main mitigation for the 8 GB RAM budget. |
+| **LLM** | Large Language Model — a neural network trained to predict the next token, which at scale produces question-answering, summarisation, and reasoning ability. |
+| **Log-Mel spectrogram** | An image-like representation of audio (frequency energy over time) that Whisper's encoder reads. *(Ch1 §1.7.6)* |
+| **Lost in the middle** | Documented effect where LLMs attend poorly to information buried in the middle of a long prompt. An argument for retrieving few, good chunks rather than stuffing everything. *(Ch1 §1.3)* |
+| **Mean pooling** | Averaging a transformer's per-token output vectors into a single sentence vector. How sentence-transformers produce one embedding per chunk. *(Ch1 §1.5.2)* |
 | **Modality** | A type of data: text, image, audio, video. |
-| **Nearest-neighbor search** | Given a query vector, finding the stored vectors closest to it. The core operation of a vector database. |
-| **OCR** | Optical Character Recognition — extracting typed/printed text from an image (e.g. reading text in a screenshot). Tesseract is an OCR engine. |
-| **Ollama** | A tool that makes downloading and running LLMs locally one command (`ollama run llama3.2`). Exposes a local API our code calls. |
-| **Parameters (of a model)** | The learned numbers inside a neural network. "3B model" = 3 billion parameters. More = smarter but heavier. |
-| **Prompt** | The full text sent to an LLM: instructions + context + user question. |
-| **Quantization** | Compressing a model by storing its numbers with fewer bits (e.g. 4-bit instead of 16-bit). Slight quality loss, huge memory savings — the reason 3B–8B models fit on laptops. |
-| **RAG** | Retrieval-Augmented Generation: retrieve relevant chunks from user's files → paste into prompt → LLM generates grounded, cited answer. |
-| **Semantic search** | Search by meaning (via embeddings) instead of exact keywords. |
-| **sentence-transformers** | A Python library of ready-made text embedding models. We use `all-MiniLM-L6-v2` (384-dim, 80 MB). |
-| **Streamlit** | Python library for building web UIs without writing HTML/JS. Our chat interface. |
-| **Token** | The unit LLMs read text in — roughly ¾ of a word. "1000 tokens" ≈ 750 words. |
-| **Top-K** | Retrieving the K most similar chunks (e.g. top-5) for a query. |
-| **Vector** | A list of numbers, e.g. `[0.12, -0.83, ...]`. In this project, always an embedding. |
-| **Vector database** | A database specialized in storing vectors and answering nearest-neighbor queries fast. |
-| **Whisper** | OpenAI's open-source speech-to-text model. Downloadable, runs offline. |
+| **Modality gap** | Empirical fact that CLIP's image vectors and text vectors occupy separate cones, so text–image similarity scores are systematically lower than text–text scores. Ignoring it makes images always lose in a merged ranking. *(Ch1 §1.7.3)* |
+| **MRR (Mean Reciprocal Rank)** | Retrieval metric: average of 1/(rank of the first correct result). Rewards ranking the right answer first. Target ≥ 0.65. *(Ch1 §1.10)* |
+| **Nearest-neighbour search** | Given a query vector, find the stored vectors closest to it. The core operation of a vector database. |
+| **Normalization (of vectors)** | Scaling a vector to length 1. Makes cosine similarity equal to a plain dot product, and makes cosine and Euclidean rankings identical. |
+| **OCR** | Optical Character Recognition — extracting printed text from an image (e.g. reading the text inside a screenshot). Tesseract is our engine. Complements CLIP: CLIP knows *"this looks like an email"*, OCR reads the actual invoice number. |
+| **Ollama** | Tool that makes running an LLM locally a single command (`ollama run llama3.2:3b`). Serves a local HTTP API our code calls. |
+| **OpenCLIP** | Open-source reimplementation of CLIP with downloadable weights. We use ViT-B/32 (512-d). |
+| **Parameters** | The learned numbers inside a neural network. "3B" = 3 billion parameters. More means more capable but heavier. *(Ch1 §1.1.5)* |
+| **Parametric memory** | Knowledge stored inside a model's weights (as opposed to *retrieved* at query time). Lossy, un-citable, and frozen at training time — the reason we use RAG. *(Ch1 §1.2)* |
+| **Prompt** | The complete text sent to the LLM: system instructions + retrieved context + user question. |
+| **Provenance metadata** | The `{source, page, timestamp, modality}` record attached to every chunk at ingestion time. **The mechanism that makes citations possible.** *(Ch1 §1.8)* |
+| **Quantization** | Storing model weights with fewer bits (e.g. 4-bit instead of 16-bit). Cuts a 3B model from ~6 GB to ~2 GB with a small accuracy cost. The single reason offline LLMs fit on laptops. *(Ch1 §1.1.5)* |
+| **Query time** | The online phase that runs per question: embed query → retrieve → prompt → generate. Target under 15 seconds end-to-end. |
+| **RAG** | Retrieval-Augmented Generation: retrieve relevant chunks from the user's own files, paste them into the prompt, and have the LLM answer only from them — producing grounded, citable answers. |
+| **Recall@K** | Retrieval metric: fraction of test questions where the correct chunk appears in the top K results. Target Recall@5 ≥ 0.80. *(Ch1 §1.10)* |
+| **RLHF / DPO** | Training stages that align a model with human preferences by learning from comparisons of which response is better. Part of what makes an instruct model helpful. |
+| **Semantic search** | Search by meaning, via embeddings, rather than by exact keyword match. |
+| **sentence-transformers** | Python library of ready-made sentence embedding models. We use `all-MiniLM-L6-v2`: 384 dimensions, ~90 MB, max **256 tokens** input. |
+| **SFT (Supervised Fine-Tuning)** | Instruction-tuning stage: training on curated (instruction, good response) pairs, turning a base model into an assistant. |
+| **Softmax** | Converts a list of raw scores into probabilities summing to 1. Used at an LLM's output layer over the vocabulary, and inside CLIP's contrastive loss. |
+| **Streamlit** | Python library for building web UIs without HTML/JS. Our chat interface. |
+| **Temperature** | Sampling parameter controlling randomness. 0 = always pick the most likely token (deterministic, factual); higher = more varied and riskier. **We use low temperature** for faithful, citation-grounded answers. Note: CLIP also has an internal learned temperature — different thing, same word. |
+| **Tesseract** | Open-source OCR engine, used via `pytesseract`. |
+| **Token** | The unit LLMs read — a sub-word fragment. ~1 token ≈ 0.75 English words. Context windows and embedding limits are measured in tokens. |
+| **Top-K** | Retrieving the K most similar chunks for a query (we start with K = 5). |
+| **Transformer** | The neural architecture behind LLMs, embedding models, CLIP, and Whisper. Stacked blocks of self-attention plus feed-forward layers. |
+| **Vector** | A list of numbers. In this project, always an embedding. |
+| **Vector database** | A database specialised in storing vectors, answering nearest-neighbour queries fast, and filtering by metadata. |
+| **ViT (Vision Transformer)** | Image encoder that splits a picture into patches and processes them like tokens. CLIP's image side. |
+| **WER (Word Error Rate)** | ASR accuracy metric: the proportion of words inserted, deleted, or substituted versus a correct transcript. Our target for Whisper: under 15% on test clips. |
+| **Whisper** | OpenAI's open-source speech-to-text model. Encoder–decoder transformer over 30-second log-Mel windows; emits text with segment timestamps. Runs fully offline. |
+| **Word2Vec / GloVe** | Early (2013–14) word embedding methods built on the distributional hypothesis. Famous for `king − man + woman ≈ queen`. Superseded by contextual embeddings, but historically important for the literature review. |
+| **Zero-shot classification** | Classifying without task-specific training — with CLIP, by embedding candidate label strings and picking whichever is closest to the image. |

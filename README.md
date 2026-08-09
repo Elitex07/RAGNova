@@ -40,6 +40,10 @@ RAGNova/
 
 ## How to use this repo as a learner
 
+**Never installed VS Code? Never opened a terminal?** Start at [Chapter 0 — Getting Started From Absolute Zero](docs/chapters/ch00-getting-started-from-zero.md). It assumes nothing, takes ~90 minutes, and gets your machine ready plus decodes the maths notation used later.
+
+**Tip:** these docs are Markdown. Open one in VS Code and press `Ctrl + Shift + V` to read it properly formatted instead of as raw text.
+
 1. Start with [docs/ROADMAP.md](docs/ROADMAP.md) — the full plan.
 2. Read chapters in order in [docs/chapters/](docs/chapters/). Each chapter has:
    - **Learn** — the concept, explained from zero.
