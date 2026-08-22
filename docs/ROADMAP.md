@@ -126,8 +126,8 @@ With 2 members: merge Track C into A and B (each owns half the UI).
 ## Progress tracker
 
 - [ ] Ch 0 — Getting Started From Absolute Zero *(each member ticks their own)*
-- [ ] Ch 1 — Objective & Problem Identification
-- [ ] Ch 2 — Synopsis & PPT
+- [x] Ch 1 — Objective & Problem Identification
+- [ ] Ch 2 — Synopsis & PPT (docs written; team deliverables pending)
 - [ ] Ch 3 — Literature Review & Methodology
 - [ ] Ch 4 — Timeline & Team Split
 - [ ] Ch 5 — Environment Setup & Offline LLM
