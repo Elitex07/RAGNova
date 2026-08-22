@@ -1,10 +1,24 @@
 # Chapter 3 — Literature Review & Methodology (Day 3)
 
-> **Deliverables today:** a **literature review** (15–20 sources, thematically organised, ending in a defended gap statement) and a **methodology section** (design rationale for every major decision, plus the evaluation protocol). Both feed directly into Day 4's presentation and the Day 14 report.
+> **Deliverables today:** a **literature review** (15–20 sources, thematically organised, ending in a defended gap statement) and a **methodology section** (design rationale for every major decision, plus the evaluation protocol). Both feed Day 4's presentation and the Day 14 report.
 >
-> **Prerequisites:** [Chapter 1](ch01-objective-and-problem-identification.md) (you need the objectives and the stack) and [Chapter 2](ch02-synopsis-and-presentation.md) (you need the academic writing mechanics — this chapter assumes them and does not repeat them).
+> **Prerequisites:** [Chapter 1](ch01-objective-and-problem-identification.md) for objectives and stack; [Chapter 2](ch02-synopsis-and-presentation.md) for academic writing mechanics — this chapter assumes them and does not repeat them.
 >
-> **Why this day is not optional.** A literature review is not a ritual to satisfy an examiner. It is the day you find out whether your design decisions are defensible. Three of the choices in Chapter 1's stack table are non-obvious, and today is when you learn *why* they are right — or discover they are wrong while it still costs nothing to change them.
+> **Companion files.** This chapter is the *method*. Two companions hold the material:
+> - **[Chapter 3A — Annotated Bibliography](ch03a-annotated-bibliography.md)** — ~60 sources across eleven themes, with twelve deep dives. Your raw material.
+> - **[Chapter 3B — Reading a Paper & Citation Mechanics](ch03b-reading-and-citations.md)** — a fully worked three-pass reading of CLIP, plus every IEEE entry type and the reference-manager workflow.
+
+---
+
+## Why this day is not optional
+
+A literature review is not a ritual to satisfy an examiner. It is the day you discover whether your design decisions are defensible.
+
+Consider what happens without it. You choose `all-MiniLM-L6-v2` because a tutorial used it. In the viva someone asks "why that model and not BGE or E5?" and you have nothing. With a literature review you answer: *"MTEB [MTEB] benchmarks embedding models across 56 tasks; MiniLM-L6 sits in the upper band for retrieval at 22M parameters and 384 dimensions, whereas BGE-large is 335M parameters — roughly fifteen times the memory for a few points of benchmark score we cannot exploit under our RAM budget."* That is the same decision, transformed from arbitrary into engineered.
+
+Three of Chapter 1's stack choices are genuinely non-obvious — two vector collections rather than one, transcription rather than native audio embeddings, and rank-based rather than score-based merging. Today is when you learn *why* they are right, or discover they are wrong while changing them still costs nothing.
+
+There is a second, less comfortable reason. **Today is when you find out whether someone has already built your project.** Finding that out on Day 3 is survivable and even useful; finding out in the viva is not.
 
 ---
 
@@ -12,14 +26,14 @@
 
 | Part | What it does | Time |
 |---|---|---|
-| **Part 1 — LEARN (method)** | What a literature review is for, where to find papers, how to search, how to judge a source, how to read a paper in three passes, how to synthesise rather than summarise, how to find and phrase a gap, and how to cite without plagiarising. | ~75 min |
-| **Part 2 — THE SURVEY** | The actual annotated literature for RAGNova: seven themes, ~30 sources, each with *what problem it solved*, *the key idea*, and *what we take from it*. This is your raw material. | ~90 min |
-| **Part 3 — LEARN (methodology)** | What "methodology" means in an engineering project, how to write design rationale, Architecture Decision Records, and how to design an evaluation that can actually fail. | ~45 min |
-| **Part 4 — DECIDE** | Organising structure, source count, which gap to claim, which decisions to formalise. | ~20 min |
-| **Part 5 — BUILD** | Time-boxed day with templates. | ~4 hours |
-| **Part 6 — CHECK** | Rubric, twenty-five questions, failure modes. | ~40 min |
+| **Part 1 — LEARN: the method** | What a review is for; where and how to search; how to judge a source; how to read a paper; how to manage references; how to synthesise rather than summarise; how to find and phrase a gap; how to cite without plagiarising. | ~120 min |
+| **Part 2 — The survey, compressed** | Theme summary, the comparison table, and the assembled gap statement. Full material in [Ch 3A](ch03a-annotated-bibliography.md). | ~30 min |
+| **Part 3 — LEARN: methodology** | Design science; design rationale and ADRs; data methodology; evaluation design with formulas and worked examples; threats to validity; reproducibility. | ~90 min |
+| **Part 4 — DECIDE** | Structure, source count, gap claim, which decisions to formalise. | ~20 min |
+| **Part 5 — BUILD** | Time-boxed day with role assignments. | ~5 hours |
+| **Part 6 — CHECK** | Rubric, forty questions with answers, failure modes. | ~50 min |
 
-**Learning outcomes.** You will be able to: construct a search strategy and log it; snowball a reference list forwards and backwards; judge whether a source is worth citing; read a paper in three passes at increasing depth; build a synthesis matrix; write thematically organised prose that argues rather than lists; phrase a gap statement you can defend; write design rationale that names the alternatives you rejected and why; and design an evaluation protocol capable of showing that you failed.
+**Learning outcomes.** You will be able to construct and log a search strategy; snowball a reference list in both directions; judge a source in ninety seconds; read a paper in three passes at increasing depth; extract the right things from an ML results table; manage references so citations never break; write thematically organised prose that argues; phrase a gap you can defend under attack; write design rationale naming rejected alternatives; define retrieval and generation metrics from their formulas; design a human study with blinding and agreement reporting; state what your evidence does *not* prove; and make your results reproducible.
 
 ---
 
@@ -27,444 +41,570 @@
 
 ## 1.1 What a literature review is actually for
 
-Students are told to "do a literature review" without being told what it *does*. It does four distinct jobs, and knowing which sentence is doing which job is how you write one that reads as an argument instead of a list.
+Students are told to "do a literature review" without being told what it *does*. It does four distinct jobs. Knowing which sentence is doing which job is how you write one that reads as an argument rather than a list.
 
 | Job | What it proves | What it looks like in your text |
 |---|---|---|
-| **1. Establish the foundation** | You know the field's core ideas and did not reinvent them badly | "Dense retrieval replaced lexical matching following [2], [3]." |
-| **2. Justify your choices** | Your design decisions rest on evidence, not on the first tutorial you found | "CLIP [5] is selected because it is trained contrastively across modalities, unlike unimodal encoders." |
-| **3. Identify the gap** | Your project is not already done by someone else | "However, existing multimodal RAG systems assume cloud-hosted inference..." |
-| **4. Set the evaluation bar** | You know how systems like yours are normally measured | "Retrieval is conventionally evaluated by Recall@k and MRR [21]." |
+| **1. Establish the foundation** | You know the field's core ideas and did not reinvent them badly | "Dense retrieval displaced lexical matching following [SBERT], [DPR]." |
+| **2. Justify your choices** | Your design rests on evidence, not on the first tutorial you found | "CLIP [CLIP] is selected because its contrastive objective produces a shared space, unlike independently trained unimodal encoders." |
+| **3. Identify the gap** | Your project is not already done | "However, existing multimodal RAG systems assume cloud-hosted inference..." |
+| **4. Set the evaluation bar** | You know how systems like yours are normally measured | "Retrieval is conventionally evaluated by Recall@k and nDCG [BEIR]." |
 
-**Job 2 is the one students skip and examiners care about most.** Every non-obvious choice in Chapter 1's stack table should be traceable to a citation. When a panel asks "why CLIP and not BLIP?", the answer "because [5] and [12] differ in objective, and ours needs a symmetric retrieval space" is worth ten times "because a tutorial used it."
+### 1.1.1 Job 2 is the one that earns marks
 
-**Job 4 is the one that saves you on Day 14.** If your evaluation metrics come from the literature, nobody can argue you invented favourable ones.
+**Every non-obvious choice in your stack table should be traceable to a citation.** When a panel asks "why CLIP and not BLIP?", the answer *"because [CLIP] and [BLIP] optimise different objectives, and symmetric retrieval is what we need — BLIP's strength is captioning, which we do not use"* is worth ten times *"because a tutorial used it."*
 
-## 1.2 What a literature review is *not*
+Build this table as you read. It is the bridge from the review into the methodology section, and it converts reading time into two deliverables at once.
 
-Three anti-patterns, in ascending order of how common they are.
+| Decision | Alternatives | Deciding evidence | Source |
+|---|---|---|---|
+| RAG over fine-tuning | fine-tune; long-context | Fine-tuning injects knowledge poorly and can *increase* hallucination | [FT-vs-RAG], [FT-Halluc] |
+| MiniLM-L6 embeddings | BGE, E5, GTE | Benchmark position vs parameter count under a RAM budget | [MTEB] |
+| CLIP for images | BLIP, SigLIP | Symmetric retrieval objective; open weights | [CLIP], [OpenCLIP] |
+| Rank-based merge | score-based | Modality gap is systematic, not noise | [ModGap] |
+| Whisper transcription | CLAP embeddings | Speech content is linguistic; timestamps required for citation | [Whisper], [CLAP] |
 
-**❌ An annotated bibliography.** A list of paragraphs, one per paper, each summarising that paper. No connections, no argument. This is the single most common student literature review and it reads as exactly what it is — a reading list with prose formatting.
+### 1.1.2 Job 4 is the one that saves you on Day 14
 
-**❌ A summary chain.** *"Smith et al. did X. Then Jones et al. did Y. Then Patel et al. did Z."* The papers are in order but nothing is compared, contrasted, or judged. The reader learns what exists but not what it means.
+If your metrics come from the literature, nobody can argue you invented favourable ones. "We report Recall@5 and MRR, following standard retrieval evaluation practice [BEIR]" is unattackable. "We measured how good it felt" is not.
 
-**❌ A citation shield.** Sentences padded with references to look rigorous, where the citation does not actually support the claim. Examiners test this by picking one and asking what it says. Do not cite anything you have not at minimum read the abstract and conclusion of.
+### 1.1.3 How a review is actually graded
 
-**✅ What it should be:** an argument, organised by *idea* rather than by *paper*, in which multiple sources appear in a single sentence because they agree, disagree, or build on one another — ending at a gap that your project fills.
+Examiners rarely have a formal rubric, but they consistently reward four things, in this order of weight:
 
-The structural test: **if you could reorder your paragraphs without damaging the meaning, you have written a list, not a review.**
+1. **Organisation by idea rather than by paper.** Detectable in ten seconds from paragraph shapes.
+2. **A gap that follows from what precedes it.** The review must *earn* the gap, not assert it.
+3. **Evidence of reading, not just citing.** Tested by asking what one paper says.
+4. **Coverage.** Whether the obvious central works are present. Missing CLIP in a cross-modal project is fatal; missing an obscure 2024 paper is not.
+
+Note that *number of references* is nowhere on that list. Twenty sources you can each summarise in one sentence beats forty you cannot.
+
+## 1.2 Five anti-patterns
+
+**❌ 1. The annotated bibliography.** One paragraph per paper, each summarising that paper, no connections. The most common student literature review, and it reads as exactly what it is.
+
+*Diagnostic:* every paragraph begins with an author name.
+
+**❌ 2. The summary chain.** *"Smith did X. Then Jones did Y. Then Patel did Z."* Chronological but uncompared. The reader learns what exists and nothing about what it means.
+
+*Diagnostic:* you could reorder paragraphs without damaging meaning.
+
+**❌ 3. The citation shield.** Sentences padded with references to look rigorous, where the citation does not support the claim. Examiners test this by picking one and asking what it says.
+
+*Diagnostic:* a citation you cannot summarise aloud.
+
+**❌ 4. The funnel that never lands.** Pages of general background — "AI is transforming industries" — that never reach the specific problem.
+
+*Diagnostic:* your first citation specific to your actual problem appears on page two.
+
+**❌ 5. The uncritical review.** Every paper described approvingly; no limitations, no disagreements, no trade-offs named.
+
+*Diagnostic:* the words *however*, *whereas*, *by contrast* and *limitation* do not appear.
+
+**✅ What it should be:** an argument organised by idea, in which multiple sources appear in a single sentence because they agree, disagree, or build on one another, ending at a gap your project fills.
 
 ## 1.3 Types of review, and which one you are writing
 
 | Type | What it is | Effort | Use when |
 |---|---|---|---|
-| **Narrative / traditional** | Thematically organised discussion of relevant work, selected by judgement | Days | ✅ **This is yours** — standard for a B.Tech project |
-| **Systematic** | Exhaustive search with pre-registered inclusion/exclusion criteria, PRISMA flow diagram, reproducible | Weeks–months | Formal research; overkill here |
-| **Scoping** | Maps the breadth of a field without depth | Weeks | Early-stage research direction |
-| **Meta-analysis** | Statistical pooling of results across studies | Months | Empirical sciences; not applicable |
+| **Narrative / traditional** | Thematically organised discussion, sources selected by judgement | Days | ✅ **Yours** |
+| **Systematic** | Exhaustive search, pre-registered inclusion criteria, PRISMA flow diagram, reproducible | Weeks–months | Formal research |
+| **Scoping** | Maps breadth without depth | Weeks | Early-stage direction-finding |
+| **Meta-analysis** | Statistical pooling across studies | Months | Empirical sciences |
 
-You are writing a **narrative review**. But borrow one habit from systematic reviews: **keep a search log** (§1.5.4). It costs nothing, and when a panel asks "how did you find these papers?", the answer "we searched these terms in these databases, and here is the log" is dramatically stronger than "we googled."
+You are writing a **narrative review**. Borrow one habit from systematic reviews: **keep a search log** (§1.5.5). When a panel asks "how did you find these papers?", "we searched these terms in these databases and here is the log" is dramatically stronger than "we googled."
 
-## 1.4 Where to find papers — and what each source is good for
+## 1.4 Where to find papers — and what each source is uniquely good at
 
-Not all sources are equal. Each has a specific strength; using the wrong one wastes hours.
+Using the wrong source wastes hours. Each has a specific strength.
 
-| Source | URL | What it is best at | Watch out for |
+| Source | Best at | How to actually use it | Watch out for |
 |---|---|---|---|
-| **Google Scholar** | scholar.google.com | Broad first sweep; **forward citation search** ("Cited by") | Indexes low-quality venues alongside good ones; no quality filter |
-| **arXiv** | arxiv.org | Newest ML work, months before publication; free full text | **Not peer-reviewed** — see §1.7.3 |
-| **Semantic Scholar** | semanticscholar.org | Citation graph, influential-citation counts, AI-generated TLDRs | TLDRs are convenient but not a substitute for reading |
-| **Papers with Code** | paperswithcode.com | Finds papers *with working implementations*; leaderboards | Benchmark-centric; misses systems work |
-| **Connected Papers** | connectedpapers.com | Visual graph of a paper's neighbourhood — excellent for discovering what you missed | Free tier limits graphs per month |
-| **ACL Anthology** | aclanthology.org | Every NLP paper (ACL, EMNLP, NAACL, TACL), free, authoritative | NLP only |
-| **IEEE Xplore / ACM DL** | ieeexplore.ieee.org · dl.acm.org | Peer-reviewed venues; the citation format your report uses | Often paywalled — use your institution's access |
-| **Official documentation** | *(project sites)* | The ground truth for tools you actually use | Cite the docs, never a tutorial blog |
+| **Google Scholar** | Broad first sweep; **forward citation search** | Search, then click **"Cited by"** on anything central. Sort by citations. Use the year filter to separate foundations from current practice. | Indexes predatory venues alongside good ones with no visual distinction |
+| **arXiv** | Newest ML work, months before publication; free full text | Browse `cs.CL`, `cs.IR`, `cs.CV`. Use `arxiv-sanity` or the listing by date. | **Not peer-reviewed** (§1.7.3) |
+| **Semantic Scholar** | Citation graph; *influential* citation counts; TLDRs | Open a paper → "Citations" tab → filter by "Highly Influential". This surfaces the papers that genuinely built on it, not the ones citing it in passing. | TLDRs are convenient, not a substitute for reading |
+| **Papers with Code** | Papers *with working implementations*; leaderboards | Search a task ("Image-Text Retrieval") to see what actually works | Benchmark-centric; misses systems work |
+| **Connected Papers** | Visual graph of a paper's neighbourhood | Seed with your most central paper; the graph shows prior and derivative work you missed | Free tier limits graphs per month |
+| **MTEB / BEIR leaderboards** | **Choosing an embedding model with evidence** | Filter by model size and retrieval score; this *is* your justification | Leaderboard gaming; check parameter counts |
+| **ACL Anthology** | Every NLP paper, free, authoritative | Search by venue and year; BibTeX provided per paper | NLP only |
+| **IEEE Xplore / ACM DL** | Peer-reviewed venues, correct citation metadata | Use your institution's proxy | Paywalled |
+| **Official documentation** | Ground truth for tools you use | Cite docs with an access date | Never cite a tutorial blog as evidence |
 
-**The practical workflow that works:** start on Google Scholar to find the two or three obviously-central papers, read those, then use **Connected Papers** or Semantic Scholar's citation graph on one of them to discover the neighbourhood you did not know existed. That second step is where the non-obvious references come from, and it takes fifteen minutes.
+### 1.4.1 The workflow that actually works
 
-> **Getting paywalled papers legitimately:** try (1) your institution's library proxy, (2) arXiv — most ML papers have a free preprint, (3) the author's personal or lab website, which almost always hosts a PDF, (4) emailing the author, who will nearly always send it and is often pleased to be asked.
+1. **Google Scholar** — find the two or three obviously central papers (they will have thousands of citations).
+2. **Read those to Pass 1** (§1.8).
+3. **Connected Papers or Semantic Scholar** on one of them — this is where the non-obvious references come from. Fifteen minutes, and it is the step that separates a review that looks researched from one that looks googled.
+4. **Forward-citation search** on the closest prior work (§1.6.2) — this is where you find out whether your project already exists.
+5. **MTEB / Papers with Code** for the specific engineering choices you must justify.
+
+### 1.4.2 Getting paywalled papers legitimately
+
+In order of speed: (1) your institution's library proxy; (2) **arXiv** — most ML papers have a free preprint; (3) the author's personal or lab website, which almost always hosts a PDF; (4) email the author, who will nearly always send it and is often pleased to be asked. Do not use pirate mirrors — it is both a legal problem and, in a submitted report, a citation you cannot properly source.
 
 ## 1.5 How to search properly
 
-### 1.5.1 Build the query from concepts, not sentences
+### 1.5.1 Decompose into concepts, never search a sentence
 
-Do not type your project title into a search box. Decompose the problem into concepts, list synonyms for each, and combine.
+Do not type your project title into a search box. Break the problem into concepts, list synonyms per concept, then combine.
 
-| Concept | Synonyms and near-terms to try |
+| Concept | Synonyms and near-terms |
 |---|---|
-| Retrieval-augmented generation | RAG · retrieval-augmented LM · knowledge-grounded generation · open-domain QA |
-| Semantic search | dense retrieval · vector search · neural information retrieval · embedding-based retrieval |
-| Cross-modal | multimodal retrieval · image-text retrieval · vision-language · text-to-image search |
+| Retrieval-augmented generation | RAG · retrieval-augmented LM · knowledge-grounded generation · open-domain QA · grounded generation |
+| Semantic search | dense retrieval · vector search · neural IR · embedding-based retrieval · dual encoder · bi-encoder |
+| Cross-modal | multimodal retrieval · image-text retrieval · vision-language · text-to-image search · joint embedding |
 | Speech search | spoken content retrieval · ASR · speech-to-text · spoken document retrieval |
-| Offline / local | on-device inference · edge deployment · local LLM · quantized inference · privacy-preserving |
-| Citations | attribution · groundedness · provenance · source attribution · faithfulness |
+| Offline / local | on-device inference · edge deployment · local LLM · quantized inference · privacy-preserving NLP |
+| Citations | attribution · groundedness · provenance · verifiability · source attribution · faithfulness |
+| Chunking | passage segmentation · text splitting · document segmentation · passage granularity |
 
-Then combine with boolean operators:
+**The synonym list is not optional.** "Citation transparency" returns almost nothing; **"attribution"** and **"verifiability"** return an entire literature (see [Ch 3A Theme 9](ch03a-annotated-bibliography.md)). Missing that literature would be a serious gap in a project whose fourth objective is citations.
+
+### 1.5.2 Boolean operators, per engine
+
+| Operator | Google Scholar | arXiv | Semantic Scholar |
+|---|---|---|---|
+| Exact phrase | `"dense retrieval"` | `"dense retrieval"` | `"dense retrieval"` |
+| AND | space (implicit) | `AND` | space |
+| OR | `OR` (capitals required) | `OR` | `OR` |
+| Exclude | `-caption` | `ANDNOT` | `-caption` |
+| Field-restricted | `author:radford` `source:NeurIPS` | `ti:`, `abs:`, `au:`, `cat:` | filters in UI |
+| Date range | UI sidebar | `submittedDate:[...]` | UI sidebar |
+
+### 1.5.3 A worked search session
+
+Do this rather than reading about it. Approximate result counts are indicative — yours will differ.
 
 ```
-("retrieval-augmented generation" OR RAG) AND multimodal AND (offline OR "on-device" OR local)
-"cross-modal retrieval" AND (CLIP OR "vision-language") AND "vector database"
-"spoken content retrieval" AND embedding
+Query 1  "multimodal retrieval-augmented generation"
+         → many results, mostly 2023–2025. Scan first 30 titles.
+         Keep: MuRAG, RA-CM3, REVEAL, and any survey.
+
+Query 2  "multimodal RAG" AND (offline OR "on-device" OR local)
+         → far fewer. THIS THINNESS IS YOUR EVIDENCE.
+         Screenshot the result count for your slides.
+
+Query 3  "modality gap" contrastive
+         → finds Liang et al. NeurIPS 2022. This single paper
+           upgrades your merge policy from a hack to a design decision.
+
+Query 4  Forward citations of Lewis et al. 2020, filtered "multimodal"
+         → what people built on RAG. Find Self-RAG, CRAG, surveys.
+
+Query 5  "attribution" OR "verifiability" AND "language model"
+         → a whole literature on citations you would otherwise miss:
+           Rashkin, Bohnet, Liu (verifiability), Menick (GopherCite).
+
+Query 6  MTEB leaderboard, filter: retrieval, <100M parameters
+         → the evidence for your embedding model choice.
+
+Query 7  "document screenshot" retrieval  OR  ColPali
+         → the modern alternative to parse-then-embed. You must be
+           able to say why you did not do this.
 ```
 
-Google Scholar supports quotes for exact phrases, `-` for exclusion, and `author:` / `source:` filters. Use the year filter to separate foundations (pre-2021) from current practice (2023+).
+**Query 2 deserves comment.** When a search returns very few relevant results, that is not a failed search — it is a finding, and it is exactly the evidence a gap statement needs. Record the count and the date.
 
-### 1.5.2 The three-generation rule
+### 1.5.4 The three-generation rule
 
 For each core concept, deliberately find:
 
-1. **The foundational paper** — the one that introduced the idea (often 2017–2021, heavily cited)
-2. **A significant extension** — what people did next
-3. **A recent survey or system paper** (2023–2025) — what the current consensus is
+1. **The foundational paper** — introduced the idea (often 2017–2021, heavily cited)
+2. **A significant extension** — what came next
+3. **A recent survey or system paper (2023–2025)** — current consensus
 
-This produces a review with historical depth *and* currency, which reads far better than a pile of papers all from the same eighteen months. It also gives you the "X established A, Y extended it to B, current systems do C" structure that §1.11 needs.
+This produces historical depth *and* currency, and hands you the "X established A, Y extended it to B, current systems do C" structure that §1.13 needs.
 
-### 1.5.3 Snowballing — where most of your good references come from
+### 1.5.5 The search log
 
-Once you have one genuinely central paper, you can walk the citation graph in both directions. This is faster and higher-yield than searching.
-
-**Backward snowballing** — read the paper's *reference list*. What did it build on? This finds foundations. If four papers you already like all cite the same fifth paper, that fifth paper is foundational and you must read it.
-
-**Forward snowballing** — on Google Scholar, click **"Cited by"** under the paper. This finds everything published *since* that builds on it, sorted by citation count. **This is how you find out whether someone has already built your project.**
-
-> **Do this specific search today, seriously:** open the Lewis et al. RAG paper on Google Scholar, click "Cited by", and search within those results for `multimodal` and for `offline`. Whatever you find is either (a) a strong reference, or (b) evidence that your gap statement needs adjusting. Both outcomes are valuable, and finding out on Day 3 is infinitely better than finding out in the viva.
-
-Stop snowballing when you reach **saturation** — when new searches keep returning papers you have already seen. That is the signal you have covered the area, and it usually arrives faster than students expect.
-
-### 1.5.4 Keep a search log
-
-A simple table, maintained as you go. Ten minutes of work, and it converts "we found some papers" into a defensible method.
-
-| Date | Source | Query | Results scanned | Kept | Notes |
+| Date | Source | Query | Scanned | Kept | Notes |
 |---|---|---|---|---|---|
-| ⟨date⟩ | Google Scholar | `"multimodal RAG" offline` | 40 | 3 | Most results cloud-based — supports our gap |
-| ⟨date⟩ | Semantic Scholar | Forward citations of Lewis 2020 | 60 | 5 | Found Self-RAG, CRAG |
+| ⟨date⟩ | Scholar | `"multimodal RAG" offline` | 40 | 3 | Almost all cloud-based — **supports gap** |
+| ⟨date⟩ | Scholar | Forward cites of Lewis 2020 | 60 | 5 | Found Self-RAG, CRAG |
 
-The template lives in [`reports/literature-matrix.md`](../../reports/literature-matrix.md).
+Template in [`reports/literature-matrix.md`](../../reports/literature-matrix.md). **Stop when you reach saturation** — when new searches keep returning papers you have already seen. That signal usually arrives faster than students expect, and recognising it prevents an open-ended day.
 
-## 1.6 How to judge whether a source is worth citing
+## 1.6 Snowballing — where your best references come from
 
-Not everything you find deserves a place in your reference list. Five tests, applied in about ninety seconds per paper.
+Searching finds the obvious. Snowballing finds the rest, and it is faster.
 
-### 1.6.1 Venue
+### 1.6.1 Backward snowballing
 
-Where it was published is the fastest quality proxy.
+Read a good paper's **reference list**. What did it build on?
+
+**The heuristic that works:** if four papers you already respect all cite the same fifth paper, that fifth paper is foundational and you must read it. This is how you find things nobody's search terms would have surfaced.
+
+### 1.6.2 Forward snowballing — the mandatory one
+
+On Google Scholar, click **"Cited by"** under a paper. Everything published since that builds on it, sortable by citations. Then use the **"Search within citing articles"** box to filter.
+
+> **Do this today, for real.** Open Lewis et al. 2020 → "Cited by" → search within for `multimodal`, then for `offline`, then for `local`. Repeat for MuRAG.
+>
+> Three outcomes, all valuable:
+> - **Nothing close** → your gap is real, and you now have evidence rather than assertion.
+> - **Something adjacent** → a strong reference, and a sharper gap.
+> - **Something very close** → you must narrow your gap. Finding this on Day 3 costs an hour. Finding it in the viva costs the viva.
+
+### 1.6.3 Citation-graph tools
+
+**Connected Papers** builds a similarity graph from one seed paper — prior work on one side, derivative on the other. **Semantic Scholar's "Highly Influential Citations"** filter distinguishes papers that genuinely built on a work from those that cite it in passing; that distinction is not available on Google Scholar and it is worth the extra click.
+
+## 1.7 Judging whether a source is worth citing
+
+Five tests, ninety seconds per paper.
+
+### 1.7.1 Venue
 
 | Tier | Examples | Treatment |
 |---|---|---|
-| **Top ML/NLP conferences** | NeurIPS, ICML, ICLR, ACL, EMNLP, NAACL, CVPR, ICCV, ECCV | Cite confidently |
-| **Strong journals** | IEEE TPAMI, TACL, JMLR, ACM Computing Surveys | Cite confidently |
-| **Reputable secondary venues** | ICASSP, SIGIR, ECIR, WACV, workshop papers at top venues | Fine; note it is a workshop paper if it is |
-| **arXiv preprint only** | — | Usable — see §1.6.3 |
-| **Unknown journal, high fee, promises fast review** | — | ❌ Predatory. Do not cite |
-| **Blog posts, Medium, YouTube** | — | ❌ Not citable as evidence. Useful for *learning*, never as a source |
+| **Top ML/NLP/CV conferences** | NeurIPS, ICML, ICLR, ACL, EMNLP, NAACL, CVPR, ICCV, ECCV, SIGIR | Cite confidently |
+| **Strong journals** | IEEE TPAMI, TACL, JMLR, ACM Computing Surveys, VLDB Journal | Cite confidently |
+| **Reputable secondary** | ICASSP, Interspeech, ECIR, WACV, EACL, COLING, workshops at top venues | Fine — say "workshop paper" if it is one |
+| **arXiv preprint only** | — | Usable, with care (§1.7.3) |
+| **Unknown journal, high fee, "fast review"** | — | ❌ Predatory. Never cite |
+| **Blogs, Medium, YouTube** | — | ❌ Not evidence. Excellent for *learning* |
 
-> **In machine learning specifically, conferences outrank journals.** This surprises students from other disciplines. NeurIPS and ACL papers are fully peer-reviewed and are the primary publication venue for the field. Do not downgrade a paper for being "only" a conference paper.
+> **In machine learning, conferences outrank journals.** This surprises students from other disciplines. NeurIPS and ACL are fully peer-reviewed and are the field's primary venues. Do not downgrade a paper for being "only" a conference paper — and do not describe an ICML paper as "published in a conference, not a journal" in your report.
 
-### 1.6.2 Citations, read correctly
+### 1.7.2 Citations, read correctly
 
-Citation count is a signal, not a verdict, and it must be normalised by age.
+Normalise by age: **citations per year since publication.**
 
-- A 2017 paper with 100,000 citations is foundational (Transformer).
-- A 2024 paper with 50 citations may be excellent — it has had no time.
-- A 2015 paper with 3 citations is probably not worth your attention.
+| Rate | Interpretation |
+|---|---|
+| > 100/year | Landmark |
+| 20–100/year | Solid, influential |
+| 5–20/year | Respectable |
+| < 5/year, older than 3 years | Needs another justification for inclusion |
 
-Rough heuristic: **citations per year since publication.** Over ~100/year is a landmark; over ~20/year is solid; under ~5/year needs another justification for inclusion.
+A 2024 paper with 50 citations may be excellent — it has had no time. A 2015 paper with 3 citations probably is not worth your attention.
 
-### 1.6.3 Preprints: usable, with a caveat
+### 1.7.3 Preprints
 
-Much of the most important ML work appears on arXiv months or years before formal publication, and some never gets formally published. Refusing to cite preprints would exclude genuinely central work.
+Much of the most important ML work appears on arXiv months or years before formal publication, and some never appears elsewhere. Refusing preprints would exclude central work.
 
-**The rule:** cite preprints when the work is clearly influential (high citations, from a known lab, with released code and reproductions), and **always cite the published version if one exists**. Check for it — many papers you find on arXiv were later published at NeurIPS or ACL, and citing the arXiv version when a peer-reviewed version exists looks careless.
+**The rule:** cite preprints when the work is clearly influential — high citations, known lab, released code, independent reproductions — and **always cite the published version if one exists.** Check: many papers you find on arXiv were later published at NeurIPS or ACL, and citing the preprint when a peer-reviewed version exists reads as carelessness.
 
-### 1.6.4 Primary versus secondary
+### 1.7.4 Predatory venue checklist
 
-Always trace a claim to its **primary source** — the paper that actually did the work.
+If three or more apply, do not cite:
 
-If you learned about CLIP from a survey, cite CLIP, not the survey — *unless* you are citing the survey's own contribution (its taxonomy, its comparative analysis). Citing a survey for a fact the survey itself cites is a signal you did not read the original.
+- [ ] Emails you unsolicited inviting submission
+- [ ] Promises review in days
+- [ ] Publication fee prominent, editorial board vague or unverifiable
+- [ ] Journal name closely imitates a well-known one
+- [ ] Claims impact factors from organisations you cannot verify
+- [ ] Scope absurdly broad ("Journal of Engineering, Medicine and Management")
+- [ ] Papers on the site have obvious formatting and language errors
 
-### 1.6.5 The "can I state its contribution in one sentence?" test
+### 1.7.5 Primary versus secondary, and the reproducibility signal
 
-Before adding a paper to your reference list, say aloud what it contributed. If you cannot, you have not read it enough to cite it, and a panel question will expose that in ten seconds.
+Always trace a claim to its **primary source**. If you learned about CLIP from a survey, cite CLIP — unless you are citing the survey's *own* contribution, such as its taxonomy. Citing a survey for a fact the survey itself cites signals you did not read the original.
 
-## 1.7 How to read a paper — the three-pass method
+Two further positive signals worth noting when choosing between similar papers: **released code and weights**, and **independent reproductions**. OpenCLIP exists because CLIP's training data was not released; that history is itself citable and is why you cite both.
 
-You do not read a research paper the way you read a textbook. Reading twenty papers cover-to-cover is impossible in a day and unnecessary; the standard technique is Keshav's **three-pass method**, and it is the single highest-leverage skill in this chapter.
+### 1.7.6 The one-sentence test
 
-### Pass 1 — Five to ten minutes. Decide whether to continue.
+Before adding a paper to your reference list, say aloud what it contributed. If you cannot, you have not read it enough to cite it, and one panel question will expose that.
 
-Read only: **title, abstract, introduction, section headings, conclusion, figures**. Skip everything else, including all mathematics.
+## 1.8 How to read a paper — three passes
 
-Answer five questions:
-1. **Category** — is this a new technique, a system, an analysis, or a survey?
-2. **Context** — what other work does it relate to?
-3. **Correctness** — do the assumptions look reasonable?
-4. **Contribution** — what is the main claim?
-5. **Clarity** — is it well written?
+You do not read a research paper like a textbook. Reading twenty papers cover-to-cover is impossible in a day and unnecessary. The standard technique is Keshav's three-pass method.
 
-After Pass 1 you should be able to state the paper's contribution in one sentence. **Most papers stop here** — that is the point. Perhaps 60% of what you find will be Pass-1-only, and that is a successful outcome, not a failure.
+> **A fully worked example — an actual Pass 1, Pass 2 and Pass 3 on the CLIP paper, with the notes written out — is in [Chapter 3B](ch03b-reading-and-citations.md).** Read it before doing your own; seeing the output makes the method concrete in a way description cannot.
 
-### Pass 2 — About an hour. Understand the content.
+### Pass 1 — 5–10 minutes. Decide whether to continue.
 
-For papers that survive Pass 1 and are directly relevant. Read the whole thing carefully but **skip proofs and detailed derivations**. Pay close attention to figures, tables, and axis labels — in ML papers the figures usually carry the argument.
+Read only: **title, abstract, introduction, section headings, conclusion, figures.** Skip all mathematics.
 
-Extract, in writing:
-- The **problem** it solves
-- The **key idea** in your own words (this is the test — if you cannot paraphrase it, you have not understood it)
-- The **method**, at a level you could explain on a whiteboard
-- The **results** and, critically, **what was measured**
-- The **limitations** the authors admit to
+Answer the five Cs: **Category** (technique / system / analysis / survey), **Context** (what it relates to), **Correctness** (do the assumptions look reasonable), **Contribution** (the main claim), **Clarity**.
 
-Mark unread references you now want.
+You should be able to state the contribution in one sentence. **Most papers stop here** — roughly 60% of what you find should be Pass-1-only. That is a successful outcome, not a failure.
 
-For RAGNova, roughly six to eight papers deserve Pass 2 — the ones directly underpinning your architecture: RAG, Sentence-BERT, CLIP, Whisper, HNSW, and one multimodal RAG paper.
+### Pass 2 — ~1 hour. Understand the content.
 
-### Pass 3 — Several hours. Reproduce the reasoning.
+For papers directly underpinning your architecture. Read fully but **skip proofs and derivations**. Pay close attention to figures, tables, and axis labels — in ML papers the figures usually carry the argument.
 
-Attempt to reconstruct the work: challenge every assumption, follow the derivations, ask what you would have done differently. **You need this for at most one or two papers** — probably CLIP and the RAG paper, since those are the two an examiner is most likely to probe.
+### Pass 3 — hours. Reconstruct the reasoning.
 
-### What to write down (do this immediately, not later)
+Challenge every assumption; ask what you would have done differently. **Needed for at most two papers** — for you, CLIP and RAG, since those are what an examiner will probe.
 
-For every paper reaching Pass 2, complete this note before moving on. Memory decays fast, and re-reading a paper because you took no notes is the most avoidable time loss of Day 3.
+### 1.8.1 Reading an ML paper specifically
+
+ML papers hide their contribution in predictable places. Four skills worth having explicitly:
+
+**Where the contribution actually is.** The abstract's *last two sentences* usually state it. The introduction's final paragraph almost always contains an explicit "our contributions are" list. Read those two places first.
+
+**How to read a results table.** Ask, in this order:
+1. What is the **baseline**, and is it a fair one? (A weak baseline makes anything look good.)
+2. What is the **metric**, and is higher better?
+3. How large is the **gap** — and is it larger than the variation between seeds?
+4. What is **bolded**, and did the authors bold their own method by convention rather than by winning?
+5. Which datasets are *missing* that you would expect?
+
+**How to read an ablation table.** An ablation removes one component to show it matters. Read it as the authors' own answer to "which parts are load-bearing?" If a component's removal costs almost nothing, that component is not doing much — a fact often more useful to you than the headline result, because it tells you what you can safely omit.
+
+**How to read a claim.** "State of the art" means *on the benchmarks reported, at submission time.* It is a time-stamped, dataset-scoped claim, not a permanent property. Never write "X is the state of the art" in your report without both qualifiers.
+
+### 1.8.2 Reading a paper you do not understand
+
+You will meet papers where the method section is impenetrable. This is normal and not a verdict on you. In order:
+
+1. **Read the figures first.** In ML the architecture diagram often conveys more than three pages of prose.
+2. **Find a talk.** Most NeurIPS/ICML/ACL papers have a 5–15 minute author video. Enormously faster than the paper.
+3. **Find the blog post.** Author labs usually publish an accessible version. Use it to *understand*, then cite the paper.
+4. **Read a survey's description of it** to get the shape, then return.
+5. **Accept Pass 1 depth.** You do not need Pass 2 on everything. Knowing what a paper contributed is enough to cite it responsibly.
+
+### 1.8.3 What to write down, immediately
+
+Complete this before moving to the next paper. Memory decays fast, and re-reading because you took no notes is Day 3's most avoidable time loss.
 
 ```markdown
 **Citation:** Author et al., "Title", Venue, Year
-**Theme:** (which of your review's themes it belongs to)
+**Theme:** which of your review's themes
 **Problem:** what was broken before this
-**Key idea (own words):** ...
-**Method:** ...
-**Results / what was measured:** ...
-**Limitations (stated by authors):** ...
-**Relevance to RAGNova:** what we take, what we reject, and why
-**Quotable claim + page:** (for a fact you may need to cite precisely)
+**Key idea (own words):** ...        ← if you cannot paraphrase, you did not understand
+**Method:** at whiteboard level
+**Results / what was measured:** with numbers
+**Limitations (authors' own):** ...
+**Relevance to RAGNova:** what we take, what we reject, why   ← the field that matters
+**Quotable claim + location:** ...
+**Confidence:** did I read this to Pass 1 / 2 / 3?
 ```
 
-That last field — *relevance to RAGNova* — is what turns reading into a literature review. A note without it is a summary; a note with it is an argument fragment.
+The **Relevance** field is what turns reading into a literature review. A note without it is a summary; a note with it is an argument fragment you can paste almost directly into your prose.
 
-## 1.8 The synthesis matrix — the tool that converts notes into prose
+## 1.9 Reference management — set this up before you write
 
-The mechanical bridge between "twenty sets of notes" and "an argument organised by theme" is a **synthesis matrix**: papers as rows, themes as columns.
+Fifteen minutes now prevents an entire category of failure later: a reference list that does not match the in-text numbers, a citation with the wrong year, or a rebuild of the whole list when you insert one source in the middle.
 
-| Paper | Dense retrieval | Cross-modal | Generation & grounding | Efficiency | Offline |
-|---|---|---|---|---|---|
-| Sentence-BERT [2] | ✅ core | — | — | ✅ small model | — |
-| CLIP [5] | — | ✅ core | — | — | ✅ runs locally |
-| Lewis RAG [4] | ✅ uses DPR | — | ✅ core | — | ❌ assumes server |
-| HNSW [7] | — | — | — | ✅ core | ✅ embedded |
+**Use Zotero** (free, open-source). Install it plus the browser connector. On any paper page, click the connector — it captures authors, title, venue, year, and the PDF. Organise into a collection per theme, matching your review's structure so the collection *is* the outline.
 
-**Read the matrix down a column and you have written a paragraph.** The "Cross-modal" column becomes your cross-modal paragraph, citing everything with a mark in it. This is the concrete technique that prevents the paper-by-paper anti-pattern of §1.2, because you are physically organised by idea rather than by source.
+Full setup, BibTeX workflow, and the mapping from Zotero fields to IEEE output are in [Chapter 3B](ch03b-reading-and-citations.md).
 
-**Read across a row** and you see how one paper contributes to several themes — which is how a single citation ends up appearing in three different paragraphs, exactly as it should.
+**Two rules regardless of tool:**
+1. **Capture the reference the moment you decide to cite it**, not at the end. Reconstructing thirty citations on Day 13 is miserable and error-prone.
+2. **Verify metadata against the actual paper.** Automatic capture is often wrong about venue — it frequently records the arXiv version when a conference version exists. Zotero saving it does not make it correct.
 
-**A column with only one mark** signals either a thin theme you should merge, or a genuine gap. **A column with no marks in the "Offline" sense** is precisely how you discover your gap statement empirically rather than by assertion.
+## 1.10 The synthesis matrix
 
-The template is in [`reports/literature-matrix.md`](../../reports/literature-matrix.md).
+The mechanical bridge from "twenty sets of notes" to "an argument organised by theme": papers as rows, themes as columns.
 
-## 1.9 Synthesis versus summary — with a worked before/after
+| Paper | Representation | Retrieval | Cross-modal | Grounding | Attribution | Offline |
+|---|---|---|---|---|---|---|
+| Sentence-BERT | ✅ core | ✅ | — | — | — | ✅ small |
+| CLIP | ✅ | ✅ | ✅ core | — | — | ✅ |
+| Modality gap | — | — | ✅ critical | — | — | — |
+| RAG (Lewis) | — | ✅ | — | ✅ core | ⚠️ possible | ❌ assumes server |
+| Verifiability (Liu) | — | — | — | ✅ | ✅ core | — |
+| HNSW | — | ✅ core | — | — | — | ✅ embedded |
 
-This is the difference between a pass and a distinction. Look at the same content written both ways.
+**Read down a column → you have written that paragraph.** The "Cross-modal" column becomes your cross-modal paragraph, citing everything marked in it. This is the concrete technique that prevents the paper-by-paper anti-pattern, because you are physically organised by idea rather than by source.
+
+**Read across a row** → you see how one paper serves several themes, which is how a single citation legitimately appears in three paragraphs.
+
+### 1.10.1 Diagnostics — the matrix tells you things
+
+| Pattern | What it means | What to do |
+|---|---|---|
+| A column with one mark | Thin theme | Merge it, or find two more sources |
+| A column with many marks | Your strongest theme | Lead with it |
+| A row with one mark | A paper only tangentially relevant | Consider dropping it |
+| **A combination of columns with no system marked across all of them** | **Your gap, found empirically** | This is the finding, not an assertion |
+| Every paper marked in every column | Your themes are not distinct | Redefine them |
+
+That fourth row is the important one. Your gap should emerge from the matrix, not be decided in advance and then justified.
+
+## 1.11 Synthesis versus summary
+
+This is the difference between a pass and a distinction.
 
 **❌ Summary (paper-by-paper):**
 
 > Reimers and Gurevych [2] proposed Sentence-BERT, which modifies BERT to produce sentence embeddings. Karpukhin et al. [3] proposed Dense Passage Retrieval, which uses dense vectors for retrieval. Lewis et al. [4] proposed RAG, which combines retrieval with generation. Radford et al. [5] proposed CLIP, which links images and text.
 
-Four sentences, four papers, zero connections. The reader learns that these things exist and nothing about how they relate. Note also that every sentence has the same shape — a strong smell of the anti-pattern.
+Four sentences, four papers, zero connections — and every sentence has the same shape, which is the smell of the anti-pattern.
 
 **✅ Synthesis (idea-by-idea):**
 
-> The shift from lexical to dense retrieval rests on the observation that semantic similarity can be expressed as geometric proximity. Sentence-BERT [2] made this practical by fine-tuning transformer encoders so that sentence-level vectors are directly comparable under cosine similarity, and Dense Passage Retrieval [3] demonstrated that such representations outperform BM25 on open-domain question answering — establishing dense retrieval as the default for semantic search. Lewis et al. [4] then coupled a dense retriever to a generative model, showing that conditioning generation on retrieved evidence both improves factual accuracy and, crucially for our purposes, renders the evidence available for attribution. This grounding property is what makes citation possible at all; it is a consequence of the architecture rather than a presentation-layer addition.
+> The shift from lexical to dense retrieval rests on the observation that semantic similarity can be expressed as geometric proximity. Sentence-BERT [2] made this practical by fine-tuning transformer encoders so that sentence-level vectors are directly comparable under cosine similarity, and Dense Passage Retrieval [3] demonstrated that such representations substantially outperform BM25 on open-domain question answering — establishing dense retrieval as the default for semantic search. Lewis et al. [4] then coupled a dense retriever to a generative model, showing that conditioning generation on retrieved evidence both improves factual accuracy and, crucially for the present work, leaves the evidence available for attribution. This grounding property is what makes citation possible at all: it is a consequence of the architecture rather than a presentation-layer addition.
 >
-> Extending the same geometric principle across modalities required a shared representation space. CLIP [5] achieved this by training image and text encoders jointly under a contrastive objective over large-scale caption data, such that an image and its description occupy nearby positions in one space. Cross-modal retrieval thereby reduces to the same nearest-neighbour operation as unimodal retrieval — a unification we exploit directly.
+> Extending the same geometric principle across modalities required a shared representation space. CLIP [5] achieved this by training image and text encoders jointly under a contrastive objective over large-scale caption data, such that an image and its description occupy nearby positions in one space. Cross-modal retrieval thereby reduces to the same nearest-neighbour operation as unimodal retrieval — a unification the present work exploits directly.
 
-The second version has the **same citations** but is organised by *idea*. Each paper appears because it advances the argument. The final sentence of each paragraph does work: it connects the literature to *our* design.
+Same citations, organised by *idea*. Each paper appears because it advances the argument, and the last sentence of each paragraph connects the literature to *your* design.
 
-### Five moves that create synthesis
+### 1.11.1 Five moves that create synthesis
 
-Use these verbs and constructions deliberately:
-
-| Move | Signal phrases | Example |
+| Move | Signal phrases | Effect |
 |---|---|---|
 | **Agreement** | "Both [2] and [3] find..." · "Consistent with [4]..." | Groups papers into a position |
 | **Contrast** | "Whereas [5] optimises X, [12] targets Y" | Shows you can distinguish, not just list |
-| **Chronological development** | "[2] established... subsequently [4] extended..." | Shows a field maturing |
-| **Methodological grouping** | "Approaches divide into A [2],[3] and B [5],[6]" | Creates a taxonomy — very strong |
-| **Gap identification** | "However, none of [4]–[6] address..." | The move that justifies your project |
+| **Development** | "[2] established... subsequently [4] extended..." | Shows a field maturing |
+| **Taxonomy** | "Approaches divide into A [2],[3] and B [5],[6]" | ⭐ Strongest move available |
+| **Gap** | "However, none of [4]–[6] address..." | Justifies your project |
 
-**The taxonomy move is the most impressive of the five.** If you can say "existing approaches fall into three families, and here is the trade-off each makes," you have demonstrated genuine command of the area — far more than any amount of individual summarising.
+**The taxonomy move is the most impressive.** If you can say "existing approaches fall into three families, and each makes this trade-off," you demonstrate command of the area far beyond any amount of individual summarising. You have three natural taxonomies available:
 
-## 1.10 Finding and phrasing the gap
+- **Retrieval:** lexical / dense / hybrid / late-interaction
+- **Document understanding:** parse-then-embed / OCR-then-embed / screenshot-as-image (ColPali-style)
+- **RAG maturity:** naive / advanced / modular (using the survey's taxonomy)
 
-The gap is the load-bearing sentence of your entire review. Everything before it exists to make it credible.
+Use at least one.
 
-### 1.10.1 Types of gap — pick the honest one
+### 1.11.2 Paragraph templates
 
-| Gap type | Claim | Risk |
+**Theme paragraph:**
+> ⟨Topic sentence naming the idea.⟩ ⟨Foundational work and what it established [n].⟩ ⟨Extension or refinement [n], [n].⟩ ⟨A contrast or limitation [n].⟩ ⟨One sentence connecting this to our design.⟩
+
+**Gap paragraph:**
+> ⟨What exists [n], [n].⟩ ⟨However, ⟨specific limitation⟩.⟩ ⟨Why that limitation matters for our setting.⟩ ⟨What this work does about it.⟩
+
+**Opening paragraph of the review** (roadmap — tells the reader the structure):
+> ⟨This review examines N themes.⟩ ⟨Sections A and B cover foundations; C and D cover the multimodal extension; E covers attribution.⟩ ⟨The review concludes by identifying the gap this project addresses.⟩
+
+**Closing paragraph** (the pivot into methodology):
+> ⟨One sentence summarising what the field provides.⟩ ⟨One sentence naming what remains open.⟩ ⟨One sentence stating what this project therefore does.⟩
+
+### 1.11.3 Transition phrase bank
+
+Because vocabulary is the practical bottleneck when writing synthesis:
+
+| Function | Phrases |
+|---|---|
+| Adding agreement | *Similarly · Likewise · Consistent with this · Building on this · In the same vein* |
+| Contrasting | *However · By contrast · Whereas · Conversely · Nevertheless · While [n] assumes X, [m] instead* |
+| Sequencing development | *Subsequently · Building on [n] · This was extended by · More recently* |
+| Grouping | *Approaches fall into · Two families · Broadly, methods can be categorised as* |
+| Signalling limitation | *A limitation of this approach is · This assumes · [n] does not address · remains an open question* |
+| Landing the gap | *However, none of these · These systems assume · remains unaddressed · has received comparatively little attention* |
+
+## 1.12 Finding and phrasing the gap
+
+The gap is the load-bearing sentence of the review. Everything before exists to make it credible.
+
+### 1.12.1 Types of gap — pick the honest one
+
+| Type | Claim | Risk |
 |---|---|---|
-| **Nobody has done X** | Genuine novelty | ⚠️ Usually false and easily disproved. Avoid unless certain |
-| **X exists but not under constraint C** | ✅ **Ours** — multimodal RAG exists, but not fully offline | Low, and easy to defend |
-| **X and Y exist separately but not integrated** | ✅ **Also ours** — cross-modal retrieval and cited RAG rarely combined | Low |
-| **X exists but is not accessible/reproducible** | Engineering and documentation contribution | Modest but honest |
+| **Nobody has done X** | Absolute novelty | ⚠️ Usually false; one counter-example destroys it |
+| **X exists but not under constraint C** | ✅ **Yours** — multimodal RAG exists, but not fully offline | Low |
+| **X and Y exist separately but not integrated** | ✅ **Also yours** — cross-modal retrieval and attributed RAG rarely combined | Low |
+| **X exists but is not accessible or reproducible** | Engineering + documentation contribution | Modest but honest |
 | **X has not been evaluated in setting S** | Empirical contribution | Requires solid evaluation |
 
-**Your gap combines rows 2 and 3**, and both are safe because they are *conjunctive* claims about combination rather than absolute claims about novelty. That distinction matters: "nobody has built a multimodal RAG system" is false and will be destroyed in the viva. "Multimodal RAG systems typically assume cloud-hosted inference, and cross-modal retrieval is rarely bidirectional in systems that also provide citation transparency" is true, specific, and defensible.
+Your gap combines rows 2 and 3. Both are safe because they are **conjunctive claims about combination**, not absolute claims about novelty. That distinction matters enormously: *"nobody has built a multimodal RAG system"* is false and will be destroyed. *"Multimodal RAG systems typically assume cloud-hosted inference, and cross-modal retrieval is rarely bidirectional in systems that also provide citation transparency"* is true, specific, and defensible.
 
-### 1.10.2 How to phrase it
+### 1.12.2 The four-move formula
 
-Four-move formula:
-
-1. **Acknowledge what exists** — "Multimodal RAG has been demonstrated [MuRAG, others]."
-2. **Name the specific limitation** — "However, these systems assume cloud-hosted embedding and generation services."
+1. **Acknowledge what exists** — "Multimodal RAG has been demonstrated [MuRAG], [RA-CM3]."
+2. **Name the specific limitation** — "However, these systems assume cloud-hosted embedding and generation."
 3. **State why it matters** — "This precludes deployment on confidential corpora and in disconnected environments."
-4. **State your contribution, modestly** — "This work integrates these components under a strict offline constraint, with citation transparency as a first-class design requirement."
+4. **State your contribution, modestly** — "This work integrates these components under a strict offline constraint, with attribution as a first-class design requirement."
 
-Note what move 4 does *not* say. It does not claim a new algorithm. **Your contribution is integration and constraint satisfaction, and that is a legitimate engineering contribution — say it plainly.** Overclaiming novelty is the fastest way to lose a viva; claiming exactly what you did, and defending it, is the fastest way to win one.
+Move 4 does *not* claim a new algorithm. **Your contribution is integration and constraint satisfaction, which is a legitimate engineering contribution — say it plainly.** Overclaiming novelty is the fastest way to lose a viva; claiming exactly what you did and defending it is the fastest way to win one.
 
-### 1.10.3 Pressure-test your gap before you commit
+### 1.12.3 Pressure-testing the gap
 
-Ask, as a team:
-- If a panel member says "but system Z does this" — what is our answer? (Have one for the obvious candidates: ChatGPT with file upload, LangChain demos, NotebookLM.)
-- Did we actually search for prior work that closes our gap? (§1.5.3's forward-citation search is the evidence.)
-- Is our gap *narrow enough to be true* and *broad enough to be interesting*?
+Prepare an answer for each. If any answer is weak, narrow the gap.
 
-## 1.11 Citing without plagiarising
+| Challenge | The shape of a good answer |
+|---|---|
+| *"ChatGPT with file upload does this"* | Cloud-hosted; session-scoped rather than a persistent index; no bidirectional cross-modal retrieval; attribution inconsistent |
+| *"LangChain/LlamaIndex has multimodal RAG"* | Frameworks, not systems; multimodal is an add-on; typically default to hosted embeddings; cross-modal rarely bidirectional |
+| *"NotebookLM handles documents and audio"* | Cloud; audio is a *generated output*, not a retrievable indexed modality; no image-to-document retrieval |
+| *"MuRAG already did multimodal RAG"* | Server-scale infrastructure; image + text only, no speech; attribution not a design goal |
+| *"ColPali retrieves documents as images — simpler than your pipeline"* | ⭐ The hardest question. Requires more compute per page; no timestamped audio path; our OCR + text path yields exact-string retrieval it cannot. **Have this answer ready.** |
 
-### 1.11.1 The rule
+That last row is the one most likely to catch you out, because it is a genuinely better idea in some respects. Being able to say *"yes, and here is the trade-off we chose and why"* is far stronger than not having heard of it.
 
-**Cite whenever an idea, a number, a method, or a phrasing is not your own.** Common knowledge in the field ("neural networks consist of layers") does not need a citation; anything specific does.
+## 1.13 Citing without plagiarising
 
-### 1.11.2 Paraphrase versus quote
+### 1.13.1 The rule
 
-In engineering writing, **direct quotation is rare** — reserve it for a definition so precise that rewording would damage it. Paraphrase everything else.
+**Cite whenever an idea, a number, a method, or a phrasing is not your own.** Common knowledge in the field ("neural networks consist of layers") needs no citation; anything specific does.
 
-A real paraphrase changes both **words and structure**, not just words:
+### 1.13.2 Paraphrase versus quote
+
+In engineering writing, direct quotation is rare — reserve it for a definition so precise that rewording would damage it. A real paraphrase changes **both words and structure**:
 
 | | Text |
 |---|---|
 | **Original** | "We train an image encoder and a text encoder jointly to predict the correct pairings of a batch of (image, text) training examples." |
-| ❌ **Patchwriting** *(this is plagiarism)* | "They train an image encoder and text encoder together to predict the right pairings of a batch of (image, text) examples [5]." |
-| ✅ **Genuine paraphrase** | "CLIP's training objective is contrastive: within each batch, the model must identify which caption belongs to which image, which forces matched pairs into proximity within a shared space [5]." |
+| ❌ **Patchwriting** *(plagiarism)* | "They train an image encoder and text encoder together to predict the right pairings of a batch of (image, text) examples [5]." |
+| ✅ **Genuine paraphrase** | "CLIP's objective is contrastive: within each batch the model must identify which caption belongs to which image, forcing matched pairs into proximity within a shared space [5]." |
 
-Patchwriting — swapping a few synonyms while retaining the original sentence structure — **counts as plagiarism** even with a citation attached. The reliable technique: read the passage, close it, wait a moment, then write what it means from memory in your own sentence shape. If you find yourself looking back and forth while typing, you are patchwriting.
+**Patchwriting — swapping synonyms while keeping the original sentence structure — counts as plagiarism even with a citation attached.** The reliable technique: read the passage, close it, wait a beat, then write what it means in your own sentence shape. If you are looking back and forth while typing, you are patchwriting.
 
-### 1.11.3 Self-check before submission
+### 1.13.3 Other integrity issues
+
+| Issue | What it is | Rule |
+|---|---|---|
+| **Self-plagiarism** | Reusing your own earlier submitted text | Disclose reuse; check your institution's policy |
+| **Citation padding** | Citing to look rigorous | Cite only what you read and what supports the claim |
+| **Misattribution** | Citing [5] for a claim [5] does not make | Verify the claim is actually in the paper |
+| **Figure reuse** | Copying a figure from a paper | Redraw it yourself, or reproduce with "Adapted from [n]" and check permission |
+| **AI-assisted writing** | Using an assistant to draft text | Follow your institution's disclosure policy. **In every case, you must be able to explain and defend every sentence you submit** — that requirement is independent of policy |
+
+### 1.13.4 Pre-submission integrity check
 
 - [ ] Every claim about prior work carries a citation
-- [ ] Every citation in the text appears in the reference list, and vice versa
-- [ ] References are numbered in **order of first appearance** (IEEE)
-- [ ] Every reference verified against the actual paper — exact venue, year, author list
-- [ ] Nothing is patchwritten
-- [ ] You have read at least abstract + conclusion of everything cited
-- [ ] Run through your institution's similarity checker if one is available
+- [ ] Every in-text citation appears in the reference list, and vice versa
+- [ ] References numbered in order of first appearance (IEEE)
+- [ ] Every reference verified against the actual paper — authors, venue, year
+- [ ] Published version cited where one exists, not the preprint
+- [ ] Nothing patchwritten
+- [ ] Every cited work read to at least abstract + conclusion
+- [ ] Figures either original or attributed
+- [ ] Similarity checker run, if available
 
 ---
 
-# Part 2 — THE SURVEY: RAGNova's literature, annotated
+# Part 2 — The survey, compressed
 
-> **How to use this part.** This is *raw material*, not text to paste. Each entry gives the citation, the problem it solved, its key idea, and — the field that matters — **what RAGNova takes from it**. Your job today is to read the ones marked **[Pass 2]**, verify every citation, and write your own synthesis using the techniques in §1.9.
->
-> **⚠️ Verify every entry independently.** Venue names, years and author lists must be exact. Check on the ACL Anthology, the publisher's site, or arXiv before it enters your reference list. An incorrect citation is worse than a missing one.
+> **The full annotated bibliography — ~60 sources across eleven themes, with twelve deep dives — is [Chapter 3A](ch03a-annotated-bibliography.md).** This section gives the shape, the comparison table, and the gap statement.
 
-## Theme 1 — Representation: how meaning became geometry
+## 2.1 The eleven themes
 
-| # | Source | Problem it solved | Key idea | What RAGNova takes |
-|---|---|---|---|---|
-| 1 | Mikolov et al., "Efficient Estimation of Word Representations in Vector Space," ICLR Workshop, 2013 | Words as one-hot vectors carried no semantic relationships | Distributional hypothesis: predict a word from its context, and semantically similar words acquire nearby vectors | The historical origin of "meaning as direction." Cite for background only |
-| 2 | Vaswani et al., "Attention Is All You Need," NeurIPS, 2017 | Recurrent models processed sequences serially and lost long-range dependencies | Self-attention lets every token attend to every other; fully parallel | The architecture beneath *every* model we use — LLM, embedder, CLIP, Whisper |
-| 3 | Devlin et al., "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding," NAACL, 2019 | Word vectors were context-independent — "bank" had one vector | Bidirectional pretraining yields context-dependent token representations | The encoder family our embedding model descends from |
-| 4 | **Reimers & Gurevych, "Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks," EMNLP-IJCNLP, 2019** **[Pass 2]** | BERT's raw outputs are poor for sentence similarity; comparing all pairs was computationally infeasible | Siamese/triplet fine-tuning plus mean pooling produces sentence vectors directly comparable by cosine similarity | **Direct justification for `all-MiniLM-L6-v2`.** Cite when explaining why our text embeddings work |
+| # | Theme | What it establishes | Core sources |
+|---|---|---|---|
+| 1 | **Representation** | Meaning as geometry: word → contextual → sentence embeddings | Transformer, BERT, Sentence-BERT |
+| 2 | **Retrieval** | Dense beats lexical; how to search vectors fast | DPR, HNSW, BM25, RRF, BEIR |
+| 3 | **Embedding model selection** | ⭐ *How to justify your model choice with evidence* | MTEB, E5, BGE, GTE |
+| 4 | **Cross-modal** | One shared space for images and text — and its known failure mode | CLIP, OpenCLIP, **modality gap**, BLIP, SigLIP |
+| 5 | **Speech** | Robust offline transcription with timestamps | Whisper, WhisperX, CLAP, wav2vec 2.0 |
+| 6 | **Document understanding** | ⭐ Parse-then-embed vs OCR vs screenshot-as-image | Tesseract, LayoutLM, Donut, **ColPali**, DSE |
+| 7 | **Grounding & RAG** | Retrieval as the fix for parametric memory | RAG, REALM, FiD, Self-RAG, CRAG, RAG survey |
+| 8 | **Why not fine-tuning** | ⭐ *Empirical evidence for ADR-001* | Ovadia, Gekhman, Kandpal, LoRA, QLoRA |
+| 9 | **Attribution & verifiability** | ⭐ *The literature behind Objective O4* | Rashkin, Bohnet, Liu, GopherCite, RARR |
+| 10 | **Chunking & context** | Passage granularity; the lost-in-the-middle effect | Lost in the Middle, RAPTOR, late chunking, LumberChunker |
+| 11 | **Local execution** | Quantization is why offline is possible | GPTQ, AWQ, LLM.int8(), Llama 3, llama.cpp |
 
-**Synthesis hook for your prose:** entries 1→4 form a clean chronological arc — from context-free word vectors, to contextual token vectors, to comparable sentence vectors. That arc is a ready-made opening paragraph.
+Four themes are starred because they are where a typical student project has *nothing* and yours will have evidence. Theme 3 justifies your embedding model; Theme 6 lets you answer the ColPali question; Theme 8 turns ADR-001 from an opinion into a finding; Theme 9 is an entire literature on citations that a keyword search for "citation" would never surface.
 
-## Theme 2 — Retrieval: from keywords to vectors
+## 2.2 The comparison table
 
-| # | Source | Problem it solved | Key idea | What RAGNova takes |
-|---|---|---|---|---|
-| 5 | Robertson & Zaragoza, "The Probabilistic Relevance Framework: BM25 and Beyond," *Foundations and Trends in IR*, 2009 | Formalising lexical relevance ranking | Term frequency and inverse document frequency with length normalisation | The **baseline we argue against** — and the method still superior for rare exact strings |
-| 6 | **Karpukhin et al., "Dense Passage Retrieval for Open-Domain Question Answering," EMNLP, 2020** **[Pass 2]** | Lexical retrieval fails on paraphrase in QA | Dual-encoder trained on question–passage pairs; dense vectors beat BM25 substantially | Empirical evidence that dense retrieval outperforms keywords — **the citation behind Objective O2** |
-| 7 | **Malkov & Yashunin, "Efficient and Robust Approximate Nearest Neighbor Search Using Hierarchical Navigable Small World Graphs," IEEE TPAMI, vol. 42, no. 4, 2020** **[Pass 2]** | Exact nearest-neighbour search scales linearly and becomes infeasible | Multi-layer proximity graph; greedy descent through long-range then short-range links; ~O(log N) | **The algorithm inside ChromaDB.** Cite when discussing scalability |
-| 8 | Johnson, Douze & Jégou, "Billion-Scale Similarity Search with GPUs," *IEEE Trans. Big Data*, 2021 | Similarity search at industrial scale | IVF and product quantization, GPU-accelerated (FAISS) | The **alternative we rejected** — cite when justifying ChromaDB over FAISS |
-| 9 | Cormack, Clarke & Buettcher, "Reciprocal Rank Fusion Outperforms Condorcet and Individual Rank Learning Methods," SIGIR, 2009 | Combining several ranked lists into one | Fuse by reciprocal rank rather than raw score | **Directly relevant to our modality-gap problem** (§Theme 3) and to optional hybrid search |
-| 10 | Thakur et al., "BEIR: A Heterogeneous Benchmark for Zero-shot Evaluation of Information Retrieval Models," NeurIPS Datasets & Benchmarks, 2021 | Retrieval models were evaluated on single datasets and overfit them | Standardised zero-shot benchmark across 18 datasets | Where our **metric definitions** (Recall@k, nDCG) come from |
+Prose alone will not make the gap visible. This table does the argumentative work of two pages and is the figure most likely to survive into your final report.
 
-## Theme 3 — Cross-modal: one space for pictures and words
-
-| # | Source | Problem it solved | Key idea | What RAGNova takes |
-|---|---|---|---|---|
-| 11 | **Radford et al., "Learning Transferable Visual Models From Natural Language Supervision," ICML, 2021 (CLIP)** **[Pass 2 + Pass 3]** | Vision models needed fixed label sets and manual annotation; image and text vectors were incomparable | Contrastive training on ~400M image–caption pairs; N×N in-batch similarity matrix with the diagonal maximised, producing a **shared** embedding space | **The entire basis of Objective O3.** The most important paper in your review — expect questions |
-| 12 | Cherti et al., "Reproducible Scaling Laws for Contrastive Language-Image Learning," CVPR, 2023 (OpenCLIP) | CLIP's weights and training data were not fully open | Open reproduction on LAION; released checkpoints | **The implementation we actually use.** Cite alongside [11] |
-| 13 | **Liang et al., "Mind the Gap: Understanding the Modality Gap in Multi-modal Contrastive Representation Learning," NeurIPS, 2022** **[Pass 2]** | Unexplained: image and text embeddings occupy *separate* regions despite joint training | The gap arises from initialisation and is preserved by the contrastive objective; it is systematic, not noise | **Direct justification for our rank-based merge** (Ch 1 §1.7.3). This citation converts an implementation hack into a literature-grounded design decision — one of the strongest moves available to you |
-| 14 | Li et al., "BLIP: Bootstrapping Language-Image Pre-training," ICML, 2022 | CLIP retrieves but cannot generate captions or answer about images | Combines contrastive and generative objectives; caption bootstrapping | The **alternative we rejected** — heavier, and we need symmetric retrieval, not captioning |
-| 15 | Zhai et al., "Sigmoid Loss for Language Image Pre-Training," ICCV, 2023 (SigLIP) | CLIP's softmax loss requires very large batches | Pairwise sigmoid loss; better at small batch sizes | Note as a **future-work upgrade path** — shows currency without committing you |
-
-**Why Theme 3 is the strongest part of your review.** Most student multimodal projects cite CLIP and stop. Citing [13] as well proves you understand a *known failure mode* of the technique you adopted and designed around it deliberately. Make sure this appears in your review and your Day 4 slides.
-
-## Theme 4 — Speech: making audio searchable
-
-| # | Source | Problem it solved | Key idea | What RAGNova takes |
-|---|---|---|---|---|
-| 16 | **Radford et al., "Robust Speech Recognition via Large-Scale Weak Supervision," ICML, 2023 (Whisper)** **[Pass 2]** | ASR systems were brittle across accents, noise and domains, and needed per-domain fine-tuning | Encoder–decoder transformer trained on ~680k hours of weakly supervised multilingual audio; zero-shot robustness | **Objective O1's audio pipeline** and the spoken-query feature. Cite for timestamped segment output |
-| 17 | Elizalde et al., "CLAP: Learning Audio Concepts from Natural Language Supervision," ICASSP, 2023 | Audio had no CLIP-equivalent shared space | Contrastive audio–text pretraining | **The alternative we rejected.** Excellent for environmental sound, weaker for the semantics of speech — cite to justify the transcription bridge |
-| 18 | Smith, "An Overview of the Tesseract OCR Engine," ICDAR, 2007 | Extracting printed text from images | Classical OCR pipeline | Justifies the **OCR path** complementing CLIP: CLIP knows an image *looks like* an invoice; OCR reads the invoice number |
-
-**The argument this theme must make:** we had two routes for audio, we chose transcription over native audio embeddings, and [16] versus [17] is the evidence. That is Job 2 from §1.1 executed properly.
-
-## Theme 5 — Grounding: RAG and its descendants
-
-| # | Source | Problem it solved | Key idea | What RAGNova takes |
-|---|---|---|---|---|
-| 19 | Guu et al., "REALM: Retrieval-Augmented Language Model Pre-Training," ICML, 2020 | Knowledge locked in parameters, un-updatable and un-inspectable | Retrieval integrated into pretraining, jointly learned | Historical predecessor — establishes the idea before RAG named it |
-| 20 | **Lewis et al., "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks," NeurIPS, 2020** **[Pass 2 + Pass 3]** | LLMs hallucinate, cannot cite, and cannot access private or new data | Combine a dense retriever with a seq2seq generator; condition generation on retrieved passages | **The paper your project is named after.** Justifies the whole architecture and Objective O4 |
-| 21 | Izacard & Grave, "Leveraging Passage Retrieval with Generative Models for Open Domain Question Answering," EACL, 2021 (Fusion-in-Decoder) | Combining evidence from many passages | Encode passages independently, fuse in the decoder | Explains **why top-K matters** and how multiple chunks combine |
-| 22 | Ji et al., "Survey of Hallucination in Natural Language Generation," *ACM Computing Surveys*, 2023 | Hallucination discussed anecdotally, not systematically | Taxonomy of causes and mitigations | **The citation behind Ch 1 §1.2.** Use it when you claim hallucination is structural |
-| 23 | Liu et al., "Lost in the Middle: How Language Models Use Long Contexts," *TACL*, 2024 | Assumption that longer context is strictly better | Accuracy degrades for information positioned mid-prompt | **Justifies retrieving few good chunks rather than stuffing everything** — Ch 1 §1.3 |
-| 24 | Asai et al., "Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection," ICLR, 2024 | Naive RAG retrieves indiscriminately and cannot assess its own output | Model emits reflection tokens deciding when to retrieve and whether output is supported | **Future work.** Shows you know naive RAG's limits |
-| 25 | Yan et al., "Corrective Retrieval Augmented Generation," arXiv, 2024 | Retrieval sometimes returns irrelevant passages | Lightweight evaluator grades retrieval and triggers correction | **Future work** — a concrete improvement path for the report's final section |
-| 26 | Gao et al., "Retrieval-Augmented Generation for Large Language Models: A Survey," arXiv, 2023–24 | The field fragmented rapidly | Taxonomy: Naive → Advanced → Modular RAG | **Use its taxonomy to position your system honestly** — "RAGNova implements Naive RAG extended to multiple modalities" is a defensible, precise self-description |
-
-> **A high-value move:** explicitly classify your own system using [26]'s taxonomy. Saying "ours is Naive RAG with multimodal ingestion; Advanced RAG techniques such as query rewriting and reranking are future work" demonstrates that you know where you sit in the field. Panels respond very well to this, and it pre-empts "why didn't you do reranking?"
-
-## Theme 6 — Multimodal RAG specifically (this is where your gap lives)
-
-| # | Source | Problem it solved | Key idea | What RAGNova takes |
-|---|---|---|---|---|
-| 27 | **Chen et al., "MuRAG: Multimodal Retrieval-Augmented Generator for Open Question Answering over Images and Text," EMNLP, 2022** **[Pass 2]** | RAG was text-only | Retrieves from a multimodal memory of image–text pairs to answer questions | **Closest prior work.** Read it carefully and be ready to state precisely how you differ — offline execution, four modalities including speech, and citation transparency |
-
-**This row is the most important in the entire survey**, because a strong panel member will find this paper. You must be able to say what MuRAG does, what it assumes (server-scale infrastructure, no speech modality, attribution not a design goal), and therefore what remains open. Do the forward-citation search of §1.5.3 on this paper today.
-
-## Theme 7 — Making it run offline
-
-| # | Source | Problem it solved | Key idea | What RAGNova takes |
-|---|---|---|---|---|
-| 28 | Dettmers et al., "LLM.int8(): 8-bit Matrix Multiplication for Transformers at Scale," NeurIPS, 2022 | Large models exceeded consumer memory | 8-bit inference with outlier handling, near-lossless | Establishes that quantization preserves quality |
-| 29 | Frantar et al., "GPTQ: Accurate Post-Training Quantization for Generative Pre-trained Transformers," ICLR, 2023 | 4-bit quantization degraded quality | One-shot weight quantization using second-order information | **The evidence behind Ch 1 §1.1.5's memory table** — the reason a 3B model fits in ~2 GB |
-| 30 | Lin et al., "AWQ: Activation-aware Weight Quantization for LLM Compression and Acceleration," MLSys, 2024 | Some weights matter far more than others | Protect salient weights identified by activation statistics | Current practice; cite alongside [29] |
-| 31 | Es et al., "RAGAS: Automated Evaluation of Retrieval Augmented Generation," EACL (demo), 2024 | RAG evaluation was ad hoc | Metrics for faithfulness, answer relevance, context relevance | **Where our faithfulness metric comes from** — Ch 1 §1.10. Cite so your evaluation is not self-invented |
-| 32 | Official documentation: Ollama · ChromaDB · sentence-transformers · faster-whisper | — | — | Cite with access dates for implementation specifics |
-
-## The comparison table your review needs
-
-Prose alone will not make the gap visible. **Include this table** — it does the argumentative work of two pages, and it is the single figure most likely to survive into your final report.
-
-| System / approach | Text | Image | Audio | Cross-modal | Generative answer | Citations | Offline |
+| System / approach | Text | Image | Audio | Cross-modal | Generative answer | Attribution | Offline |
 |---|---|---|---|---|---|---|---|
-| Keyword search (BM25 [5]) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
-| Dense retrieval (DPR [6]) | ✅ | ❌ | ❌ | ❌ | ❌ | ⚠️ passages only | ✅ |
-| RAG [20] | ✅ | ❌ | ❌ | ❌ | ✅ | ⚠️ possible, not built in | ⚠️ if self-hosted |
-| CLIP retrieval [11] | ⚠️ ≤77 tokens | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ |
-| MuRAG [27] | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ |
-| Cloud assistants with file upload | ✅ | ✅ | ⚠️ | ⚠️ | ✅ | ⚠️ inconsistent | ❌ |
-| LangChain/LlamaIndex demo RAG | ✅ | ⚠️ add-on | ⚠️ add-on | ❌ | ✅ | ⚠️ manual | ⚠️ configurable |
+| Keyword search (BM25) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Dense retrieval (DPR) | ✅ | ❌ | ❌ | ❌ | ❌ | ⚠️ passages only | ✅ |
+| RAG (Lewis) | ✅ | ❌ | ❌ | ❌ | ✅ | ⚠️ possible, not built in | ⚠️ if self-hosted |
+| CLIP retrieval | ⚠️ ≤77 tokens | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ |
+| ColPali / DSE | ✅ as image | ✅ | ❌ | ✅ | ⚠️ with a VLM | ⚠️ page-level | ⚠️ heavy |
+| MuRAG | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ |
+| Cloud assistants + upload | ✅ | ✅ | ⚠️ | ⚠️ | ✅ | ⚠️ inconsistent | ❌ |
+| LangChain / LlamaIndex demos | ✅ | ⚠️ add-on | ⚠️ add-on | ❌ | ✅ | ⚠️ manual | ⚠️ configurable |
 | **RAGNova** | ✅ | ✅ | ✅ | ✅ 3 directions | ✅ | ✅ first-class | ✅ verified |
 
-**The empty region in the bottom-right of this table is your gap, made visible.** Note the honest use of ⚠️ — a table of all ✅ for your system and all ❌ for everyone else is not credible and invites hostile questioning. Nuance is more persuasive than triumph.
+**The empty region in the bottom-right is your gap, made visible.** Note the honest ⚠️ marks — a table of all ✅ for you and all ❌ for everyone else is not credible and invites hostile questioning. Nuance persuades; triumph does not.
 
-## The gap statement, assembled
+## 2.3 The gap statement, assembled
 
-Putting §1.10.2's four moves together with the survey above:
+> Multimodal retrieval-augmented generation has been demonstrated over combined image and text corpora [MuRAG], [RA-CM3], and cross-modal retrieval is well established through contrastive vision-language pretraining [CLIP], [OpenCLIP]. Attribution has likewise received attention as an evaluation target [Rashkin], [Verifiability]. However, existing systems exhibit three limitations relative to the setting addressed here. First, they assume cloud-hosted embedding and generation services, precluding deployment on confidential corpora or in disconnected environments — a constraint that quantization research [GPTQ], [AWQ] has recently made unnecessary. Second, speech is rarely integrated as a first-class retrievable modality despite the maturity of robust offline transcription [Whisper]. Third, attribution is typically evaluated post hoc rather than propagated as provenance metadata through ingestion, indexing and generation. This work integrates four modalities under a strict offline constraint, maintains provenance from ingestion through to citation rendering, and evaluates the resulting system using established retrieval [BEIR] and RAG-specific [RAGAS] metrics.
 
-> Multimodal retrieval-augmented generation has been demonstrated over combined image and text corpora [27], and cross-modal retrieval is well established through contrastive vision-language pretraining [11], [12]. However, existing systems exhibit three limitations relative to the setting addressed here. First, they assume cloud-hosted embedding and generation services, precluding deployment on confidential corpora or in disconnected environments. Second, speech is rarely integrated as a first-class retrievable modality despite the maturity of robust offline transcription [16]. Third, source attribution is typically treated as a presentation-layer concern rather than a design requirement propagated through ingestion, indexing, and generation. This work integrates four modalities under a strict offline constraint, with provenance metadata maintained from ingestion through to citation rendering, and evaluates the resulting system using established retrieval [10] and RAG-specific [31] metrics.
-
-Rewrite this in your own words. Note that it claims **integration under a constraint**, not algorithmic novelty — and that it names three specific limitations rather than one vague one.
+Rewrite in your own words. Note that it claims **integration under a constraint**, names **three specific** limitations rather than one vague one, and cites evidence that the constraint is now satisfiable.
 
 ---
 
@@ -472,37 +612,68 @@ Rewrite this in your own words. Note that it claims **integration under a constr
 
 ## 3.1 What "methodology" means in an engineering project
 
-Students confuse two things. **Research methodology** describes how you produce and validate knowledge. **Implementation detail** describes what you typed. A methodology section is the first, not the second.
+Students confuse two things. **Research methodology** describes how you produce and validate knowledge. **Implementation detail** describes what you typed. A methodology section is the first.
 
-Your methodology must answer five questions:
+Five questions it must answer:
 
 | Question | Section |
 |---|---|
-| What *kind* of work is this? | §3.2 Research approach |
-| How is the system designed, and **why this way rather than the alternatives**? | §3.3 Design rationale |
-| What data will it be tested on, and where does that data come from? | §3.5 Data methodology |
-| How will you know whether it worked? | §3.6 Evaluation methodology |
-| What could make your conclusions wrong? | §3.7 Threats to validity |
+| What *kind* of work is this? | §3.2 |
+| How is the system designed, and **why this way rather than the alternatives**? | §3.3 |
+| What data will it be tested on, and where did that data come from? | §3.5 |
+| How will you know whether it worked? | §3.6 |
+| What could make your conclusions wrong? | §3.7 |
 
-The word carrying the marks is **why**. A methodology section that says "we use ChromaDB" is a parts list. One that says "we use ChromaDB rather than FAISS because embedded operation removes a deployment dependency, and metadata filtering is required for citation provenance; FAISS's scale advantage is irrelevant below 10⁵ vectors" is methodology.
+The word carrying the marks is **why**. "We use ChromaDB" is a parts list. "We use ChromaDB rather than FAISS because embedded operation removes a deployment dependency and metadata filtering is required for provenance, while FAISS's scale advantage is irrelevant below 10⁵ vectors" is methodology.
 
 ## 3.2 Naming your research approach
 
-Use the correct term — it signals you know what kind of work you are doing.
+Yours is **Design Science Research (DSR)** — also called constructive or engineering research. You build an *artefact* that addresses a class of problem and evaluate it against defined criteria. It contrasts with *empirical* research (test a hypothesis against data) and *theoretical* research (prove a property).
 
-Yours is **Design Science Research** (also called constructive or engineering research): you build an *artefact* that solves a class of problem, and you evaluate it against defined criteria. It contrasts with *empirical research* (test a hypothesis on data) and *theoretical research* (prove a property).
+DSR is conventionally described as two cycles, and naming them shows you understand the shape of your own work:
+
+- **The design cycle** — build, evaluate, refine, repeat. Yours runs Days 5–13.
+- **The relevance cycle** — check the artefact against the real problem environment. Yours is the human feedback in Chapter 12.
+
+A third, the **rigour cycle**, connects the work to existing knowledge — which is precisely what today's literature review is.
 
 State it explicitly:
 
-> This project follows a design-science methodology: a software artefact is constructed to address an identified deficiency, and is evaluated against predefined functional and performance criteria derived from the literature.
+> This project follows a design-science methodology: a software artefact is constructed to address an identified deficiency and evaluated against functional and performance criteria defined in advance and derived from the literature. The work is constructive rather than hypothesis-testing; the claim under evaluation is that the artefact satisfies its stated objectives, not that a general proposition about the world holds.
 
-Then name the development process. Yours is **incremental and modular**: independent pipelines built in parallel against a frozen shared interface, integrated at a planned point, then evaluated and refined against human feedback. Say that, and note the two structural decisions that make it work — the schema freeze on Day 5, and integration on Day 12 rather than Day 13.
+Then name the **development process**: incremental and modular, with independent pipelines built in parallel against a frozen shared interface, integrated at a scheduled point, then refined against human feedback. Name the two structural decisions that make it work — the schema freeze on Day 5 and integration on Day 12 rather than Day 13 — and say that both are deliberate risk responses.
 
-## 3.3 Design rationale: the technique that earns marks
+## 3.3 Design rationale and Architecture Decision Records
 
 For every significant decision, document four things: **the decision, the alternatives considered, the criteria, and the justification.** Missing alternatives is what makes a design section read as arbitrary.
 
-The format below is an **Architecture Decision Record (ADR)** — a lightweight industry practice that maps perfectly onto what a methodology section needs.
+> **An ADR without rejected alternatives is not an ADR — it is a note.** The alternatives are the entire value: they prove the decision was *chosen* rather than defaulted into. Where a rejection rests on evidence from the literature, **cite it** — that single line converts an implementation preference into a defensible design decision.
+
+### 3.3.1 The seven ADRs, with the evidence each needs
+
+| ADR | Decision | Interesting rejected alternative | Evidence to cite |
+|---|---|---|---|
+| 001 | RAG over fine-tuning | Fine-tuning | ⭐ Ovadia (RAG beats FT for knowledge injection); Gekhman (FT on new knowledge *increases* hallucination); Kandpal (models struggle with long-tail facts) |
+| 002 | Local quantized LLM over cloud API | Cloud | GPTQ, AWQ (4-bit is near-lossless); privacy work (Carlini) |
+| 003 | Two vector collections | One collection | CLIP's 77-token limit; the modality gap |
+| 004 | ChromaDB over FAISS/Qdrant | FAISS | HNSW; ANN-Benchmarks; vector-DB survey |
+| 005 | Transcription over native audio embeddings | CLAP | Whisper (timestamps, robustness); CLAP (sound, not speech semantics) |
+| 006 | Fixed-size overlapping chunks | Semantic/recursive chunking | ⚠️ *thin published literature* — see §3.3.2 |
+| 007 | Rank-based cross-modal merging | Score-based | Modality gap; Reciprocal Rank Fusion |
+
+Note ADR-001. Most student projects justify "RAG not fine-tuning" by assertion. You can justify it with **three empirical papers**, one of which found that fine-tuning on new knowledge actively increases hallucination. That is a materially stronger answer, and it is available for the cost of citing it.
+
+### 3.3.2 When the literature is thin — an honest methodological move
+
+Chunking is a case where **practice outruns published research**. Most guidance lives in industry documentation and blog posts, not peer-reviewed venues. There are exceptions (late chunking, LumberChunker, RAPTOR), but there is no settled answer to "what chunk size should I use?"
+
+The correct response is not to pretend otherwise, and not to cite a blog as though it were research. Write:
+
+> Passage granularity has received comparatively little systematic study relative to its practical impact; published work addresses hierarchical [RAPTOR] and embedding-aware [LateChunking] alternatives, but general guidance remains largely empirical. **Segment size is therefore treated as a tunable parameter and determined by ablation (§8.4) rather than adopted from literature.**
+
+**This is a genuinely strong move.** It demonstrates that you can tell where evidence exists and where it does not — and it converts a weakness into a justification for running your own experiment. Examiners notice this.
+
+### 3.3.3 The ADR format
 
 ```markdown
 # ADR-003: Use two vector collections rather than one
@@ -511,202 +682,295 @@ The format below is an **Architecture Decision Record (ADR)** — a lightweight 
 Accepted (Day 3)
 
 ## Context
-Text chunks are embedded with all-MiniLM-L6-v2 (384-d); images with
-OpenCLIP ViT-B/32 (512-d). Both must be searchable from one query interface.
+Text is embedded with all-MiniLM-L6-v2 (384-d); images with OpenCLIP
+ViT-B/32 (512-d). Both must be searchable from one query interface.
+CLIP's text encoder truncates at 77 tokens.
 
 ## Decision
-Maintain two separate ChromaDB collections, queried independently and
-merged by rank.
+Maintain two ChromaDB collections, queried independently, merged by rank.
 
 ## Alternatives considered
-1. Single collection, one model for both — impossible: CLIP's text encoder
-   truncates at 77 tokens [11], so it cannot represent document-length passages.
-2. Single collection, projecting one space into the other — requires training
-   a projection layer; out of scope and unvalidated.
-3. Two collections, merged by raw similarity score — rejected: the modality
-   gap [13] makes text-image similarities systematically lower than
-   text-text, so images would be systematically ranked last.
+1. One collection, one model — impossible: CLIP truncates at 77 tokens [CLIP],
+   so document-length passages cannot be represented.
+2. One collection with a learned projection between spaces — requires paired
+   training data and validation we cannot perform in the schedule.
+3. Two collections merged by raw score — rejected: the modality gap [ModGap]
+   makes text-image similarities systematically lower than text-text, so
+   images would rank last regardless of relevance.
 
 ## Consequences
-+ Each modality is embedded by the model best suited to it
-+ Rank-based merging is robust to the modality gap
++ Each modality embedded by the model best suited to it
++ Adding a modality means adding a collection, not redesigning
 − Two indexes to maintain; merge policy becomes a tunable parameter
-− Absolute cross-modal scores are not comparable to text scores; the UI must
-  not display them side by side as if they were
+− Scores are not comparable across collections; the UI must never display
+  them side by side as though on one scale
+
+## Revisit if
+A single encoder handles document-length text and images in one space at a
+size viable for local execution.
 ```
 
-Note what makes this strong: **alternative 3 is rejected with a citation.** That single line converts an implementation choice into a literature-grounded design decision. Do this for your non-obvious decisions.
+Template and two worked examples are in [`docs/decisions/`](../decisions/).
 
-**Write ADRs for these seven**, which are the ones a panel will probe:
+## 3.4 Structure of the methodology section
 
-| ADR | Decision | The interesting alternative you rejected |
-|---|---|---|
-| 001 | RAG rather than fine-tuning | Fine-tuning — no citations, per-file retraining, needs GPUs |
-| 002 | Local quantized LLM rather than a cloud API | Cloud — violates the offline objective |
-| 003 | Two vector collections | One collection — CLIP's 77-token limit |
-| 004 | ChromaDB rather than FAISS or Qdrant | FAISS — no metadata, no persistence layer, scale irrelevant here |
-| 005 | Transcription rather than native audio embeddings | CLAP — weaker on speech semantics; loses timestamps |
-| 006 | Fixed-size overlapping chunks | Semantic/recursive chunking — better, but more moving parts; note as future work |
-| 007 | Rank-based cross-modal merging | Score-based merging — defeated by the modality gap |
-
-A folder is prepared at [`docs/decisions/`](../decisions/) with the template and ADR-003 written out as a worked example.
-
-## 3.4 The methodology section's structure
-
-| Section | Content |
+| § | Content |
 |---|---|
-| 3.1 Research approach | Design science; incremental modular development (§3.2) |
-| 3.2 System architecture | The pipeline diagram plus a component walkthrough |
-| 3.3 Ingestion methodology | Per-modality: parsing, chunking parameters and their justification, metadata schema |
-| 3.4 Indexing methodology | Embedding models with citations, collection design, ANN algorithm |
-| 3.5 Retrieval methodology | Query embedding, top-K selection, cross-modal merge policy |
-| 3.6 Generation methodology | Prompt construction, temperature, citation format and validation |
-| 3.7 Data methodology | Corpus composition, gold-set construction (§3.5) |
-| 3.8 Evaluation methodology | Metrics, protocol, human study design (§3.6) |
-| 3.9 Threats to validity | §3.7 |
+| 1 | Research approach — design science; incremental modular development |
+| 2 | System architecture — diagram plus component walkthrough |
+| 3 | Ingestion methodology — per modality; chunking parameters justified; metadata schema |
+| 4 | Indexing methodology — embedding models with citations; collection design; ANN algorithm |
+| 5 | Retrieval methodology — query embedding; top-K; cross-modal merge policy |
+| 6 | Generation methodology — prompt construction; temperature; citation format and validation |
+| 7 | Data methodology — corpus composition; gold-set construction; annotation protocol |
+| 8 | Evaluation methodology — metrics; protocol; human study design; ablations |
+| 9 | Threats to validity |
+| 10 | Reproducibility |
 
 ## 3.5 Data methodology
 
-Say where your data came from and why it is adequate. Three points:
+### 3.5.1 Corpus
 
-**Composition.** 50–200 files across four formats, deliberately including cross-modal pairs — an image and a document on the same topic, an audio clip discussing a topic also in a PDF. State that this is *purposive* sampling, not random: the corpus is constructed to exercise the cross-modal capability specifically.
+**Sampling is purposive, not random** — say this explicitly, using the term. The corpus is constructed to exercise cross-modal capability: it deliberately contains an image and a document on the same topic, and an audio clip discussing a topic also present in a PDF. Random sampling would not guarantee the cross-modal pairs the third objective requires.
 
-**Gold-set construction, and the honest disclosure.** Your evaluation questions were written **before** the system existed (Ch 1 §3.3). Say so explicitly — it is a genuine methodological strength that prevents unconscious tuning-to-the-test.
+Report composition as a table: count and total size per modality, page count for documents, total duration for audio, language, and provenance (created by the team / public domain / licensed).
 
-But also disclose the limitation plainly: **the gold set was authored by the same team that built the system**, which introduces bias in question phrasing (you will unconsciously write questions your architecture handles well). The mitigation — have the Chapter 12 external testers write additional questions, and report those results separately. **Stating a limitation and its mitigation is worth more than hiding it**; a panel that discovers an undisclosed weakness treats everything else with suspicion.
+### 3.5.2 Gold-set construction protocol
 
-**Ethics and licensing.** Only owned or freely-shareable files; no confidential material in a submitted corpus; note that offline operation is itself the privacy control.
+Describe this as a *protocol*, because that is what makes it credible:
+
+1. **Written before implementation.** Chapter 1 §3.3. Say so — it prevents unconscious tuning-to-the-test.
+2. **Query types deliberately balanced:** direct-lookup, paraphrase (sharing no keywords with the source — these are the ones that prove semantic search), cross-modal, multi-hop if any, and **negative controls** the corpus genuinely cannot answer.
+3. **Annotation:** each query labelled with the segment(s) that should be retrieved.
+4. **Independent verification:** a second team member confirms each label without seeing the first's answer, and disagreements are resolved by discussion. **Report how many needed resolution** — it is a measure of how well-defined your labels are.
+5. **Frozen before evaluation.** Once you begin measuring, the gold set does not change. Adding a question after seeing a failure invalidates the comparison.
+
+### 3.5.3 The bias you must disclose
+
+**The gold set was authored by the same team that built the system.** This risks question phrasing that unconsciously favours your architecture — you will naturally write questions your design handles.
+
+Mitigation: external participants author additional questions in Chapter 12, and **those results are reported separately** from the internal set.
+
+> Stating a limitation and its mitigation is worth more than concealing it. A panel that *discovers* an undisclosed weakness treats everything else you claim with suspicion. A panel that is *told* about one treats you as a careful researcher.
+
+### 3.5.4 Ethics and licensing
+
+Only owned or freely redistributable files; no confidential material in a submitted corpus; note that local execution means no corpus content is transmitted anywhere, which is itself the privacy control the project argues for.
 
 ## 3.6 Evaluation methodology
 
 ### 3.6.1 The principle
 
-**An evaluation that cannot fail is not an evaluation.** Define your metrics, targets, and protocol *now*, before results exist. Metrics chosen after seeing results are worthless, and examiners know this.
+**An evaluation that cannot fail is not an evaluation.** Define metrics, targets and protocol *now*, in writing, before results exist. Metrics chosen after seeing results are worthless and examiners know it.
 
-### 3.6.2 Retrieval metrics — what each actually measures
+### 3.6.2 Retrieval metrics — definitions and worked examples
 
-| Metric | Definition | What it captures | Weakness |
-|---|---|---|---|
-| **Recall@K** | Fraction of queries where a correct chunk appears in the top K | "Did we find it at all?" | Ignores position within the top K |
-| **MRR** | Mean of 1/(rank of first correct result) | "Did we rank it first?" | Only considers the first correct result |
-| **nDCG@K** | Position-discounted gain over graded relevance | Handles multiple relevant results with degrees of relevance | Requires graded judgements — more labelling |
+Notation: for query *q*, the system returns a ranked list; *rel(i)* = 1 if the result at rank *i* is relevant.
 
-**Report Recall@5 and MRR.** They answer different questions and are cheap to compute from binary judgements. Mention nDCG as applicable if you later grade relevance — but do not promise it.
-
-**Worked example, so you can actually compute these.** Five questions; the rank at which the correct chunk appeared:
-
-| Q | Rank of correct chunk | In top 5? | Reciprocal rank |
-|---|---|---|---|
-| 1 | 1 | ✅ | 1.00 |
-| 2 | 3 | ✅ | 0.33 |
-| 3 | not retrieved | ❌ | 0.00 |
-| 4 | 2 | ✅ | 0.50 |
-| 5 | 1 | ✅ | 1.00 |
+**Precision@K** — of the K returned, what fraction were relevant?
 
 ```
-Recall@5 = 4/5 = 0.80
-MRR      = (1.00 + 0.33 + 0.00 + 0.50 + 1.00) / 5 = 0.566
+P@K = (number of relevant results in top K) / K
 ```
 
-Notice the two metrics disagree in emphasis: recall looks respectable while MRR reveals that question 2 was ranked third. **That disagreement is exactly why you report both** — and being able to explain it is a strong viva answer.
+**Recall@K** — of the relevant items that exist, what fraction appeared in the top K?
 
-### 3.6.3 Generation metrics
+```
+R@K = (relevant results in top K) / (total relevant items)
+```
 
-Automatic text-overlap metrics (BLEU, ROUGE) are **inappropriate** for RAG answers — a correct answer phrased differently scores badly, and a fluent wrong answer can score well. Say this explicitly; it demonstrates you chose metrics deliberately rather than defaulting.
+In our gold set each query has one correct segment, so Recall@K reduces to a **hit rate**: did it appear in the top K, yes or no? Say this explicitly — otherwise a sharp examiner will ask whether you understand the difference.
 
-Use the RAGAS-style dimensions [31], rated by humans on a 1–5 scale:
+**MRR (Mean Reciprocal Rank)** — how highly was the first correct result ranked?
 
-| Dimension | The rater's question |
+```
+MRR = (1/|Q|) · Σ_q  1 / rank_q      (0 if not retrieved)
+```
+
+**nDCG@K** — position-discounted gain, supporting graded relevance:
+
+```
+DCG@K  = Σ_{i=1..K}  rel(i) / log₂(i + 1)
+nDCG@K = DCG@K / IDCG@K        (IDCG = DCG of the ideal ranking)
+```
+
+**Worked example.** Five queries; rank at which the correct segment appeared:
+
+| Q | Rank | In top 5? | Reciprocal rank | DCG contribution (1/log₂(rank+1)) |
+|---|---|---|---|---|
+| 1 | 1 | ✅ | 1.000 | 1/log₂2 = 1.000 |
+| 2 | 3 | ✅ | 0.333 | 1/log₂4 = 0.500 |
+| 3 | not retrieved | ❌ | 0.000 | 0 |
+| 4 | 2 | ✅ | 0.500 | 1/log₂3 = 0.631 |
+| 5 | 1 | ✅ | 1.000 | 1.000 |
+
+```
+Recall@5  = 4/5 = 0.800
+MRR       = (1.000 + 0.333 + 0.000 + 0.500 + 1.000) / 5 = 0.567
+nDCG@5    = (1.000 + 0.500 + 0 + 0.631 + 1.000) / 5     = 0.626
+```
+
+**The metrics disagree in emphasis, and that is the point.** Recall looks respectable at 0.80 while MRR reveals that query 2's answer sat at rank three. Being able to explain that divergence is a strong viva answer; reporting only the flattering one is the kind of thing examiners probe for.
+
+**Report Recall@5 and MRR.** Both are computable from binary judgements. Mention nDCG only if you actually grade relevance — do not promise it.
+
+### 3.6.3 The statistics caution that will save you
+
+With 20 queries, **one query moves Recall@5 by 0.05.** Worse, the uncertainty is larger than students expect. For a proportion *p* from *n* samples:
+
+```
+standard error = √( p(1−p) / n )
+
+For p = 0.80, n = 20:   SE = √(0.8 × 0.2 / 20) = √0.008 ≈ 0.089
+95% confidence interval ≈ 0.80 ± 1.96 × 0.089 ≈ 0.80 ± 0.175
+                        ≈ [0.62, 0.98]
+```
+
+**Report it as `Recall@5 = 0.80 (n = 20, 95% CI ≈ [0.62, 0.98])`.**
+
+Two consequences you must internalise:
+
+1. **Never claim a difference between 0.80 and 0.85 is meaningful at n = 20.** It is one query.
+2. If a panel member raises this, **agree immediately.** "You're right — with twenty queries the interval is wide, which is why we report it and why we do not claim significance for small differences" is a much better answer than a defence.
+
+Larger n narrows the interval as √n, so 80 queries would roughly halve it. If you have time, growing the gold set is the single cheapest way to strengthen your results.
+
+### 3.6.4 Generation metrics
+
+**Do not use BLEU or ROUGE.** State why explicitly, because choosing metrics deliberately rather than by default is itself evidence of rigour: overlap metrics penalise a correct answer phrased differently, and reward a fluent but unsupported one. For RAG, phrasing is not the property under test — grounding is.
+
+Use RAGAS-style dimensions, rated 1–5 by humans:
+
+| Dimension | The rater's question | What a failure looks like |
+|---|---|---|
+| **Faithfulness** | Is every claim supported by the cited segment? | Answer states a fact the segment does not contain |
+| **Answer relevance** | Does it address what was asked? | Correct and grounded, but answers a different question |
+| **Context relevance** | Were the retrieved segments useful? | Retrieval returned noise; the model coped anyway |
+| **Citation correctness** | Do `[n]` markers point at the supporting segments? | Right answer, wrong citation number |
+
+Separating the last two is worth doing: it lets you attribute failure to *retrieval* versus *generation*, which is the diagnostic distinction you need when improving the system.
+
+### 3.6.5 Designing the human study so it is credible
+
+Five design choices, each with a reason:
+
+1. **Raters:** at least three, including at least one external to the team. One rater is an opinion; three is data.
+2. **Blinding:** when comparing configurations, raters must not know which produced which answer. Otherwise expectation contaminates the rating. Practically: shuffle outputs and label them A/B.
+3. **Written rubric, agreed before rating.** Define each point on the 1–5 scale with an example. Without this, raters drift and scores are not comparable across sessions.
+4. **Agreement:** at least two raters score a common subset. Report **percentage agreement**, or Cohen's κ if you want the stronger measure. **Reporting disagreement is what makes the numbers honest** — nobody believes three raters agreed perfectly.
+5. **Report mean *and* range.** A mean of 4.0 from {4,4,4} and from {2,5,5} are entirely different findings, and only the range distinguishes them.
+
+**A worked rubric anchor** — write one like this for each dimension:
+
+> **Faithfulness.** 5 = every claim directly supported by the cited segment. 4 = all claims supported, but one is a reasonable inference rather than explicit. 3 = mostly supported, one unsupported minor detail. 2 = a central claim unsupported. 1 = contradicts the cited segment or invents content.
+
+### 3.6.6 System performance
+
+Report on a **stated reference machine** — CPU model, RAM, OS. Numbers without hardware are meaningless and an examiner may say so.
+
+Report **median and worst case**, never best case. A p95 latency matters far more to a user than a best-case one.
+
+| Measure | Target |
 |---|---|
-| **Faithfulness** | Is every claim supported by the cited chunk? |
-| **Answer relevance** | Does it address what was actually asked? |
-| **Context relevance** | Were the retrieved chunks actually useful? |
-| **Citation correctness** | Do the `[n]` markers point at the chunks that support each claim? |
+| Retrieval latency | < 1 s |
+| End-to-end latency | < 15 s |
+| PDF indexing | ≥ 1 page/s |
+| Whisper WER on test clips | < 15% |
+| Peak RSS | < available RAM with headroom |
 
-### 3.6.4 Designing the human study so it is credible
+### 3.6.7 Ablations — the cheapest route to rigour
 
-Four design choices, each with a reason:
+An ablation removes or varies one component to show it matters. **Change one thing at a time**, hold the corpus and gold set fixed, and report the same metrics.
 
-1. **Number of raters:** at least three, including at least one person outside the team. One rater is an opinion; three is data.
-2. **Blinding:** raters should not know which configuration produced which answer when you compare configurations (for example, chunk size 200 versus 400). Otherwise expectation contaminates the rating.
-3. **Written rubric:** define what each point on the 1–5 scale means, before rating. Without this, raters drift and scores are not comparable across sessions.
-4. **Agreement:** have at least two raters score the same subset and report how often they agree. Perfect agreement is unnecessary; **reporting the disagreement is what makes the numbers honest.**
+| Ablation | Variants | What it demonstrates |
+|---|---|---|
+| Chunk size | 150 / 300 / 600 words | The parameter was chosen, not guessed |
+| Top-K | 3 / 5 / 10 | Precision/context trade-off; the lost-in-the-middle effect |
+| **Cross-modal merge policy** | rank-based vs score-based | ⭐ That the modality gap is real *in your own data* |
+| Overlap | 0 / 50 words | Whether boundary loss is real |
+| OCR on/off for images | with / without | Whether the second image path earns its cost |
 
-Report **mean and range**, not just the mean. A mean of 4.0 from scores {4,4,4} and from {2,5,5} are very different findings.
-
-### 3.6.5 System performance
-
-Report on a stated reference machine (specify CPU and RAM — numbers without hardware are meaningless): indexing throughput per modality, retrieval latency, end-to-end latency, and peak memory. Report the **median and the worst case**, not the best case.
-
-### 3.6.6 Ablations — the cheapest way to look rigorous
-
-An ablation removes or varies one component to show it matters. Three that cost almost nothing here and produce real findings:
-
-| Ablation | What it demonstrates |
-|---|---|
-| Chunk size 150 vs 300 vs 600 | That your chunking parameter was chosen, not guessed |
-| Top-K = 3 vs 5 vs 10 | The precision/context trade-off, and the lost-in-the-middle effect [23] |
-| Rank-based vs score-based cross-modal merge | That the modality gap [13] is real **in your own data** |
-
-**The third one is the most valuable experiment in your entire project.** It takes an afternoon, it converts a cited claim into your own empirical finding, and it produces a result no other team will have. Do it in Chapter 12.
+**The merge-policy ablation is the most valuable experiment in the entire project.** It takes an afternoon, it converts a cited claim into your own empirical finding, and it produces a result no other team will have. Run it in Chapter 12.
 
 ## 3.7 Threats to validity
 
-A short subsection that dramatically raises perceived rigour, because it shows you know what your evidence does *not* prove.
+A short subsection that markedly raises perceived rigour, because it shows you know what your evidence does *not* prove.
 
-| Threat | In your project | Mitigation |
-|---|---|---|
-| **Internal** — is the effect caused by what you claim? | Retrieval improvements might come from corpus properties rather than the embedding model | Ablations (§3.6.6); fixed corpus across comparisons |
-| **External** — does it generalise? | 50–200 English files on one hardware configuration; results may not hold at 10⁵ files or in other languages | State the limit explicitly; do not extrapolate |
-| **Construct** — do the metrics measure what matters? | Recall@5 does not measure answer usefulness; hence the human ratings | Report both retrieval and answer metrics |
-| **Conclusion** — is the sample big enough? | 20 questions is small; a single question shifts Recall@5 by 0.05 | Report the sample size beside every number; avoid claiming small differences are significant |
+| Type | The question it asks | Your threat | Mitigation |
+|---|---|---|---|
+| **Internal** | Is the effect caused by what you claim? | Retrieval quality may reflect corpus properties rather than model capability | Ablations with corpus held fixed |
+| **External** | Does it generalise? | 50–200 English files, one hardware configuration; may not hold at 10⁵ files, other languages, or noisier audio | State limits explicitly; claim nothing beyond them |
+| **Construct** | Do the metrics measure what matters? | Recall@5 measures retrieval, not usefulness; faithfulness ratings are subjective | Report retrieval *and* answer metrics; publish the rubric |
+| **Conclusion** | Is the sample large enough? | n = 20 gives a 95% CI of roughly ±0.175 | Report n and CI beside every figure; claim no small differences |
+| **Bias** | Who made the test? | Gold set authored by the system's designers | External questions, reported separately |
 
-That last row is worth internalising. With 20 questions, **a difference between 0.80 and 0.85 is one question.** Do not build an argument on it, and if a panel member points this out, agreeing immediately is a much better answer than defending it.
+## 3.8 Reproducibility
+
+Rarely included in student reports, and it takes twenty minutes. Include it and you look like a researcher.
+
+| What to record | Why |
+|---|---|
+| Exact model identifiers and versions (`llama3.2:3b`, `all-MiniLM-L6-v2`, `ViT-B-32/laion2b_s34b_b79k`) | "Llama 3.2" alone does not identify a quantization |
+| `pip freeze > requirements.txt`, and the Python version | Library versions change behaviour |
+| Random seeds; generation temperature | Generation is stochastic unless pinned |
+| Hardware: CPU, RAM, OS | Latency numbers are meaningless without it |
+| The corpus manifest — filenames with checksums | Proves the same data was used across ablations |
+| The frozen gold set, committed to the repository | Proves it was not edited after seeing results |
+| Date of every measurement | Models and libraries get updated |
+
+State it in one sentence: *"All evaluation artefacts — corpus manifest, gold set, dependency versions, and configuration — are committed to the project repository at the commit corresponding to each reported result."*
 
 ---
 
 # Part 4 — DECIDE
 
-**4.1 Organising structure.** Thematic, using the seven themes of Part 2. Chronological ordering makes contribution invisible; a paper-by-paper structure is the anti-pattern of §1.2. If you compress, merge Themes 1 and 2 into "semantic representation and retrieval."
+**4.1 Organising structure.** Thematic, using [Ch 3A](ch03a-annotated-bibliography.md)'s themes. If you must compress, merge 1+2 into "semantic representation and retrieval" and 10 into 7. **Never** compress by dropping Theme 9 (attribution) — it is the literature behind your fourth objective and the part most teams lack.
 
-**4.2 How many sources.** 15–20 for the review; 20–25 for the final report. Quality over count — twenty sources you can each summarise in one sentence beats forty you cannot. Ensure coverage of every theme; a theme with one citation looks like an afterthought.
+**4.2 How many sources.** 15–20 for the review; 20–25 for the final report. Every theme needs ≥ 2 sources; a theme with one looks like an afterthought.
 
-**4.3 Which gap to claim.** The conjunctive one from §1.10.1 rows 2–3: integration under an offline constraint, with speech as a first-class modality and citations as a design requirement. Do **not** claim algorithmic novelty.
+**4.3 Which gap to claim.** The conjunctive one (§1.12.1 rows 2–3): integration under an offline constraint, speech as a first-class modality, provenance propagated rather than evaluated post hoc. **Do not claim algorithmic novelty.**
 
-**4.4 Which decisions to formalise as ADRs.** The seven in §3.3. Three of them (003, 005, 007) carry citations, which is what makes them methodology rather than preference.
+**4.4 Which decisions to formalise.** All seven ADRs. Five can cite literature; do so.
 
-**4.5 What to defer to the report.** Full ablation results, per-module implementation detail, the feedback log. Today establishes the *protocol*; Chapters 7–12 produce the numbers.
+**4.5 What to defer.** Ablation *results* (the protocol is fixed today, the numbers come in Ch 12), per-module implementation detail, and the feedback log.
+
+**4.6 The one thing to decide as a team, out loud.** Your answer to *"ColPali retrieves document pages as images — why didn't you do that?"* It is the sharpest question available about your architecture, and it deserves a real answer rather than an improvised one. (§1.12.3, last row.)
 
 ---
 
 # Part 5 — BUILD: the day
 
-## 5.1 Templates prepared for you
+## 5.1 Templates prepared
 
 | File | Purpose |
 |---|---|
-| [`reports/literature-matrix.md`](../../reports/literature-matrix.md) | Search log, per-paper note template, and the synthesis matrix pre-populated with Part 2's sources |
-| [`reports/methodology-draft.md`](../../reports/methodology-draft.md) | The full methodology section, drafted, with `⟨FILL⟩` markers |
-| [`docs/decisions/`](../decisions/) | ADR template plus ADR-003 as a worked example |
+| [`reports/literature-matrix.md`](../../reports/literature-matrix.md) | Search log, verification tracker, synthesis matrix, gap pressure-test |
+| [`reports/methodology-draft.md`](../../reports/methodology-draft.md) | Full methodology, drafted, with `⟨FILL⟩` markers |
+| [`docs/decisions/`](../decisions/) | ADR template plus 001 and 003 written out |
+| [Ch 3A](ch03a-annotated-bibliography.md) | The annotated source list |
+| [Ch 3B](ch03b-reading-and-citations.md) | Worked paper reading; IEEE reference for every entry type; Zotero workflow |
 
-> Same warning as Chapter 2: **rewrite everything in your own words.** You will be questioned on every sentence, and text you did not write is text you cannot defend.
+> **Rewrite everything in your own words.** You will be questioned on every sentence.
 
 ## 5.2 Schedule
 
 | Time | Task | Who |
 |---|---|---|
-| 0:00–0:30 | Read Part 1. Agree the theme structure and the gap claim. | All |
-| 0:30–1:30 | **Verify every citation in Part 2** against the actual source. Split the list three ways. Fix errors in the matrix as you go. | Parallel |
-| 1:30–2:30 | Pass-2 reading. Member 1: RAG [20] + DPR [6]. Member 2: CLIP [11] + modality gap [13]. Member 3: Whisper [16] + MuRAG [27]. Write the §1.7 note for each. | Parallel |
-| 2:30–3:00 | **Forward-citation search** (§1.5.3) on Lewis [20] and MuRAG [27], filtering for `offline`, `local`, `multimodal`. Log results. Adjust the gap statement if needed. | Member 3 |
-| 3:00–4:00 | Fill the synthesis matrix. Write the review: one paragraph per theme, using the §1.9 moves. | Member 1 leads |
-| 4:00–5:00 | Write the methodology draft and the seven ADRs. | Member 2 leads |
-| 5:00–5:30 | One editor merges and unifies voice. Build the comparison table. | One editor |
-| 5:30–6:00 | Run the §6.1 rubric and drill the §6.2 questions. | All |
+| 0:00–0:30 | Read Part 1 §§1.1–1.3, 1.11–1.12. Agree theme structure and gap claim. | All |
+| 0:30–0:45 | Set up Zotero; create one collection per theme ([Ch 3B](ch03b-reading-and-citations.md)). | Member 3 |
+| 0:45–1:45 | **Verify every citation in [Ch 3A](ch03a-annotated-bibliography.md)** against the actual source. Split three ways. Tick the tracker. | Parallel |
+| 1:45–2:15 | ⭐ **Forward-citation search** (§1.6.2) on Lewis, MuRAG and ColPali, filtering `offline`, `local`, `multimodal`, `speech`. Log everything. Adjust the gap if needed. | Member 3 |
+| 2:15–3:15 | Pass-2 reading. M1: RAG + Ovadia/Gekhman. M2: CLIP + modality gap. M3: Whisper + Liu verifiability. Write the §1.8.3 note for each. | Parallel |
+| 3:15–4:15 | Fill the synthesis matrix. Write the review — one paragraph per theme, using §1.11's moves. **Include at least one taxonomy move.** | M1 leads |
+| 4:15–5:15 | Write the methodology draft and the five remaining ADRs. | M2 leads |
+| 5:15–5:45 | One editor merges, unifies voice, builds the comparison table. | One editor |
+| 5:45–6:15 | Rubric §6.1; drill §6.2 questions. | All |
 
-## 5.3 The one task nobody should skip
+## 5.3 The two tasks nobody may skip
 
-**The forward-citation search at 2:30.** Everything else can be recovered later; discovering in the viva that someone published exactly your system in 2024 cannot. Fifteen minutes, and it either strengthens your gap statement with evidence or tells you to narrow it while narrowing is still free.
+**The forward-citation search (1:45).** Everything else is recoverable. Discovering in the viva that your system was published in 2024 is not. Fifteen minutes.
+
+**Citation verification (0:45).** One wrong venue found by an examiner casts doubt on every other number in your report. This is the cheapest credibility insurance available.
 
 ---
 
@@ -714,94 +978,126 @@ That last row is worth internalising. With 20 questions, **a difference between 
 
 ## 6.1 Rubric
 
-Score 0–3 each. Below 30/42, revise.
+Score 0–3. Below 42/60, revise.
 
 | # | Criterion | Score |
 |---|---|---|
 | 1 | Organised thematically, not paper-by-paper | /3 |
-| 2 | Multiple sources appear in single sentences, compared or contrasted | /3 |
-| 3 | At least one taxonomy or grouping move (§1.9) | /3 |
-| 4 | Every theme has ≥ 2 sources | /3 |
-| 5 | Comparison table present, with honest ⚠️ marks | /3 |
-| 6 | Gap stated in four moves; conjunctive, not absolute-novelty | /3 |
-| 7 | Gap pressure-tested against ≥ 3 candidate counter-examples | /3 |
-| 8 | Every citation verified against the actual source | /3 |
-| 9 | Nothing patchwritten; paraphrases restructure, not just re-word | /3 |
-| 10 | Methodology names alternatives rejected, with reasons | /3 |
-| 11 | ≥ 3 ADRs cite literature | /3 |
-| 12 | Metrics defined with targets **before** any results exist | /3 |
-| 13 | Human study design specifies raters, blinding, rubric, agreement | /3 |
-| 14 | Threats to validity section present and honest | /3 |
-| | **Total** | **/42** |
+| 2 | Multiple sources compared or contrasted within single sentences | /3 |
+| 3 | At least one taxonomy move (§1.11.1) | /3 |
+| 4 | Opening roadmap paragraph and closing pivot paragraph present | /3 |
+| 5 | Every theme has ≥ 2 sources | /3 |
+| 6 | Attribution literature (Theme 9) included | /3 |
+| 7 | Embedding model choice justified with benchmark evidence | /3 |
+| 8 | ColPali / screenshot-retrieval alternative acknowledged and addressed | /3 |
+| 9 | Comparison table present with honest ⚠️ marks | /3 |
+| 10 | Gap stated in four moves; conjunctive, not absolute-novelty | /3 |
+| 11 | Gap pressure-tested against ≥ 4 counter-examples | /3 |
+| 12 | Search log completed; forward-citation search documented | /3 |
+| 13 | Every citation verified against the actual source | /3 |
+| 14 | Published versions cited where they exist | /3 |
+| 15 | Nothing patchwritten | /3 |
+| 16 | Methodology names alternatives rejected, with reasons | /3 |
+| 17 | ≥ 5 ADRs cite literature | /3 |
+| 18 | Metrics defined with formulas and targets, before any results | /3 |
+| 19 | Confidence interval or sample-size caution stated | /3 |
+| 20 | Human study specifies raters, blinding, rubric, agreement | /3 |
+| | **Total** | **/60** |
 
-## 6.2 Twenty-five questions a panel will ask
+## 6.2 Forty questions
 
 **On the review**
-1. How did you find these papers? → §1.5 search log + snowballing. Show the log.
-2. Which is the most important paper for your work, and why? → Lewis [20] for architecture; CLIP [11] for the cross-modal capability.
-3. Has anyone already built this? → MuRAG [27] is closest; name the three differences (offline, speech, citation-as-requirement).
-4. What is your gap in one sentence? → §1.10.2 move 2 + 3.
-5. Is your contribution novel? → **Integration under a constraint, not a new algorithm.** Say it plainly and do not overclaim.
-6. Why cite a 2009 paper (BM25) in a 2026 project? → It is the baseline we argue against, and still superior for rare exact strings.
-7. What does [13] (modality gap) actually say, and why does it matter to you? → Image and text embeddings occupy separate regions; hence rank-based merging.
-8. Which paper did you disagree with, or find a limitation in? → Any honest answer scores well. Lost-in-the-Middle [23] versus the "just use long context" position is a good one.
+1. How did you find these papers? → §1.5 search log, snowballing, citation graphs. Show the log.
+2. Which paper is most important to your work? → RAG for architecture; CLIP for the cross-modal capability.
+3. Has anyone already built this? → MuRAG is closest; name three differences (offline, speech, provenance-as-requirement).
+4. What is your gap in one sentence? → §1.12.2 moves 2 + 3.
+5. Is your contribution novel? → **Integration under a constraint, not a new algorithm.** Say it plainly.
+6. Why cite BM25, from 2009? → It is the baseline we argue against, and still better for rare exact strings.
+7. What does the modality-gap paper actually say? → Image and text embeddings occupy separate regions; systematic, not noise; hence rank-based merging.
+8. Which paper did you disagree with? → Any honest answer scores. Lost-in-the-Middle versus "just use long context" is a good one.
+9. What is the difference between a preprint and a published paper, and why does it matter? → Peer review; cite the published version where one exists.
+10. What are the three families of retrieval? → Lexical, dense, late-interaction (plus hybrid). §1.11.1.
+11. Which theme was hardest to find literature for? → Chunking. See §3.3.2 — and it is why we ablate instead.
 
-**On methodology**
-9. What research methodology is this? → Design science: construct an artefact, evaluate against predefined criteria.
-10. Why RAG and not fine-tuning? → ADR-001: no citations, per-file retraining, GPU requirement.
-11. Why ChromaDB and not FAISS? → ADR-004: embedded operation, metadata filtering for provenance; scale advantage irrelevant below 10⁵ vectors.
-12. Why two collections? → ADR-003: 512-d vs 384-d, different spaces, CLIP's 77-token limit.
-13. Why 300-word chunks? → Fits the 256-token embedding limit; ablation at 150/300/600 will validate it.
-14. Why transcription rather than CLAP? → ADR-005: speech content is linguistic; transcription gives timestamps and readable evidence.
-15. Why is your temperature low? → Faithfulness over creativity in a citation-grounded system.
+**On design choices**
+12. Why RAG and not fine-tuning? → ADR-001, and cite Ovadia and Gekhman rather than asserting.
+13. Doesn't fine-tuning teach the model your data? → Poorly, for facts; and Gekhman found fine-tuning on new knowledge can *increase* hallucination.
+14. Why `all-MiniLM-L6-v2` and not BGE or E5? → MTEB position against parameter count under an 8 GB RAM budget.
+15. Why ChromaDB and not FAISS? → ADR-004: embedded, metadata filtering for provenance; scale advantage irrelevant below 10⁵.
+16. Why two collections? → ADR-003: different dimensionality, different spaces, CLIP's 77-token limit.
+17. Why CLIP and not BLIP or SigLIP? → Symmetric retrieval objective; open weights; SigLIP noted as a future upgrade.
+18. What is the modality gap and what bug does it cause? → Systematically lower text-image scores; naive score merging buries images.
+19. Why transcription and not CLAP? → ADR-005: speech content is linguistic; timestamps required for citation.
+20. **Why not ColPali — retrieve document pages as images?** → ⭐ Higher compute per page; no timestamped audio path; our OCR path gives exact-string retrieval. A legitimate alternative with a different trade-off.
+21. Why 300-word chunks? → Fits the 256-token embedding limit; validated by ablation, not assumed.
+22. Why is temperature low? → Faithfulness over variety in a citation-grounded system.
+23. Why HNSW rather than exact search? → Architectural correctness and scalability; at our scale exact search would also work, and we say so.
 
 **On evaluation**
-16. How will you know it worked? → Recall@5 ≥ 0.80, MRR ≥ 0.65, cross-modal Recall@5 ≥ 0.70, faithfulness ≥ 4/5.
-17. Why Recall@5 *and* MRR? → They measure different things — finding versus ranking. Give the §3.6.2 worked example.
-18. Why not BLEU or ROUGE? → Overlap metrics penalise correct paraphrase and reward fluent wrong answers.
-19. Who writes the test questions, and isn't that biased? → We do, before implementation; the bias is real, and external testers add questions in Chapter 12.
-20. How many test questions? Is that enough? → 20; with 20 questions one item moves Recall@5 by 0.05, so we do not claim small differences.
-21. How do you prevent tuning to the test set? → Gold set written before implementation; parameters chosen by ablation, reported honestly.
-22. What are the threats to validity? → §3.7's four rows.
-23. What ablation would most strengthen your claims? → Rank-based versus score-based merging — it tests the modality gap in our own data.
+24. How will you know it worked? → Recall@5 ≥ 0.80, MRR ≥ 0.65, cross-modal Recall@5 ≥ 0.70, faithfulness ≥ 4/5.
+25. Why Recall@5 *and* MRR? → Finding versus ranking. Give the §3.6.2 worked example where they diverge.
+26. What is MRR, precisely? → Mean of 1/rank of the first relevant result; 0 if not retrieved.
+27. Why not nDCG? → It needs graded relevance judgements; our gold set is binary. We say so rather than promising it.
+28. Why not BLEU or ROUGE? → They penalise correct paraphrase and reward fluent unsupported text.
+29. Who wrote the test questions — isn't that biased? → Yes, and we disclose it. External questions in Ch 12, reported separately.
+30. How many questions, and is that enough? → n = 20; 95% CI ≈ ±0.175. We report the interval and claim no small differences.
+31. ⭐ *If asked "0.80 versus 0.85 — is that an improvement?"* → **No.** At n = 20 that is one query, well inside the interval.
+32. How do you avoid tuning to the test set? → Gold set written before implementation and frozen before measurement.
+33. How do you separate retrieval failure from generation failure? → Context relevance versus faithfulness are rated separately.
+34. How many raters, and how do you know they agree? → ≥ 3, one external, blinded, shared subset with agreement reported.
+35. What is the single most valuable experiment you will run? → Rank-based versus score-based merging — it tests the modality gap in our own data.
 
-**On honesty**
-24. What is the weakest part of your evaluation? → Small sample and self-authored questions. Say so; the mitigation is external testers.
-25. What would you do with three more months? → Advanced RAG [26]: reranking, query rewriting, Self-RAG-style verification [24], and video.
+**On honesty and limits**
+36. What are the threats to validity? → §3.7's five rows.
+37. What is the weakest part of your evaluation? → Small n and self-authored questions; mitigation is external testers.
+38. What would make your conclusions wrong? → Corpus-specific effects; hence fixed-corpus ablations.
+39. Is your system reproducible? → §3.8 — pinned model versions, `requirements.txt`, seeds, corpus manifest, frozen gold set, all committed.
+40. What would you do with three more months? → Advanced RAG: reranking, query rewriting, Self-RAG-style verification, ColPali-style page retrieval, and video.
 
 ## 6.3 Failure modes
 
 | Failure | Why it costs | Fix |
 |---|---|---|
-| Paper-by-paper paragraphs | Reads as a reading list; no argument | Synthesis matrix (§1.8) — write down columns |
-| No gap statement | The review does not justify the project | Four-move formula (§1.10.2) |
+| Paper-by-paper paragraphs | Reads as a reading list | Synthesis matrix; write down columns (§1.10) |
+| No gap statement | The review does not justify the project | Four-move formula (§1.12.2) |
 | Gap claims absolute novelty | One counter-example destroys it | Claim integration under constraint |
-| Citing surveys for primary facts | Signals you did not read originals | Trace to the primary source (§1.6.4) |
-| Citing blogs or Medium | Not evidence | Primary sources only (§1.6.1) |
-| Patchwritten paraphrase | Plagiarism, even when cited | Close the source, then write from memory (§1.11.2) |
-| Methodology as a parts list | No "why", so no marks | Alternatives + criteria + justification (§3.3) |
-| Metrics chosen after results | Worthless — and examiners know | Define targets today, in writing |
-| No threats-to-validity section | Suggests you cannot see your own limits | §3.7 — four rows is enough |
-| Unverified references | An error found in the viva taints everything | Verify all today (§5.2, 0:30–1:30) |
+| Missing the attribution literature | Objective O4 has no theoretical grounding | Theme 9 — search "attribution", not "citation" |
+| Embedding model unjustified | "Why this model?" has no answer | MTEB evidence (§1.1.1) |
+| Unaware of ColPali/DSE | A sharp examiner finds the alternative you did not consider | §1.12.3 last row |
+| Citing surveys for primary facts | Signals you did not read the originals | Trace to primary (§1.7.5) |
+| Citing blogs as evidence | Not evidence | Primary sources; docs for tools |
+| Preprint cited when published version exists | Reads as careless | Check every one (§1.7.3) |
+| Patchwritten paraphrase | Plagiarism even when cited | Close the source, then write (§1.13.2) |
+| Methodology as a parts list | No "why", no marks | Alternatives + criteria + justification (§3.3) |
+| Metrics chosen after results | Worthless, and detectable | Fix targets today, in writing |
+| Claiming 0.85 > 0.80 at n = 20 | Statistically indefensible | Report CIs (§3.6.3) |
+| No threats-to-validity section | Suggests you cannot see your own limits | §3.7 |
+| No reproducibility statement | Results cannot be checked | §3.8 — twenty minutes |
+| Unverified references | One error taints everything | Verify all today (§5.3) |
 
 ## 6.4 Day 3 completion checklist
 
-- [ ] Search log completed with at least six distinct queries across ≥ 3 sources
-- [ ] Forward-citation search on Lewis [20] and MuRAG [27] done and logged
-- [ ] Every citation in the reference list verified against the actual source
-- [ ] Six papers read to Pass 2, with the §1.7 note completed for each
-- [ ] Synthesis matrix filled in
-- [ ] Literature review written thematically, 15–20 sources, ≥ 1 taxonomy move
-- [ ] Comparison table built, with honest ⚠️ marks
-- [ ] Gap stated in four moves and pressure-tested against three counter-examples
-- [ ] Methodology draft covering all nine subsections
-- [ ] Seven ADRs written; at least three cite literature
-- [ ] Evaluation protocol fixed in writing: metrics, targets, rater count, rubric, blinding
-- [ ] Threats-to-validity section written
+- [ ] Zotero set up; one collection per theme; all sources captured
+- [ ] Search log: ≥ 7 distinct queries across ≥ 3 sources, with result counts
+- [ ] ⭐ Forward-citation search on Lewis, MuRAG and ColPali completed and logged
+- [ ] Every citation verified against the actual source; published versions preferred
+- [ ] Six papers read to Pass 2 with §1.8.3 notes completed
+- [ ] Synthesis matrix filled; gap identified from the matrix, not assumed
+- [ ] Review written thematically, 15–20 sources, ≥ 1 taxonomy move, opening and closing paragraphs present
+- [ ] Attribution literature (Theme 9) included
+- [ ] Embedding model choice justified with benchmark evidence
+- [ ] ColPali answer agreed as a team
+- [ ] Comparison table built with honest ⚠️ marks
+- [ ] Gap stated in four moves, pressure-tested against ≥ 4 counter-examples
+- [ ] Methodology draft: all ten subsections
+- [ ] Seven ADRs written; ≥ 5 cite literature
+- [ ] Evaluation protocol fixed in writing: formulas, targets, n, CI, rater count, rubric, blinding
+- [ ] Threats to validity written
+- [ ] Reproducibility statement written
 - [ ] One editor has unified the voice
-- [ ] Rubric §6.1 scored ≥ 30/42
-- [ ] All twenty-five questions in §6.2 drilled
+- [ ] Rubric §6.1 ≥ 42/60
+- [ ] All forty questions drilled
 
 ---
 
-**Next:** [Chapter 4 — Timeline, Team & Modular Work Split](ch04-timeline-and-team-split.md) (Day 4) — Presentation #2, the Gantt chart, module decomposition, interface contracts, and how three people work in parallel without blocking each other.
+**Next:** [Chapter 4 — Timeline, Team & Modular Work Split](ch04-timeline-and-team-split.md) (Day 4) — Presentation #2, the Gantt chart, module decomposition, interface contracts, and how three people work in parallel without blocking one another.

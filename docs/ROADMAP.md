@@ -50,7 +50,7 @@ Every chapter below serves one of these five questions.
 |----|-------|-----|-------------|
 | 1 | Objective & Problem Identification | 1 | Problem statement analysis, objectives, scope document |
 | 2 | Synopsis & Presentation | 2 | 2–3 page synopsis + PPT #1 |
-| 3 | Literature Review & Methodology | 3 | Survey of existing systems + our chosen methodology |
+| 3 | Literature Review & Methodology | 3 | Survey of existing systems + our chosen methodology<br>*(+ [3A] annotated bibliography, [3B] paper-reading & citations)* |
 | 4 | Timeline, Team & Modular Work Split | 4 | PPT #2, Gantt-style timeline, module ownership table |
 
 ### Phase B — Implementation (Days 5–13)
