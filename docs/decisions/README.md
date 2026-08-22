@@ -1,0 +1,50 @@
+# Architecture Decision Records (ADRs)
+
+An **ADR** is a short document recording one significant design decision: what was decided, what the alternatives were, why the alternatives were rejected, and what the decision costs you.
+
+## Why we keep these
+
+Three reasons, in ascending order of importance:
+
+1. **Memory.** In week three nobody remembers why chunk size is 300. The ADR says.
+2. **Onboarding.** A new reader understands the system by reading decisions, not by reverse-engineering code.
+3. **Marks.** A methodology section that says *"we use ChromaDB"* is a parts list. One that says *"we use ChromaDB rather than FAISS because embedded operation removes a deployment dependency and metadata filtering is required for citation provenance, while FAISS's scale advantage is irrelevant below 10⁵ vectors"* is methodology. **ADRs are that second thing, written once and reused in the report.**
+
+The teaching material is in [Chapter 3 §3.3](../chapters/ch03-literature-review-and-methodology.md).
+
+## The rule that makes an ADR worth writing
+
+> **An ADR without rejected alternatives is not an ADR — it is a note.**
+
+The alternatives are the entire value. They prove the decision was *chosen* rather than defaulted into. Where an alternative was rejected for a reason found in the literature, **cite it** — that single line converts an implementation preference into a defensible design decision.
+
+## Status values
+
+| Status | Meaning |
+|---|---|
+| **Proposed** | Under discussion, not yet acted on |
+| **Accepted** | Decided; implementation follows this |
+| **Superseded by ADR-NNN** | Replaced later — **keep the original file**; the change of mind is part of the record and shows the design evolved for reasons |
+| **Deprecated** | No longer applies, not replaced |
+
+Never delete an ADR. A superseded decision plus its replacement tells a better story than a tidy folder.
+
+## The seven ADRs this project needs
+
+Written on Day 3, referenced throughout the report.
+
+| ADR | Decision | Interesting rejected alternative | Cites literature |
+|---|---|---|---|
+| [001](adr-001-rag-over-finetuning.md) | RAG rather than fine-tuning | Fine-tuning — no citations possible, per-file retraining, GPU requirement | ✅ |
+| 002 | Local quantized LLM rather than a cloud API | Cloud API — violates Objective O6 | ✅ |
+| [003](adr-003-two-vector-collections.md) | Two vector collections | One collection — CLIP truncates text at 77 tokens | ✅ |
+| 004 | ChromaDB rather than FAISS or Qdrant | FAISS — no metadata layer, no persistence, scale advantage irrelevant here | ✅ |
+| 005 | Transcription rather than native audio embeddings | CLAP — weaker on speech semantics, loses timestamps | ✅ |
+| 006 | Fixed-size overlapping chunks | Semantic/recursive chunking — better, more complex; future work | |
+| 007 | Rank-based cross-modal merging | Score-based merging — defeated by the modality gap | ✅ |
+
+**Two are written out as worked examples** (001 and 003). Write the remaining five today.
+
+## Template
+
+Copy [`adr-template.md`](adr-template.md) to `adr-NNN-short-slug.md` and fill it in. Keep each under one page — an ADR that needs two pages is usually two decisions.
