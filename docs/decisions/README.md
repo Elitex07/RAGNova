@@ -31,19 +31,19 @@ Never delete an ADR. A superseded decision plus its replacement tells a better s
 
 ## The seven ADRs this project needs
 
-Written on Day 3, referenced throughout the report.
+001 and 003 written on Day 3; 002, 004, 005, 006 and 007 written on Day 4 during [Chapter 4](../chapters/ch04-timeline-and-team-split.md)'s planning session — all seven are architecture decisions made before any pipeline code exists, referenced throughout the report.
 
 | ADR | Decision | Interesting rejected alternative | Cites literature |
 |---|---|---|---|
 | [001](adr-001-rag-over-finetuning.md) | RAG rather than fine-tuning | Fine-tuning — no citations possible, per-file retraining, GPU requirement | ✅ |
-| 002 | Local quantized LLM rather than a cloud API | Cloud API — violates Objective O6 | ✅ |
+| [002](adr-002-local-llm-over-cloud.md) | Local quantized LLM rather than a cloud API | Cloud API — violates Objective O6 | ✅ |
 | [003](adr-003-two-vector-collections.md) | Two vector collections | One collection — CLIP truncates text at 77 tokens | ✅ |
-| 004 | ChromaDB rather than FAISS or Qdrant | FAISS — no metadata layer, no persistence, scale advantage irrelevant here | ✅ |
-| 005 | Transcription rather than native audio embeddings | CLAP — weaker on speech semantics, loses timestamps | ✅ |
-| 006 | Fixed-size overlapping chunks | Semantic/recursive chunking — better, more complex; future work | |
-| 007 | Rank-based cross-modal merging | Score-based merging — defeated by the modality gap | ✅ |
+| [004](adr-004-chromadb-over-faiss.md) | ChromaDB rather than FAISS or Qdrant | FAISS — no metadata layer, no persistence, scale advantage irrelevant here | ✅ |
+| [005](adr-005-transcription-over-clap.md) | Transcription rather than native audio embeddings | CLAP — weaker on speech semantics, loses timestamps | ✅ |
+| [006](adr-006-fixed-size-chunking.md) | Fixed-size overlapping chunks | Semantic/recursive chunking — better, more complex; future work. Explicitly the "thin literature, ablate instead" ADR (Ch3 §3.3.2) | |
+| [007](adr-007-rank-based-merge.md) | Rank-based cross-modal merging | Score-based merging — defeated by the modality gap | ✅ |
 
-**Two are written out as worked examples** (001 and 003). Write the remaining five today.
+**All seven are now written.**
 
 ## Template
 

@@ -51,7 +51,7 @@ Every chapter below serves one of these five questions.
 | 1 | Objective & Problem Identification | 1 | Problem statement analysis, objectives, scope document |
 | 2 | Synopsis & Presentation | 2 | 2–3 page synopsis + PPT #1 |
 | 3 | Literature Review & Methodology | 3 | Survey of existing systems + our chosen methodology<br>*(+ [3A] annotated bibliography, [3B] paper-reading & citations)* |
-| 4 | Timeline, Team & Modular Work Split | 4 | PPT #2, Gantt-style timeline, module ownership table |
+| 4 | Timeline, Team & Modular Work Split | 4 | PPT #2, computed critical-path schedule, module ownership table<br>*(+ [4A] scheduling & teamwork sources)* |
 
 ### Phase B — Implementation (Days 5–13)
 
@@ -60,11 +60,13 @@ Every chapter below serves one of these five questions.
 | 5 | Environment Setup & Offline LLM | 5 | Python env, Ollama + local model running, project skeleton |
 | 6 | Document Ingestion (PDF/DOCX) | 6 | Parsers, text extraction, chunking strategy |
 | 7 | Embeddings & the Vector Database | 7 | sentence-transformers, ChromaDB, first semantic search |
-| 8 | Image Pipeline (CLIP + OCR) | 8–9 | Text→image and image→text search |
-| 9 | Audio Pipeline (Whisper) | 9–10 | Speech-to-text, transcript chunking with timestamps |
-| 10 | RAG Core: Retrieval + Generation + Citations | 10–11 | The brain — query → retrieve → generate → cite |
-| 11 | Unified Query Interface (UI) | 11–12 | Streamlit chat app: text/file/image/audio/mic input |
+| 8 | Image Pipeline (CLIP + OCR) | 6–7 | Text→image and image→text search |
+| 9 | Audio Pipeline (Whisper) | 8–9 | Speech-to-text, transcript chunking with timestamps |
+| 10 | RAG Core: Retrieval + Generation + Citations | 8–9 | The brain — query → retrieve → generate → cite |
+| 11 | Unified Query Interface (UI) | 10–11 | Streamlit chat app: text/file/image/audio/mic input |
 | 12 | Integration, Testing & Human Feedback | 12–13 | End-to-end tests, feedback forms, bug-fix cycle |
+
+> **Days above are the corrected, computed schedule** — see [Chapter 4 §2.3](chapters/ch04-timeline-and-team-split.md) for the full critical-path calculation. The original Day-1 estimates (Ch10 at Day 10–11, Ch11 at Day 11–12) contained an unexamined two-day gap for Track A that a naive Gantt reading didn't surface; closing it moves Ch8–Ch11 two days earlier without changing the Day-14 deadline. Ch12–Ch13 are unchanged — the day of margin recovered is deliberately banked as a buffer before integration, not spent (Ch4 §2.4).
 
 ### Phase C — Reporting (Day 14)
 
@@ -108,7 +110,7 @@ Everyone does Chapters 1–5 and 13 **together** — shared foundation, shared r
 
 With 2 members: merge Track C into A and B (each owns half the UI).
 
-**Interface contract:** tracks stay independent because everything talks through ChromaDB and one shared Python module (`src/core/schemas.py`) defining what a "chunk" looks like. Defined in Chapter 5.
+**Interface contract:** tracks stay independent because everything talks through ChromaDB and one shared Python module (`src/core/schemas.py`) defining what a "chunk" looks like. Requirements, the module ownership (produces/consumes) table, and a strawman schema sketch are specified in [Chapter 4 §4](chapters/ch04-timeline-and-team-split.md); the schema itself is frozen and implemented in Chapter 5, enforced by a contract test (Ch4 §1.6).
 
 ---
 
@@ -129,7 +131,7 @@ With 2 members: merge Track C into A and B (each owns half the UI).
 - [x] Ch 1 — Objective & Problem Identification
 - [ ] Ch 2 — Synopsis & PPT (docs written; team deliverables pending)
 - [ ] Ch 3 — Literature Review & Methodology (docs written; team deliverables pending)
-- [ ] Ch 4 — Timeline & Team Split
+- [x] Ch 4 — Timeline & Team Split (docs written; team deliverables pending)
 - [ ] Ch 5 — Environment Setup & Offline LLM
 - [ ] Ch 6 — Document Ingestion
 - [ ] Ch 7 — Embeddings & Vector DB

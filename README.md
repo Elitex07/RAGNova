@@ -54,8 +54,12 @@ RAGNova/
 
 ## Team
 
-| Member | Role (assigned in Chapter 4) |
-|---|---|
-| Member 1 | TBD |
-| Member 2 | TBD |
-| Member 3 | TBD |
+Track assignments finalized in [Chapter 4](docs/chapters/ch04-timeline-and-team-split.md) — names below are placeholders; each track is one person's module, chosen to minimise coupling between tracks (Ch4 §1.2), not divided by rough workload.
+
+| Member | Track | Owns |
+|---|---|---|
+| ⟨Member 1⟩ | A — Text pipeline + RAG core | Chapters 6, 7, 10: parsing, chunking, text embeddings, retrieval, generation, citations |
+| ⟨Member 2⟩ | B — Vision + audio pipelines | Chapters 8, 9: CLIP image search, OCR, Whisper transcription |
+| ⟨Member 3⟩ | C — Interface + integration | Chapters 11, 12: Streamlit app, wiring pipelines together, testing |
+
+*2-member fallback:* Track C dissolves; its work splits between Tracks A and B (Ch4 §3.6).
