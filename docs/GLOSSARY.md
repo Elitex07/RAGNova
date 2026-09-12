@@ -35,7 +35,7 @@ Section references like *(Ch1 §1.5)* point to where the term is explained in de
 | **Faithfulness / groundedness** | Evaluation metric: is every claim in the generated answer actually supported by the cited source chunk? Our primary answer-quality measure. *(Ch1 §1.10)* |
 | **faster-whisper** | A CTranslate2 reimplementation of Whisper, roughly 4× faster on CPU with int8 quantization. What we actually run. |
 | **Fine-tuning** | Continuing training on your own data so knowledge enters the model's weights. Rejected for this project: needs GPUs, must be redone per file, and produces no citations. *(Ch1 §1.3)* |
-| **GGUF** | The file format Ollama/llama.cpp use to store quantized model weights for local inference. |
+| **GGUF** | The file format Ollama/llama.cpp use to store quantized model weights for local inference. Laid out so the OS can memory-map it rather than reading the whole file upfront. *(Ch5 §2.1)* |
 | **Gold set** | A hand-built list of test questions paired with the chunk that *should* be retrieved. Built before the system, so evaluation is honest. *(Ch1 §1.10, Ch1 §3.3)* |
 | **Hallucination** | Fluent, confident, false model output. Structural, not a bug — the model must always emit some token, its memory is lossy, and it never saw your files. RAG's main enemy. *(Ch1 §1.2)* |
 | **HNSW** | Hierarchical Navigable Small World — the graph algorithm ChromaDB uses for fast nearest-neighbour search. Long-range links in sparse upper layers get you near the target quickly; dense lower layers refine locally. Roughly O(log N). *(Ch1 §1.6.2)* |
@@ -49,6 +49,7 @@ Section references like *(Ch1 §1.5)* point to where the term is explained in de
 | **LLM** | Large Language Model — a neural network trained to predict the next token, which at scale produces question-answering, summarisation, and reasoning ability. |
 | **Log-Mel spectrogram** | An image-like representation of audio (frequency energy over time) that Whisper's encoder reads. *(Ch1 §1.7.6)* |
 | **Lost in the middle** | Documented effect where LLMs attend poorly to information buried in the middle of a long prompt. An argument for retrieving few, good chunks rather than stuffing everything. *(Ch1 §1.3)* |
+| **mmap (memory-mapping)** | Mapping a file's contents directly into a process's address space so the OS loads pages from disk lazily, on first access, rather than reading the whole file upfront. Why "loading" a GGUF model doesn't mean reading it all into RAM immediately, and why first-inference latency differs from later requests. *(Ch5 §2.1)* |
 | **Mean pooling** | Averaging a transformer's per-token output vectors into a single sentence vector. How sentence-transformers produce one embedding per chunk. *(Ch1 §1.5.2)* |
 | **Modality** | A type of data: text, image, audio, video. |
 | **Modality gap** | Empirical fact that CLIP's image vectors and text vectors occupy separate cones, so text–image similarity scores are systematically lower than text–text scores. Ignoring it makes images always lose in a merged ranking. *(Ch1 §1.7.3)* |
@@ -67,6 +68,7 @@ Section references like *(Ch1 §1.5)* point to where the term is explained in de
 | **RAG** | Retrieval-Augmented Generation: retrieve relevant chunks from the user's own files, paste them into the prompt, and have the LLM answer only from them — producing grounded, citable answers. |
 | **Recall@K** | Retrieval metric: fraction of test questions where the correct chunk appears in the top K results. Target Recall@5 ≥ 0.80. *(Ch1 §1.10)* |
 | **RLHF / DPO** | Training stages that align a model with human preferences by learning from comparisons of which response is better. Part of what makes an instruct model helpful. |
+| **site-packages** | The folder inside a Python environment (a venv or the system install) where installed packages actually live. Activating a venv works by prepending *this folder* to `sys.path` — the entire mechanism behind environment isolation. *(Ch5 §1.1)* |
 | **Semantic search** | Search by meaning, via embeddings, rather than by exact keyword match. |
 | **Slack / Float** | In critical-path scheduling, `float = latest start − earliest start` for an activity — how many days it could slip without delaying the project. A zero-float schedule is fully critical; RAGNova's corrected 14-day plan has none naturally, which is why a buffer is inserted deliberately before integration rather than relied upon. *(Ch4 §2.2–2.4)* |
 | **sentence-transformers** | Python library of ready-made sentence embedding models. We use `all-MiniLM-L6-v2`: 384 dimensions, ~90 MB, max **256 tokens** input. |
@@ -80,6 +82,7 @@ Section references like *(Ch1 §1.5)* point to where the term is explained in de
 | **Top-K** | Retrieving the K most similar chunks for a query (we start with K = 5). |
 | **Transformer** | The neural architecture behind LLMs, embedding models, CLIP, and Whisper. Stacked blocks of self-attention plus feed-forward layers. |
 | **Vector** | A list of numbers. In this project, always an embedding. |
+| **Wheel (`.whl`)** | A pre-built, ready-to-install Python package distribution — for compiled libraries (torch, numpy), it contains already-compiled binary code for one specific Python version + OS + CPU architecture. Why Chapter 0 insists on Python 3.11: ML libraries publish wheels for a limited set of versions, and running a too-new Python risks pip falling back to a slow, failure-prone source build. *(Ch5 §1.2)* |
 | **Vector database** | A database specialised in storing vectors, answering nearest-neighbour queries fast, and filtering by metadata. |
 | **ViT (Vision Transformer)** | Image encoder that splits a picture into patches and processes them like tokens. CLIP's image side. |
 | **WER (Word Error Rate)** | ASR accuracy metric: the proportion of words inserted, deleted, or substituted versus a correct transcript. Our target for Whisper: under 15% on test clips. |

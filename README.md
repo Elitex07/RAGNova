@@ -28,15 +28,24 @@ Think of it as "ChatGPT over your own documents," except:
 
 ```
 RAGNova/
-├── README.md            ← you are here
+├── README.md              ← you are here
 ├── docs/
-│   ├── ROADMAP.md       ← chapter breakdown + 14-day timeline + team split
-│   ├── GLOSSARY.md      ← every jargon term, explained simply
-│   └── chapters/        ← one teaching doc per chapter (read in order)
-├── src/                 ← implementation code (appears from Chapter 5)
-├── data/                ← sample files for testing (PDFs, images, audio)
-└── reports/             ← synopsis, PPTs, mid-term report
+│   ├── ROADMAP.md         ← chapter breakdown + 14-day timeline + team split
+│   ├── GLOSSARY.md        ← every jargon term, explained simply
+│   ├── decisions/         ← Architecture Decision Records (ADR-001 … 007)
+│   └── chapters/          ← one teaching doc per chapter (read in order)
+├── src/
+│   ├── core/              ← SHARED — schemas.py, config.py (Ch4 §1.3, Ch5 §3)
+│   └── pipelines/         ← per-track code, from Chapter 6 onward
+├── tests/                 ← test_contract.py — the interface contract, enforced (Ch4 §1.6)
+├── scripts/               ← verify_setup.py and other one-off setup scripts
+├── data/                  ← sample corpus + gold-standard eval set (documents/images/audio)
+├── requirements.txt       ← pinned dependencies (Ch5 §4.2)
+├── .env.example           ← committed config template — copy to .env (not committed)
+└── reports/               ← synopsis, PPTs, methodology drafts, mid-term report
 ```
+
+**Try it now:** with `.venv` activated (Ch5 §5.1), run `pytest tests/test_contract.py -v` — this passes today, before a single ingestion pipeline exists, because it tests the *shape* of data every track promises to produce, not any pipeline's internals.
 
 ## How to use this repo as a learner
 

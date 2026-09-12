@@ -57,7 +57,7 @@ Every chapter below serves one of these five questions.
 
 | Ch | Title | Days | What we build |
 |----|-------|------|---------------|
-| 5 | Environment Setup & Offline LLM | 5 | Python env, Ollama + local model running, project skeleton |
+| 5 | Environment Setup & Offline LLM | 5 | Python env, Ollama + local model running, project skeleton, **real `src/core/schemas.py` + passing contract test**<br>*(+ [5A] systems references)* |
 | 6 | Document Ingestion (PDF/DOCX) | 6 | Parsers, text extraction, chunking strategy |
 | 7 | Embeddings & the Vector Database | 7 | sentence-transformers, ChromaDB, first semantic search |
 | 8 | Image Pipeline (CLIP + OCR) | 6–7 | Text→image and image→text search |
@@ -110,7 +110,7 @@ Everyone does Chapters 1–5 and 13 **together** — shared foundation, shared r
 
 With 2 members: merge Track C into A and B (each owns half the UI).
 
-**Interface contract:** tracks stay independent because everything talks through ChromaDB and one shared Python module (`src/core/schemas.py`) defining what a "chunk" looks like. Requirements, the module ownership (produces/consumes) table, and a strawman schema sketch are specified in [Chapter 4 §4](chapters/ch04-timeline-and-team-split.md); the schema itself is frozen and implemented in Chapter 5, enforced by a contract test (Ch4 §1.6).
+**Interface contract:** tracks stay independent because everything talks through ChromaDB and one shared Python module (`src/core/schemas.py`) defining what a "chunk" looks like. Requirements, the module ownership (produces/consumes) table, and a strawman schema sketch are specified in [Chapter 4 §4](chapters/ch04-timeline-and-team-split.md); the real, frozen schema, plus its passing contract test (`tests/test_contract.py`), was implemented in [Chapter 5](chapters/ch05-environment-setup-and-offline-llm.md) §3 and is live in the repo today.
 
 ---
 
@@ -132,7 +132,7 @@ With 2 members: merge Track C into A and B (each owns half the UI).
 - [ ] Ch 2 — Synopsis & PPT (docs written; team deliverables pending)
 - [ ] Ch 3 — Literature Review & Methodology (docs written; team deliverables pending)
 - [x] Ch 4 — Timeline & Team Split (docs written; team deliverables pending)
-- [ ] Ch 5 — Environment Setup & Offline LLM
+- [x] Ch 5 — Environment Setup & Offline LLM (docs + real, tested code written — schemas.py, config.py, contract test, verify_setup.py; team still needs to install Ollama/deps on their own machines)
 - [ ] Ch 6 — Document Ingestion
 - [ ] Ch 7 — Embeddings & Vector DB
 - [ ] Ch 8 — Image Pipeline

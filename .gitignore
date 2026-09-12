@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# Virtual environment (Chapter 0 §A.4) — never commit this, it's machine-specific
+.venv/
+venv/
+env/
+
+# Secrets / machine-specific config (Chapter 5 §4) — .env.example IS committed,
+# .env itself never is
+.env
+
+# Generated at runtime — the vector database and any downloaded model cache
+chroma_db/
+.chroma/
+*.cache/
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/settings.json

@@ -1,0 +1,51 @@
+# RAGNova dependencies — pinned to specific versions deliberately.
+#
+# Why pinned, not just "latest": Chapter 3 §3.8 (reproducibility) requires
+# that a result measured in Chapter 12 can be reproduced later. An
+# unpinned `sentence-transformers` could silently change behaviour between
+# when you measure Recall@5 and when your examiner re-runs your code.
+#
+# These versions are known-compatible as of when this file was written.
+# ML libraries move fast — if `pip install -r requirements.txt` fails on
+# a version below, that is normal, not a sign you did something wrong:
+# check each package's release page for the closest available version to
+# the one pinned, update the pin, note the change and the date in your
+# commit message, and re-run `pytest tests/test_contract.py` plus
+# `python scripts/verify_setup.py` to confirm nothing broke.
+#
+# Install with:  pip install -r requirements.txt
+# (inside an activated virtual environment — Chapter 0 §A.4 / Chapter 5 §1)
+
+# --- Core: chunk validation, retrieval, generation --------------------------
+sentence-transformers==3.3.1      # text embeddings (all-MiniLM-L6-v2)
+chromadb==0.5.23                  # vector database (ADR-004)
+ollama==0.4.4                     # Python client for the local LLM API (ADR-002)
+
+# --- Vision pipeline (Track B, Chapter 8) -----------------------------------
+open-clip-torch==2.29.0           # CLIP embeddings (ADR-003, cross-modal search)
+pytesseract==0.3.13               # OCR wrapper — also requires the Tesseract
+                                   # binary installed separately (Chapter 5 §5.3)
+Pillow==11.0.0                    # image loading, used by both CLIP and OCR paths
+
+# --- Audio pipeline (Track B, Chapter 9) ------------------------------------
+faster-whisper==1.1.0             # speech-to-text (ADR-005)
+
+# --- Document pipeline (Track A, Chapter 6) ---------------------------------
+PyMuPDF==1.25.1                   # PDF parsing (imported as `fitz`)
+python-docx==1.1.2                # DOCX parsing
+
+# --- Interface (Track C, Chapter 11) ----------------------------------------
+streamlit==1.41.1                 # chat UI
+
+# --- Config, testing, and everyone's tooling --------------------------------
+python-dotenv==1.0.1              # loads .env into environment variables (§4 below)
+pytest==8.3.4                     # the contract test framework (Ch4 §1.6, tests/)
+
+# --- Not pinned here on purpose ---------------------------------------------
+# torch: installed automatically as a dependency of sentence-transformers
+# and open-clip-torch. Do NOT add a separate `torch==` pin unless you hit a
+# specific incompatibility — torch's CPU-only wheel selection is
+# platform-sensitive, and an overly specific pin here is a common source of
+# "works on my machine" installation failures across three different
+# laptops. If you need GPU support later, install torch manually per
+# https://pytorch.org/get-started/locally/ BEFORE installing this file.
