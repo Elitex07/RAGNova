@@ -133,7 +133,7 @@ With 2 members: merge Track C into A and B (each owns half the UI).
 - [ ] Ch 3 — Literature Review & Methodology (docs written; team deliverables pending)
 - [x] Ch 4 — Timeline & Team Split (docs written; team deliverables pending)
 - [x] Ch 5 — Environment Setup & Offline LLM (docs + real, tested code written — schemas.py, config.py, contract test, verify_setup.py; team still needs to install Ollama/deps on their own machines)
-- [ ] Ch 6 — Document Ingestion
+- [x] Ch 6 — Document Ingestion (docs + real, tested code written — src/pipelines/documents/ [pdf_parser, docx_parser, chunker, ingest], src/core/text_normalize.py, scripts/generate_sample_corpus.py + the 3-file synthetic starter corpus in data/documents/, tests/test_document_ingestion.py passing against the real generated files, ADR-008 written; team's full target corpus in data/README.md is still open)
 - [ ] Ch 7 — Embeddings & Vector DB
 - [ ] Ch 8 — Image Pipeline
 - [ ] Ch 9 — Audio Pipeline

@@ -29,9 +29,9 @@ The alternatives are the entire value. They prove the decision was *chosen* rath
 
 Never delete an ADR. A superseded decision plus its replacement tells a better story than a tidy folder.
 
-## The seven ADRs this project needs
+## The eight ADRs this project needs
 
-001 and 003 written on Day 3; 002, 004, 005, 006 and 007 written on Day 4 during [Chapter 4](../chapters/ch04-timeline-and-team-split.md)'s planning session — all seven are architecture decisions made before any pipeline code exists, referenced throughout the report.
+001 and 003 written on Day 3; 002, 004, 005, 006 and 007 written on Day 4 during [Chapter 4](../chapters/ch04-timeline-and-team-split.md)'s planning session; those seven are architecture decisions made before any pipeline code exists, referenced throughout the report. 008 came later, on Day 6, because it answers a question Day 4's planning session had no way to anticipate: once real DOCX parsing code existed, it turned out the file format itself doesn't store what a "page" is — that's not a design preference to weigh in a planning meeting, it's a fact about the format you only run into by trying to write the parser.
 
 | ADR | Decision | Interesting rejected alternative | Cites literature |
 |---|---|---|---|
@@ -42,8 +42,9 @@ Never delete an ADR. A superseded decision plus its replacement tells a better s
 | [005](adr-005-transcription-over-clap.md) | Transcription rather than native audio embeddings | CLAP — weaker on speech semantics, loses timestamps | ✅ |
 | [006](adr-006-fixed-size-chunking.md) | Fixed-size overlapping chunks | Semantic/recursive chunking — better, more complex; future work. Explicitly the "thin literature, ablate instead" ADR (Ch3 §3.3.2) | |
 | [007](adr-007-rank-based-merge.md) | Rank-based cross-modal merging | Score-based merging — defeated by the modality gap | ✅ |
+| [008](adr-008-docx-pagination-via-explicit-breaks.md) | DOCX pages tracked from explicit breaks only | `w:lastRenderedPageBreak` — looks like a solution, absent from our own generated files and non-reproducible even in real ones | |
 
-**All seven are now written.**
+**All eight are now written.**
 
 ## Template
 
