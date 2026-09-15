@@ -134,7 +134,12 @@ With 2 members: merge Track C into A and B (each owns half the UI).
 - [x] Ch 4 — Timeline & Team Split (docs written; team deliverables pending)
 - [x] Ch 5 — Environment Setup & Offline LLM (docs + real, tested code written — schemas.py, config.py, contract test, verify_setup.py; team still needs to install Ollama/deps on their own machines)
 - [x] Ch 6 — Document Ingestion (docs + real, tested code written — src/pipelines/documents/ [pdf_parser, docx_parser, chunker, ingest], src/core/text_normalize.py, scripts/generate_sample_corpus.py + the 3-file synthetic starter corpus in data/documents/, tests/test_document_ingestion.py passing against the real generated files, ADR-008 written; team's full target corpus in data/README.md is still open)
-- [ ] Ch 7 — Embeddings & Vector DB
+- [x] Ch 7 — Embeddings & Vector DB (docs + real, tested code written — src/core/embeddings.py,
+      src/core/vector_store.py, src/pipelines/documents/{index,search}.py,
+      scripts/{build_index,evaluate_retrieval}.py; real ChromaDB text_index built from the Ch6
+      corpus (6 chunks), first real semantic search, Recall@5=1.00/MRR=1.00 on 3 gold questions
+      (see Ch7 §3.3 for why that's promising but not yet strong evidence); two real bugs found
+      and fixed during verification — see Ch7's framing note and §2.3/§5.3)
 - [ ] Ch 8 — Image Pipeline
 - [ ] Ch 9 — Audio Pipeline
 - [ ] Ch 10 — RAG Core

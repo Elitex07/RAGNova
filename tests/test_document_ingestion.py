@@ -250,6 +250,30 @@ def test_ingest_document_missing_file_raises_file_not_found():
         ingest_document("data/documents/does_not_exist.pdf")
 
 
+def test_blank_pdf_page_produces_zero_chunks_and_warns(tmp_path, capsys):
+    # Chapter 6 §1.4's policy, exercised for real rather than only asserted
+    # in prose: a page with zero extractable text (here, a genuinely blank
+    # page — the simplest real example, same underlying case as a scanned
+    # page with no text layer) is warned about and skipped, not an error.
+    # This exact path went unexercised by any test until Chapter 7's own
+    # verification process ran it manually and found the warning's em-dash
+    # was being mangled on an unconfigured Windows console — see ingest.py's
+    # `sys.stderr.reconfigure` for the fix this test also guards.
+    fitz = pytest.importorskip("fitz", reason="PyMuPDF not installed yet")
+    doc = fitz.open()
+    doc.new_page()
+    blank = tmp_path / "blank.pdf"
+    doc.save(blank)
+    doc.close()
+
+    chunks = ingest_document(blank)
+    assert chunks == []
+
+    warning = capsys.readouterr().err
+    assert "no extractable text" in warning
+    assert "—" in warning  # confirms the em-dash survived, not "?" or "�"
+
+
 # ---------------------------------------------------------------------------
 # Part 6 — round-trip REAL chunks through ChromaDB, same pattern as
 # test_contract.py's test_round_trips_through_chromadb, but sourced from

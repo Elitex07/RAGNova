@@ -83,6 +83,7 @@ Section references like *(Ch1 §1.5)* point to where the term is explained in de
 | **Token** | The unit LLMs read — a sub-word fragment. ~1 token ≈ 0.75 English words. Context windows and embedding limits are measured in tokens. |
 | **Top-K** | Retrieving the K most similar chunks for a query (we start with K = 5). |
 | **Transformer** | The neural architecture behind LLMs, embedding models, CLIP, and Whisper. Stacked blocks of self-attention plus feed-forward layers. |
+| **Upsert** | "Update or insert": write a record by ID, replacing it if that ID already exists, inserting it if not. ChromaDB's `add()` does **not** do this — on a duplicate ID it silently keeps the original and drops the new write, no error, no update. `upsert()` gives the update-or-insert behaviour this project actually needs so a re-indexing run correctly refreshes edited content. *(Ch7 §2.3, a real bug found by testing, not assumed)* |
 | **Vector** | A list of numbers. In this project, always an embedding. |
 | **Wheel (`.whl`)** | A pre-built, ready-to-install Python package distribution — for compiled libraries (torch, numpy), it contains already-compiled binary code for one specific Python version + OS + CPU architecture. Why Chapter 0 insists on Python 3.11: ML libraries publish wheels for a limited set of versions, and running a too-new Python risks pip falling back to a slow, failure-prone source build. *(Ch5 §1.2)* |
 | **Vector database** | A database specialised in storing vectors, answering nearest-neighbour queries fast, and filtering by metadata. |

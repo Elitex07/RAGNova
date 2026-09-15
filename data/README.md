@@ -94,7 +94,7 @@ Fill in as each chapter's evaluation runs. Numbers, not adjectives (Chapter 1 §
 
 | Date | Chapter | Recall@5 | MRR | Cross-modal Recall@5 | Notes / what changed |
 |---|---|---|---|---|---|
-| | | | | | |
+| 2026-09-15 | Ch7 | 1.00 | 1.00 | N/A (no images/audio yet) | First real semantic search, 3 text queries (T1–T3) against the 6-chunk Ch6 starter corpus. All 3 hit at rank 1. Read alongside Ch7 §3.3: with only 3 questions, one miss would swing Recall@5 to 0.67 — promising, not yet strong evidence. Grow the gold set (T4 onward) before trusting this number in a report. |
 
 ---
 

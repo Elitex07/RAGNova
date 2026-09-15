@@ -26,6 +26,19 @@ from src.pipelines.documents.chunker import chunk_page_text
 from src.pipelines.documents.docx_parser import extract_docx_pages
 from src.pipelines.documents.pdf_parser import extract_pdf_pages
 
+# The zero-extractable-text warning below prints a real em-dash. On an
+# unconfigured Windows console this renders as "?" instead — the exact bug
+# Chapter 5's verify_setup.py already found and fixed for stdout (Ch5 §6.3's
+# troubleshooting table). That fix didn't cover stderr, which is what this
+# warning actually uses, so it slipped through in Chapter 6 unnoticed until
+# Chapter 7's evaluate_retrieval.py hit the identical symptom on stdout.
+# `hasattr` guards against environments where stderr has been replaced with
+# something that doesn't support `.reconfigure()` — pytest's own output
+# capturing is exactly such an environment, and this import runs under it
+# on every test collection.
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
+
 # extension -> (modality, per-page text extractor). Adding a third document
 # type later (e.g. .txt, .md) means adding one entry here, not branching
 # logic inside ingest_document() itself.
