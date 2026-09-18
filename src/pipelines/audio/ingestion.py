@@ -8,11 +8,12 @@ from src.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-MIN_CHUNK_LENGTH = 300
+TARGET_WORDS = 75
+OVERLAP_WORDS = 20
 
 class AudioIngestor:
     def __init__(self):
-        model_size = getattr(settings, "WHISPER_MODEL", "base")
+        model_size = getattr(settings, "WHISPER_MODEL", getattr(settings, "AUDIO_MODEL", "base"))
         device = getattr(settings, "WHISPER_DEVICE", "cpu")
         compute_type = getattr(settings, "WHISPER_COMPUTE_TYPE", "int8")
 
@@ -33,27 +34,21 @@ class AudioIngestor:
         )
 
         chunks = []
-        current_text = []
-        current_start = None
-        current_end = None
+        buffer = []
         chunk_index = 1
 
         for segment in segments:
-            text = segment.text.strip()
-            if not text:
+            if not segment.text.strip():
                 continue
 
-            if current_start is None:
-                current_start = segment.start
+            buffer.append(segment)
+            
+            combined_text = " ".join([s.text.strip() for s in buffer])
+            word_count = len(combined_text.split())
 
-            current_text.append(text)
-            current_end = segment.end
-
-            combined_text = " ".join(current_text)
-
-            if len(combined_text) >= MIN_CHUNK_LENGTH:
-                start_s = round(current_start, 2)
-                end_s = round(current_end, 2)
+            if word_count >= TARGET_WORDS:
+                start_s = round(buffer[0].start, 2)
+                end_s = round(buffer[-1].end, 2)
 
                 safe_stem = f"{file_path.stem}_{file_path.suffix.replace('.', '')}"
                 chunk_id = f"{safe_stem}__t{int(start_s)}__c{chunk_index:03d}"
@@ -68,15 +63,15 @@ class AudioIngestor:
                     end_s=end_s,
                 )
                 chunks.append(chunk)
-
-                current_text = []
-                current_start = None
                 chunk_index += 1
 
-        if current_text:
-            combined_text = " ".join(current_text)
-            start_s = round(current_start, 2)
-            end_s = round(current_end, 2)
+                while len(buffer) > 1 and len(" ".join([s.text.strip() for s in buffer]).split()) > OVERLAP_WORDS:
+                    buffer.pop(0)
+
+        if buffer:
+            combined_text = " ".join([s.text.strip() for s in buffer])
+            start_s = round(buffer[0].start, 2)
+            end_s = round(buffer[-1].end, 2)
             safe_stem = f"{file_path.stem}_{file_path.suffix.replace('.', '')}"
             chunk_id = f"{safe_stem}__t{int(start_s)}__c{chunk_index:03d}"
 
@@ -91,6 +86,6 @@ class AudioIngestor:
             )
             chunks.append(chunk)
 
-        logger.info(f"Generated {len(chunks)} grouped chunks for {file_path.name}")
+        logger.info(f"Generated {len(chunks)} overlapping chunks for {file_path.name}")
         return chunks
     
