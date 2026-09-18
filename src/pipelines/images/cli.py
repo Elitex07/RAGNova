@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 from src.pipelines.images.models import ImageIngestionConfig
-from src.pipelines.images.pipeline import ImageIngestionPipeline
+from src.pipelines.images import ImageIngestionPipeline
 
 
 def main() -> None:
