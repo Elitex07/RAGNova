@@ -199,7 +199,7 @@ class ImageIngestionPipeline:
             self.embedder = OpenCLIPEmbedder(self.config)
 
         # Chunk store — default to in-memory store
-        self.store: ChunkStore = store or ChunkStore()
+        self.store: ChunkStore = store if store is not None else ChunkStore()
 
     # ------------------------------------------------------------------
     # Private helpers
