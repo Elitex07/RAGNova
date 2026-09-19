@@ -29,6 +29,7 @@ from src.pipelines.images.ingest import (                     # ingest.py
 from src.pipelines.images.models import (
     ImageIngestionConfig,
     ImageMetadata,
+
     OCRResult,
 )
 from src.pipelines.images.ocr import TesseractOCREngine       # ocr.py
