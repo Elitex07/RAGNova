@@ -4,7 +4,7 @@ import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, Iterator, List, Optional, Union
+from typing import Callable, Dict, Iterator, List, Optional, Protocol, Union
 
 from faster_whisper import WhisperModel
 
@@ -34,6 +34,12 @@ WORD_PATTERN = re.compile(r'\b\w+\b')
 
 class AudioProcessingError(Exception):
     pass
+
+
+class AudioSegment(Protocol):
+    text: str
+    start: float
+    end: float
 
 
 @dataclass
@@ -89,8 +95,9 @@ class AudioIngestor:
         return re.sub(r'[^\w\-]', '_', stem)
 
     @staticmethod
-    def _compute_deterministic_hash(value: str) -> str:
-        return hashlib.sha256(value.encode('utf-8')).hexdigest()[:16]
+    def _compute_deterministic_hash(file_name: str, file_size: int) -> str:
+        content = f"{file_name}_{file_size}"
+        return hashlib.sha256(content.encode('utf-8')).hexdigest()[:16]
 
     @staticmethod
     def _count_words(text: str) -> int:
@@ -98,15 +105,16 @@ class AudioIngestor:
 
     def _create_chunk(
         self,
-        buffer: list,
+        buffer: List[AudioSegment],
         safe_stem: str,
         chunk_index: int,
         file_path: Path,
+        file_size: int,
         start_s: float,
         end_s: float
     ) -> Chunk:
         combined_text = " ".join(s.text.strip() for s in buffer)
-        file_hash = self._compute_deterministic_hash(file_path.name)
+        file_hash = self._compute_deterministic_hash(file_path.name, file_size)
         chunk_id = f"{safe_stem}_h{file_hash}_t{start_s:.2f}_c{chunk_index:03d}".replace('.', 'p')
         source_prefix = getattr(settings, 'AUDIO_SOURCE_PREFIX', 'data/audio/')
         source_prefix = source_prefix.rstrip('/') + '/'
@@ -121,7 +129,7 @@ class AudioIngestor:
             end_s=end_s,
         )
 
-    def _validate_file(self, file_path: Path) -> None:
+    def _validate_file(self, file_path: Path) -> int:
         if not file_path.exists():
             raise AudioProcessingError(f"Audio file not found: {file_path}")
         if not file_path.is_file():
@@ -138,10 +146,11 @@ class AudioIngestor:
                 raise AudioProcessingError(f"Audio file is empty: {file_path}")
             if file_size > MAX_FILE_SIZE_BYTES:
                 raise AudioProcessingError(f"Audio file too large: {file_size / (1024**3):.1f}GB")
+            return file_size
         except OSError as e:
             raise AudioProcessingError(f"Cannot access file {file_path}: {e}") from e
 
-    def _transcribe_with_retry(self, file_path: Path) -> Iterator:
+    def _transcribe_with_retry(self, file_path: Path) -> Iterator[AudioSegment]:
         last_error = None
 
         for attempt in range(self.max_retries):
@@ -171,11 +180,12 @@ class AudioIngestor:
 
     def _create_chunks_from_segments(
         self,
-        segments: Iterator,
+        segments: Iterator[AudioSegment],
         safe_stem: str,
-        file_path: Path
+        file_path: Path,
+        file_size: int
     ) -> Iterator[Chunk]:
-        buffer = []
+        buffer: List[AudioSegment] = []
         buffer_word_count = 0
         chunk_index = 1
         has_new_content = False
@@ -193,7 +203,7 @@ class AudioIngestor:
                 start_s = buffer[0].start
                 end_s = buffer[-1].end
 
-                yield self._create_chunk(buffer, safe_stem, chunk_index, file_path, start_s, end_s)
+                yield self._create_chunk(buffer, safe_stem, chunk_index, file_path, file_size, start_s, end_s)
                 chunk_index += 1
 
                 max_trims = len(buffer) * 2
@@ -219,14 +229,14 @@ class AudioIngestor:
         if buffer and has_new_content:
             start_s = buffer[0].start
             end_s = buffer[-1].end
-            yield self._create_chunk(buffer, safe_stem, chunk_index, file_path, start_s, end_s)
+            yield self._create_chunk(buffer, safe_stem, chunk_index, file_path, file_size, start_s, end_s)
 
     def process_file(self, file_path: Union[str, Path]) -> List[Chunk]:
         if self._closed:
             raise RuntimeError("AudioIngestor has been closed")
 
         file_path = Path(file_path)
-        self._validate_file(file_path)
+        file_size = self._validate_file(file_path)
 
         logger.info(f"Processing: {file_path.name}")
 
@@ -236,12 +246,15 @@ class AudioIngestor:
 
             segments = self._transcribe_with_retry(file_path)
 
+            if self.progress_callback:
+                self.progress_callback(0.5)
+
             suffix = file_path.suffix.lstrip('.')
             safe_stem = self._sanitize_stem(file_path.stem)
             if suffix:
                 safe_stem = f"{safe_stem}_{suffix}"
 
-            chunk_list = list(self._create_chunks_from_segments(segments, safe_stem, file_path))
+            chunk_list = list(self._create_chunks_from_segments(segments, safe_stem, file_path, file_size))
 
             if not chunk_list:
                 logger.warning(f"No speech chunks detected in {file_path.name}")
@@ -264,7 +277,7 @@ class AudioIngestor:
             raise RuntimeError("AudioIngestor has been closed")
 
         file_path = Path(file_path)
-        self._validate_file(file_path)
+        file_size = self._validate_file(file_path)
 
         logger.info(f"Processing (streaming): {file_path.name}")
 
@@ -277,7 +290,7 @@ class AudioIngestor:
                 safe_stem = f"{safe_stem}_{suffix}"
 
             chunk_count = 0
-            for chunk in self._create_chunks_from_segments(segments, safe_stem, file_path):
+            for chunk in self._create_chunks_from_segments(segments, safe_stem, file_path, file_size):
                 yield chunk
                 chunk_count += 1
 
