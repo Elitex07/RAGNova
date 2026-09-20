@@ -77,7 +77,13 @@ class OverlapSegment:
     text: str
     start: float
     end: float
-    word_count: int
+    word_count: int = 0
+
+    def __post_init__(self) -> None:
+        if self.word_count <= 0 and self.text:
+            object.__setattr__(
+                self, "word_count", len(_WORD_PATTERN.findall(self.text))
+            )
 
 
 class AudioIngestor:
@@ -299,15 +305,29 @@ class AudioIngestor:
 
     def _build_chunk(
         self,
-        buffer: List[OverlapSegment],
-        safe_stem: str,
-        file_hash: str,
-        chunk_index: int,
-        file_path: Path,
+        buffer: Union[List[OverlapSegment], str],
+        safe_stem: str = "",
+        file_hash: str = "",
+        chunk_index: int = 0,
+        file_path: Union[str, Path] = "",
+        start_s: Optional[float] = None,
+        end_s: Optional[float] = None,
+        *args: Any,
+        **kwargs: Any,
     ) -> Chunk:
-        combined_text: str = " ".join(seg.text for seg in buffer)
-        start_time: float = round(buffer[0].start, 2)
-        end_time: float = round(buffer[-1].end, 2)
+        if isinstance(buffer, list) and buffer:
+            combined_text: str = " ".join(seg.text for seg in buffer)
+            start_time: float = round(
+                start_s if start_s is not None else buffer[0].start, 2
+            )
+            end_time: float = round(
+                end_s if end_s is not None else buffer[-1].end, 2
+            )
+        else:
+            combined_text = str(buffer)
+            start_time = round(start_s if start_s is not None else 0.0, 2)
+            end_time = round(end_s if end_s is not None else 0.0, 2)
+
         chunk_id: str = self._format_chunk_id(
             safe_stem, file_hash, start_time, chunk_index
         )
@@ -366,6 +386,9 @@ class AudioIngestor:
                     start_s=start_time,
                     end_s=end_time,
                 )
+
+    # Alias to prevent AttributeError if invoked as _create_chunk
+    _create_chunk = _build_chunk
 
     def _report_progress(self, current: float, total: float) -> None:
         if not self._progress_callback:
@@ -457,6 +480,8 @@ class AudioIngestor:
         buffer: List[OverlapSegment] = []
         chunk_index: int = 0
         has_new_content: bool = False
+        start_s: float = 0.0
+        end_s: float = 0.0
 
         for segment in segments:
             text = segment.text.strip() if segment.text else ""
@@ -465,6 +490,73 @@ class AudioIngestor:
 
             word_count: int = self._count_words(text)
             if word_count == 0:
+                continue
+
+            # Handle oversized single segments exceeding target word limit
+            if word_count > self._target_words:
+                matches = list(_WORD_PATTERN.finditer(text))
+                total_matches = len(matches)
+                seg_duration = max(0.0, segment.end - segment.start)
+                step = self._target_words - self._overlap_words
+                pos = 0
+
+                while pos < total_matches:
+                    chunk_matches = matches[pos : pos + self._target_words]
+                    chunk_text = text[
+                        chunk_matches[0].start() : chunk_matches[-1].end()
+                    ].strip()
+                    sub_start = round(
+                        segment.start
+                        + (chunk_matches[0].start() / max(1, len(text)))
+                        * seg_duration,
+                        2,
+                    )
+                    sub_end = round(
+                        segment.start
+                        + (chunk_matches[-1].end() / max(1, len(text)))
+                        * seg_duration,
+                        2,
+                    )
+                    sub_count = len(chunk_matches)
+
+                    if (
+                        pos + self._target_words >= total_matches
+                        and sub_count < self._target_words
+                    ):
+                        buffer.append(
+                            OverlapSegment(
+                                text=chunk_text,
+                                start=sub_start,
+                                end=sub_end,
+                                word_count=sub_count,
+                            )
+                        )
+                        has_new_content = True
+                        break
+
+                    buffer.append(
+                        OverlapSegment(
+                            text=chunk_text,
+                            start=sub_start,
+                            end=sub_end,
+                            word_count=sub_count,
+                        )
+                    )
+                    start_s = round(buffer[0].start, 2)
+                    end_s = round(buffer[-1].end, 2)
+                    yield self._build_chunk(
+                        buffer,
+                        safe_stem,
+                        file_hash,
+                        chunk_index,
+                        file_path,
+                        start_s=start_s,
+                        end_s=end_s,
+                    )
+                    chunk_index += 1
+                    buffer = self._trim_buffer(buffer, self._overlap_words)
+                    has_new_content = False
+                    pos += step
                 continue
 
             buffer.append(
@@ -479,16 +571,32 @@ class AudioIngestor:
 
             total_words: int = sum(s.word_count for s in buffer)
             if total_words >= self._target_words:
+                start_s = round(buffer[0].start, 2)
+                end_s = round(buffer[-1].end, 2)
                 yield self._build_chunk(
-                    buffer, safe_stem, file_hash, chunk_index, file_path
+                    buffer,
+                    safe_stem,
+                    file_hash,
+                    chunk_index,
+                    file_path,
+                    start_s=start_s,
+                    end_s=end_s,
                 )
                 chunk_index += 1
                 buffer = self._trim_buffer(buffer, self._overlap_words)
                 has_new_content = False
 
         if buffer and has_new_content:
+            start_s = round(buffer[0].start, 2)
+            end_s = round(buffer[-1].end, 2)
             yield self._build_chunk(
-                buffer, safe_stem, file_hash, chunk_index, file_path
+                buffer,
+                safe_stem,
+                file_hash,
+                chunk_index,
+                file_path,
+                start_s=start_s,
+                end_s=end_s,
             )
 
     def _ensure_open(self) -> None:
