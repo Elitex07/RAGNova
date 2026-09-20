@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import logging
 import re
 import time
@@ -87,6 +88,8 @@ class AudioIngestor:
         "_vad_parameters",
         "_progress_callback",
         "_max_retries",
+        "_target_words",
+        "_overlap_words",
         "_model",
         "_closed",
     )
@@ -97,26 +100,51 @@ class AudioIngestor:
         device: Optional[str] = None,
         compute_type: Optional[str] = None,
         vad_parameters: Optional[Dict[str, Any]] = None,
-        progress_callback: Optional[Callable[[float], None]] = None,
-        max_retries: int = 3,
+        progress_callback: Optional[Callable[..., None]] = None,
+        max_retries: Optional[int] = None,
+        target_words: Optional[int] = None,
+        overlap_words: Optional[int] = None,
     ) -> None:
-        if OVERLAP_WORDS >= TARGET_WORDS:
+        self._target_words: int = (
+            target_words
+            if target_words is not None
+            else getattr(settings, "AUDIO_CHUNK_TARGET_WORDS", TARGET_WORDS)
+        )
+        self._overlap_words: int = (
+            overlap_words
+            if overlap_words is not None
+            else getattr(settings, "AUDIO_CHUNK_OVERLAP_WORDS", OVERLAP_WORDS)
+        )
+
+        if self._overlap_words >= self._target_words:
             raise ValueError(
-                f"OVERLAP_WORDS ({OVERLAP_WORDS}) must be less than "
-                f"TARGET_WORDS ({TARGET_WORDS})"
+                f"overlap_words ({self._overlap_words}) must be less than "
+                f"target_words ({self._target_words})"
             )
-        if max_retries < 1:
+
+        resolved_retries: int = (
+            max_retries
+            if max_retries is not None
+            else getattr(settings, "WHISPER_MAX_RETRIES", 3)
+        )
+        if resolved_retries < 1:
             raise ValueError("max_retries must be at least 1")
+        self._max_retries: int = resolved_retries
 
         self._model_size: str = self._resolve_model_size(model_size)
         self._device: str = self._resolve_device(device)
         self._compute_type: str = self._resolve_compute_type(compute_type)
+
+        configured_vad: Dict[str, Any] = getattr(
+            settings, "WHISPER_VAD_PARAMETERS", {}
+        ) or {}
         self._vad_parameters: Dict[str, Any] = {
             **DEFAULT_VAD_PARAMETERS,
+            **configured_vad,
             **(vad_parameters or {}),
         }
-        self._progress_callback: Optional[Callable[[float], None]] = progress_callback
-        self._max_retries: int = max_retries
+
+        self._progress_callback: Optional[Callable[..., None]] = progress_callback
         self._closed: bool = False
 
         logger.info(
@@ -143,9 +171,17 @@ class AudioIngestor:
 
     @staticmethod
     def _resolve_device(override: Optional[str]) -> str:
-        device: str = override or str(
-            getattr(settings, "WHISPER_DEVICE", "cpu") or "cpu"
-        )
+        if override and isinstance(override, str) and override.strip():
+            device = override.strip().lower()
+        else:
+            raw = None
+            for attr in ("WHISPER_DEVICE", "AUDIO_DEVICE"):
+                val = getattr(settings, attr, None)
+                if val and isinstance(val, str) and val.strip():
+                    raw = val.strip()
+                    break
+            device = (raw or "cpu").lower()
+
         if device not in VALID_DEVICES:
             logger.warning(
                 "Invalid device '%s', falling back to 'cpu'. Valid: %s",
@@ -157,9 +193,17 @@ class AudioIngestor:
 
     @staticmethod
     def _resolve_compute_type(override: Optional[str]) -> str:
-        compute_type: str = override or str(
-            getattr(settings, "WHISPER_COMPUTE_TYPE", "int8") or "int8"
-        )
+        if override and isinstance(override, str) and override.strip():
+            compute_type = override.strip().lower()
+        else:
+            raw = None
+            for attr in ("WHISPER_COMPUTE_TYPE", "AUDIO_COMPUTE_TYPE"):
+                val = getattr(settings, attr, None)
+                if val and isinstance(val, str) and val.strip():
+                    raw = val.strip()
+                    break
+            compute_type = (raw or "int8").lower()
+
         if compute_type not in VALID_COMPUTE_TYPES:
             logger.warning(
                 "Invalid compute_type '%s', falling back to 'int8'. Valid: %s",
@@ -183,25 +227,36 @@ class AudioIngestor:
     def _count_words(text: str) -> int:
         return len(_WORD_PATTERN.findall(text))
 
-    @staticmethod
-    def _trim_buffer(buffer: List[OverlapSegment]) -> List[OverlapSegment]:
+    @classmethod
+    def _trim_buffer(
+        cls,
+        buffer: List[OverlapSegment],
+        overlap_words: int = OVERLAP_WORDS,
+    ) -> List[OverlapSegment]:
+        if overlap_words <= 0:
+            return []
+
         total_words: int = sum(seg.word_count for seg in buffer)
         idx: int = 0
-        while idx < len(buffer) - 1 and total_words > OVERLAP_WORDS:
+        while (
+            idx < len(buffer) - 1
+            and (total_words - buffer[idx].word_count) >= overlap_words
+        ):
             total_words -= buffer[idx].word_count
             idx += 1
         trimmed: List[OverlapSegment] = list(buffer[idx:])
 
-        if len(trimmed) == 1 and trimmed[0].word_count > OVERLAP_WORDS:
+        if len(trimmed) == 1 and trimmed[0].word_count > overlap_words:
             sole: OverlapSegment = trimmed[0]
-            raw_words: List[str] = sole.text.split()
-            if len(raw_words) > OVERLAP_WORDS:
-                overlap_text: str = " ".join(raw_words[-OVERLAP_WORDS:])
+            matches = list(_WORD_PATTERN.finditer(sole.text))
+            if len(matches) > overlap_words:
+                slice_start = matches[-overlap_words].start()
+                overlap_text = sole.text[slice_start:].strip()
                 trimmed[0] = OverlapSegment(
                     text=overlap_text,
                     start=sole.start,
                     end=sole.end,
-                    word_count=len(_WORD_PATTERN.findall(overlap_text)),
+                    word_count=len(matches[-overlap_words:]),
                 )
 
         return trimmed
@@ -251,23 +306,87 @@ class AudioIngestor:
         file_path: Path,
     ) -> Chunk:
         combined_text: str = " ".join(seg.text for seg in buffer)
-        start_time: float = buffer[0].start
-        end_time: float = buffer[-1].end
+        start_time: float = round(buffer[0].start, 2)
+        end_time: float = round(buffer[-1].end, 2)
         chunk_id: str = self._format_chunk_id(
             safe_stem, file_hash, start_time, chunk_index
         )
-        return Chunk(
-            chunk_id=chunk_id,
-            text=combined_text,
-            metadata={
-                "source": str(file_path),
-                "source_type": "audio",
-                "start_time": start_time,
-                "end_time": end_time,
-                "chunk_index": chunk_index,
-                "file_hash": file_hash,
-            },
+        metadata: Dict[str, Any] = {
+            "source": str(file_path),
+            "source_type": "audio",
+            "start_time": start_time,
+            "end_time": end_time,
+            "chunk_index": chunk_index,
+            "file_hash": file_hash,
+        }
+        embedding_model = (
+            getattr(settings, "DEFAULT_TEXT_EMBEDDING_MODEL", None)
+            or getattr(settings, "EMBEDDING_MODEL", None)
         )
+
+        chunk_kwargs: Dict[str, Any] = {
+            "chunk_id": chunk_id,
+            "text": combined_text,
+            "source": str(file_path),
+            "modality": "audio",
+            "embedding_model": embedding_model,
+            "start_s": start_time,
+            "end_s": end_time,
+            "start_time": start_time,
+            "end_time": end_time,
+            "chunk_index": chunk_index,
+            "file_hash": file_hash,
+            "metadata": metadata,
+        }
+
+        try:
+            sig = inspect.signature(Chunk)
+            has_var_keyword = any(
+                p.kind == inspect.Parameter.VAR_KEYWORD
+                for p in sig.parameters.values()
+            )
+            if has_var_keyword:
+                return Chunk(**chunk_kwargs)
+            filtered = {k: v for k, v in chunk_kwargs.items() if k in sig.parameters}
+            return Chunk(**filtered)
+        except (ValueError, TypeError):
+            try:
+                return Chunk(
+                    chunk_id=chunk_id,
+                    text=combined_text,
+                    metadata=metadata,
+                )
+            except TypeError:
+                return Chunk(
+                    chunk_id=chunk_id,
+                    source=str(file_path),
+                    modality="audio",
+                    text=combined_text,
+                    embedding_model=embedding_model,
+                    start_s=start_time,
+                    end_s=end_time,
+                )
+
+    def _report_progress(self, current: float, total: float) -> None:
+        if not self._progress_callback:
+            return
+        try:
+            sig = inspect.signature(self._progress_callback)
+            num_params = len([
+                p for p in sig.parameters.values()
+                if p.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+            ])
+            if num_params >= 2:
+                self._progress_callback(current, total)
+            else:
+                ratio = min(1.0, max(0.0, current / total)) if total > 0 else 1.0
+                self._progress_callback(ratio)
+        except Exception:
+            try:
+                ratio = min(1.0, max(0.0, current / total)) if total > 0 else 1.0
+                self._progress_callback(ratio)
+            except Exception:
+                logger.debug("Progress callback execution failed", exc_info=True)
 
     def _transcribe_with_retry(self, file_path: Path) -> Iterator[AudioSegment]:
         last_yielded_start: float = -1.0
@@ -288,11 +407,18 @@ class AudioIngestor:
                         getattr(info, "language_probability", 0.0),
                     )
 
+                total_duration: float = getattr(info, "duration", 0.0) or 0.0
+
                 for segment in segments:
                     if segment.start <= last_yielded_start:
                         continue
                     last_yielded_start = segment.start
+                    if total_duration > 0:
+                        self._report_progress(segment.end, total_duration)
                     yield segment
+
+                if total_duration > 0:
+                    self._report_progress(total_duration, total_duration)
                 return
 
             except Exception as exc:
@@ -333,13 +459,17 @@ class AudioIngestor:
         has_new_content: bool = False
 
         for segment in segments:
-            if not segment.text or segment.text.isspace():
+            text = segment.text.strip() if segment.text else ""
+            if not text:
                 continue
 
-            word_count: int = self._count_words(segment.text)
+            word_count: int = self._count_words(text)
+            if word_count == 0:
+                continue
+
             buffer.append(
                 OverlapSegment(
-                    text=segment.text.strip(),
+                    text=text,
                     start=segment.start,
                     end=segment.end,
                     word_count=word_count,
@@ -348,12 +478,12 @@ class AudioIngestor:
             has_new_content = True
 
             total_words: int = sum(s.word_count for s in buffer)
-            if total_words >= TARGET_WORDS:
+            if total_words >= self._target_words:
                 yield self._build_chunk(
                     buffer, safe_stem, file_hash, chunk_index, file_path
                 )
                 chunk_index += 1
-                buffer = self._trim_buffer(buffer)
+                buffer = self._trim_buffer(buffer, self._overlap_words)
                 has_new_content = False
 
         if buffer and has_new_content:
@@ -413,15 +543,11 @@ class AudioIngestor:
         logger.info("Processing: %s", resolved.name)
 
         try:
-            if self._progress_callback:
-                self._progress_callback(0.0)
+            self._report_progress(0.0, 1.0)
 
             segments: Iterator[AudioSegment] = self._transcribe_with_retry(
                 resolved
             )
-
-            if self._progress_callback:
-                self._progress_callback(0.5)
 
             chunks: List[Chunk] = list(
                 self._create_chunks_from_segments(
@@ -438,9 +564,7 @@ class AudioIngestor:
                 "Generated %d chunks for %s", len(chunks), resolved.name
             )
 
-            if self._progress_callback:
-                self._progress_callback(1.0)
-
+            self._report_progress(1.0, 1.0)
             return chunks
 
         except AudioProcessingError:
@@ -451,12 +575,19 @@ class AudioIngestor:
             ) from exc
 
     def close(self) -> None:
-        if self._closed:
+        if getattr(self, "_closed", False):
             return
         self._closed = True
         if getattr(self, "_model", None) is not None:
-            del self._model
-        logger.debug("AudioIngestor closed")
+            try:
+                del self._model
+            except Exception:
+                pass
+        try:
+            if logger is not None:
+                logger.debug("AudioIngestor closed")
+        except Exception:
+            pass
 
     def __enter__(self) -> AudioIngestor:
         return self
@@ -480,5 +611,7 @@ class AudioIngestor:
             f"AudioIngestor(model={self._model_size!r}, "
             f"device={self._device!r}, "
             f"compute_type={self._compute_type!r}, "
+            f"target_words={self._target_words}, "
+            f"overlap_words={self._overlap_words}, "
             f"status={status!r})"
         )
