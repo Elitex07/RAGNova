@@ -1,324 +1,484 @@
+from __future__ import annotations
+
 import hashlib
 import logging
 import re
 import time
+import types
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, Iterator, List, Optional, Protocol, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Protocol,
+    Union,
+    runtime_checkable,
+)
 
 from faster_whisper import WhisperModel
 
 try:
-    from src.core.schemas import Chunk
     from src.core.config import settings
-except ImportError as e:
+    from src.core.schemas import Chunk
+except ImportError as exc:
     raise ImportError(
-        f"Failed to import required dependencies: {e}. "
+        f"Failed to import required dependencies: {exc}. "
         "Ensure src.core.schemas and src.core.config are available."
-    ) from e
+    ) from exc
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
-TARGET_WORDS = 75
-OVERLAP_WORDS = 20
-MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024 * 1024
-SUPPORTED_AUDIO_EXTENSIONS = {
-    '.mp3', '.wav', '.m4a', '.flac', '.ogg', '.aac', '.opus', '.mpeg',
-    '.mp4', '.webm', '.wma', '.mka', '.3gp', '.amr'
+TARGET_WORDS: int = getattr(settings, "AUDIO_CHUNK_TARGET_WORDS", 300)
+OVERLAP_WORDS: int = getattr(settings, "AUDIO_CHUNK_OVERLAP_WORDS", 50)
+MAX_FILE_SIZE_BYTES: int = 2 * 1024 * 1024 * 1024
+
+SUPPORTED_EXTENSIONS: frozenset[str] = frozenset({
+    ".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac",
+    ".opus", ".mpeg", ".mp4", ".webm", ".wma", ".mka",
+    ".3gp", ".amr",
+})
+
+DEFAULT_VAD_PARAMETERS: Dict[str, Any] = {
+    "min_silence_duration_ms": 500,
+    "speech_pad_ms": 200,
 }
-DEFAULT_VAD_PARAMETERS = {'min_silence_duration_ms': 500, 'speech_pad_ms': 200}
-VALID_DEVICES = ['cpu', 'cuda', 'auto']
-VALID_COMPUTE_TYPES = ['int8', 'float16', 'float32', 'int8_float16', 'int8_float32']
-WORD_PATTERN = re.compile(r'\b\w+\b')
+
+VALID_DEVICES: frozenset[str] = frozenset({"cpu", "cuda", "auto"})
+VALID_COMPUTE_TYPES: frozenset[str] = frozenset({
+    "int8", "float16", "float32", "int8_float16", "int8_float32",
+})
+
+_WORD_PATTERN: re.Pattern[str] = re.compile(r"\b\w+\b")
 
 
 class AudioProcessingError(Exception):
     pass
 
 
+@runtime_checkable
 class AudioSegment(Protocol):
-    text: str
-    start: float
-    end: float
+    @property
+    def text(self) -> str: ...
+
+    @property
+    def start(self) -> float: ...
+
+    @property
+    def end(self) -> float: ...
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class OverlapSegment:
     text: str
     start: float
     end: float
+    word_count: int
 
 
 class AudioIngestor:
+    __slots__ = (
+        "_model_size",
+        "_device",
+        "_compute_type",
+        "_vad_parameters",
+        "_progress_callback",
+        "_max_retries",
+        "_model",
+        "_closed",
+    )
+
     def __init__(
         self,
-        vad_parameters: Optional[Dict] = None,
+        model_size: Optional[str] = None,
+        device: Optional[str] = None,
+        compute_type: Optional[str] = None,
+        vad_parameters: Optional[Dict[str, Any]] = None,
         progress_callback: Optional[Callable[[float], None]] = None,
         max_retries: int = 3,
-    ):
+    ) -> None:
         if OVERLAP_WORDS >= TARGET_WORDS:
-            raise ValueError(f"OVERLAP_WORDS ({OVERLAP_WORDS}) must be less than TARGET_WORDS ({TARGET_WORDS})")
+            raise ValueError(
+                f"OVERLAP_WORDS ({OVERLAP_WORDS}) must be less than "
+                f"TARGET_WORDS ({TARGET_WORDS})"
+            )
         if max_retries < 1:
             raise ValueError("max_retries must be at least 1")
 
-        self.vad_parameters = {**DEFAULT_VAD_PARAMETERS, **(vad_parameters or {})}
-        self.progress_callback = progress_callback
-        self.max_retries = max_retries
-        self._closed = False
+        self._model_size: str = self._resolve_model_size(model_size)
+        self._device: str = self._resolve_device(device)
+        self._compute_type: str = self._resolve_compute_type(compute_type)
+        self._vad_parameters: Dict[str, Any] = {
+            **DEFAULT_VAD_PARAMETERS,
+            **(vad_parameters or {}),
+        }
+        self._progress_callback: Optional[Callable[[float], None]] = progress_callback
+        self._max_retries: int = max_retries
+        self._closed: bool = False
 
-        self._load_configuration()
+        logger.info(
+            "Loading faster-whisper model '%s' on %s (%s)",
+            self._model_size,
+            self._device,
+            self._compute_type,
+        )
+        self._model: WhisperModel = WhisperModel(
+            self._model_size,
+            device=self._device,
+            compute_type=self._compute_type,
+        )
 
-        logger.info(f"Loading faster-whisper model '{self.model_size}' on {self.device}")
-        self.model = WhisperModel(self.model_size, device=self.device, compute_type=self.compute_type)
-
-    def _load_configuration(self) -> None:
-        self.model_size = self._get_config_with_fallback('WHISPER_MODEL', 'AUDIO_MODEL', default='base')
-        self.device = self._get_config_with_validation('WHISPER_DEVICE', 'cpu', VALID_DEVICES)
-        self.compute_type = self._get_config_with_validation('WHISPER_COMPUTE_TYPE', 'int8', VALID_COMPUTE_TYPES)
-
-    def _get_config_with_fallback(self, *keys: str, default: str) -> str:
-        for key in keys:
-            value = getattr(settings, key, None)
+    @staticmethod
+    def _resolve_model_size(override: Optional[str]) -> str:
+        if override and isinstance(override, str) and override.strip():
+            return override.strip()
+        for attr in ("WHISPER_MODEL_SIZE", "WHISPER_MODEL", "AUDIO_MODEL"):
+            value = getattr(settings, attr, None)
             if value and isinstance(value, str) and value.strip():
                 return value.strip()
-        return default
+        return "base"
 
-    def _get_config_with_validation(self, key: str, default: str, valid_values: List[str]) -> str:
-        value = getattr(settings, key, default)
-        if value not in valid_values:
-            logger.warning(f"Invalid value '{value}' for {key}, using default '{default}'")
-            return default
-        return value
+    @staticmethod
+    def _resolve_device(override: Optional[str]) -> str:
+        device: str = override or str(
+            getattr(settings, "WHISPER_DEVICE", "cpu") or "cpu"
+        )
+        if device not in VALID_DEVICES:
+            logger.warning(
+                "Invalid device '%s', falling back to 'cpu'. Valid: %s",
+                device,
+                sorted(VALID_DEVICES),
+            )
+            return "cpu"
+        return device
+
+    @staticmethod
+    def _resolve_compute_type(override: Optional[str]) -> str:
+        compute_type: str = override or str(
+            getattr(settings, "WHISPER_COMPUTE_TYPE", "int8") or "int8"
+        )
+        if compute_type not in VALID_COMPUTE_TYPES:
+            logger.warning(
+                "Invalid compute_type '%s', falling back to 'int8'. Valid: %s",
+                compute_type,
+                sorted(VALID_COMPUTE_TYPES),
+            )
+            return "int8"
+        return compute_type
 
     @staticmethod
     def _sanitize_stem(stem: str) -> str:
-        return re.sub(r'[^\w\-]', '_', stem)
+        return re.sub(r"[^\w\-]", "_", stem)
 
     @staticmethod
-    def _compute_deterministic_hash(file_name: str, file_size: int) -> str:
-        content = f"{file_name}_{file_size}"
-        return hashlib.sha256(content.encode('utf-8')).hexdigest()[:16]
+    def _compute_file_hash(file_name: str, file_size: int) -> str:
+        return hashlib.sha256(
+            f"{file_name}_{file_size}".encode("utf-8")
+        ).hexdigest()[:16]
 
     @staticmethod
     def _count_words(text: str) -> int:
-        return len(WORD_PATTERN.findall(text))
+        return len(_WORD_PATTERN.findall(text))
 
-    def _create_chunk(
-        self,
-        buffer: List[AudioSegment],
+    @staticmethod
+    def _trim_buffer(buffer: List[OverlapSegment]) -> List[OverlapSegment]:
+        total_words: int = sum(seg.word_count for seg in buffer)
+        idx: int = 0
+        while idx < len(buffer) - 1 and total_words > OVERLAP_WORDS:
+            total_words -= buffer[idx].word_count
+            idx += 1
+        trimmed: List[OverlapSegment] = list(buffer[idx:])
+
+        if len(trimmed) == 1 and trimmed[0].word_count > OVERLAP_WORDS:
+            sole: OverlapSegment = trimmed[0]
+            raw_words: List[str] = sole.text.split()
+            if len(raw_words) > OVERLAP_WORDS:
+                overlap_text: str = " ".join(raw_words[-OVERLAP_WORDS:])
+                trimmed[0] = OverlapSegment(
+                    text=overlap_text,
+                    start=sole.start,
+                    end=sole.end,
+                    word_count=len(_WORD_PATTERN.findall(overlap_text)),
+                )
+
+        return trimmed
+
+    @staticmethod
+    def _format_chunk_id(
         safe_stem: str,
+        file_hash: str,
+        start: float,
         chunk_index: int,
-        file_path: Path,
-        file_size: int,
-        start_s: float,
-        end_s: float
-    ) -> Chunk:
-        combined_text = " ".join(s.text.strip() for s in buffer)
-        file_hash = self._compute_deterministic_hash(file_path.name, file_size)
-        chunk_id = f"{safe_stem}_h{file_hash}_t{start_s:.2f}_c{chunk_index:03d}".replace('.', 'p')
-        source_prefix = getattr(settings, 'AUDIO_SOURCE_PREFIX', 'data/audio/')
-        source_prefix = source_prefix.rstrip('/') + '/'
-
-        return Chunk(
-            chunk_id=chunk_id,
-            source=f"{source_prefix}{file_path.name}",
-            modality="audio",
-            text=combined_text,
-            embedding_model=getattr(settings, 'TEXT_EMBEDDING_MODEL', 'default'),
-            start_s=start_s,
-            end_s=end_s,
-        )
+    ) -> str:
+        timestamp: str = f"{start:.2f}".replace(".", "p")
+        return f"{safe_stem}_h{file_hash}_t{timestamp}_c{chunk_index:03d}"
 
     def _validate_file(self, file_path: Path) -> int:
         if not file_path.exists():
             raise AudioProcessingError(f"Audio file not found: {file_path}")
         if not file_path.is_file():
             raise AudioProcessingError(f"Path is not a file: {file_path}")
-        suffix = file_path.suffix.lower()
-        if suffix not in SUPPORTED_AUDIO_EXTENSIONS:
+        suffix: str = file_path.suffix.lower()
+        if suffix not in SUPPORTED_EXTENSIONS:
             raise AudioProcessingError(
-                f"Unsupported audio format: {suffix}. "
-                f"Supported: {', '.join(sorted(SUPPORTED_AUDIO_EXTENSIONS))}"
+                f"Unsupported audio format '{suffix}'. "
+                f"Supported: {sorted(SUPPORTED_EXTENSIONS)}"
             )
         try:
-            file_size = file_path.stat().st_size
-            if file_size == 0:
-                raise AudioProcessingError(f"Audio file is empty: {file_path}")
-            if file_size > MAX_FILE_SIZE_BYTES:
-                raise AudioProcessingError(f"Audio file too large: {file_size / (1024**3):.1f}GB")
-            return file_size
-        except OSError as e:
-            raise AudioProcessingError(f"Cannot access file {file_path}: {e}") from e
+            file_size: int = file_path.stat().st_size
+        except OSError as exc:
+            raise AudioProcessingError(
+                f"Cannot access file {file_path}: {exc}"
+            ) from exc
+        if file_size == 0:
+            raise AudioProcessingError(f"Audio file is empty: {file_path}")
+        if file_size > MAX_FILE_SIZE_BYTES:
+            raise AudioProcessingError(
+                f"Audio file exceeds 2 GB limit: "
+                f"{file_size / (1024 ** 3):.1f} GB"
+            )
+        return file_size
+
+    def _build_chunk(
+        self,
+        buffer: List[OverlapSegment],
+        safe_stem: str,
+        file_hash: str,
+        chunk_index: int,
+        file_path: Path,
+    ) -> Chunk:
+        combined_text: str = " ".join(seg.text for seg in buffer)
+        start_time: float = buffer[0].start
+        end_time: float = buffer[-1].end
+        chunk_id: str = self._format_chunk_id(
+            safe_stem, file_hash, start_time, chunk_index
+        )
+        return Chunk(
+            chunk_id=chunk_id,
+            text=combined_text,
+            metadata={
+                "source": str(file_path),
+                "source_type": "audio",
+                "start_time": start_time,
+                "end_time": end_time,
+                "chunk_index": chunk_index,
+                "file_hash": file_hash,
+            },
+        )
 
     def _transcribe_with_retry(self, file_path: Path) -> Iterator[AudioSegment]:
-        last_error = None
+        last_yielded_start: float = -1.0
+        last_error: Optional[Exception] = None
 
-        for attempt in range(self.max_retries):
+        for attempt in range(self._max_retries):
             try:
-                segments, info = self.model.transcribe(
+                segments, info = self._model.transcribe(
                     str(file_path),
                     vad_filter=True,
-                    vad_parameters=self.vad_parameters
+                    vad_parameters=self._vad_parameters,
                 )
 
-                if hasattr(info, 'language') and info.language:
-                    logger.debug(f"Detected language: {info.language}")
+                if hasattr(info, "language") and info.language:
+                    logger.debug(
+                        "Detected language: %s (prob=%.2f)",
+                        info.language,
+                        getattr(info, "language_probability", 0.0),
+                    )
 
-                segment_list = list(segments)
-                return iter(segment_list)
+                for segment in segments:
+                    if segment.start <= last_yielded_start:
+                        continue
+                    last_yielded_start = segment.start
+                    yield segment
+                return
 
-            except Exception as e:
-                last_error = e
-                if attempt < self.max_retries - 1:
-                    wait_time = 2 ** attempt
-                    logger.warning(f"Transcription attempt {attempt + 1} failed: {e}. Retrying in {wait_time}s...")
-                    time.sleep(wait_time)
+            except Exception as exc:
+                last_error = exc
+                if attempt < self._max_retries - 1:
+                    backoff: float = 2.0 ** attempt
+                    logger.warning(
+                        "Transcription attempt %d/%d failed for '%s': %s. "
+                        "Retrying in %.0fs",
+                        attempt + 1,
+                        self._max_retries,
+                        file_path.name,
+                        exc,
+                        backoff,
+                    )
+                    time.sleep(backoff)
                 else:
-                    logger.error(f"All {self.max_retries} transcription attempts failed for {file_path.name}")
+                    logger.error(
+                        "All %d transcription attempts failed for '%s'",
+                        self._max_retries,
+                        file_path.name,
+                    )
 
-        raise AudioProcessingError(f"Transcription failed for {file_path.name}: {last_error}") from last_error
+        raise AudioProcessingError(
+            f"Transcription failed after {self._max_retries} attempts "
+            f"for {file_path.name}: {last_error}"
+        ) from last_error
 
     def _create_chunks_from_segments(
         self,
         segments: Iterator[AudioSegment],
         safe_stem: str,
         file_path: Path,
-        file_size: int
+        file_hash: str,
     ) -> Iterator[Chunk]:
-        buffer: List[AudioSegment] = []
-        buffer_word_count = 0
-        chunk_index = 1
-        has_new_content = False
+        buffer: List[OverlapSegment] = []
+        chunk_index: int = 0
+        has_new_content: bool = False
 
         for segment in segments:
             if not segment.text or segment.text.isspace():
                 continue
 
-            buffer.append(segment)
+            word_count: int = self._count_words(segment.text)
+            buffer.append(
+                OverlapSegment(
+                    text=segment.text.strip(),
+                    start=segment.start,
+                    end=segment.end,
+                    word_count=word_count,
+                )
+            )
             has_new_content = True
-            segment_words = self._count_words(segment.text)
-            buffer_word_count += segment_words
 
-            if buffer_word_count >= TARGET_WORDS:
-                start_s = buffer[0].start
-                end_s = buffer[-1].end
-
-                yield self._create_chunk(buffer, safe_stem, chunk_index, file_path, file_size, start_s, end_s)
+            total_words: int = sum(s.word_count for s in buffer)
+            if total_words >= TARGET_WORDS:
+                yield self._build_chunk(
+                    buffer, safe_stem, file_hash, chunk_index, file_path
+                )
                 chunk_index += 1
-
-                max_trims = len(buffer) * 2
-                trims = 0
-                while len(buffer) > 1 and trims < max_trims:
-                    overlap_words = self._count_words(" ".join(s.text.strip() for s in buffer[1:]))
-                    if overlap_words <= OVERLAP_WORDS:
-                        break
-                    removed_words = self._count_words(buffer[0].text.strip())
-                    buffer.pop(0)
-                    buffer_word_count -= removed_words
-                    trims += 1
-
-                if len(buffer) == 1 and buffer_word_count > TARGET_WORDS * 1.5:
-                    first_segment = buffer[0]
-                    words = first_segment.text.split()
-                    overlap_text = " ".join(words[-OVERLAP_WORDS:])
-                    buffer[0] = OverlapSegment(overlap_text, first_segment.start, first_segment.end)
-                    buffer_word_count = len(words[-OVERLAP_WORDS:])
-
+                buffer = self._trim_buffer(buffer)
                 has_new_content = False
 
         if buffer and has_new_content:
-            start_s = buffer[0].start
-            end_s = buffer[-1].end
-            yield self._create_chunk(buffer, safe_stem, chunk_index, file_path, file_size, start_s, end_s)
+            yield self._build_chunk(
+                buffer, safe_stem, file_hash, chunk_index, file_path
+            )
 
-    def process_file(self, file_path: Union[str, Path]) -> List[Chunk]:
+    def _ensure_open(self) -> None:
         if self._closed:
             raise RuntimeError("AudioIngestor has been closed")
 
-        file_path = Path(file_path)
-        file_size = self._validate_file(file_path)
+    def _prepare_file(
+        self, file_path: Union[str, Path]
+    ) -> tuple[Path, int, str, str]:
+        resolved: Path = Path(file_path)
+        file_size: int = self._validate_file(resolved)
+        safe_stem: str = self._sanitize_stem(resolved.stem)
+        suffix: str = resolved.suffix.lstrip(".")
+        if suffix:
+            safe_stem = f"{safe_stem}_{suffix}"
+        file_hash: str = self._compute_file_hash(resolved.name, file_size)
+        return resolved, file_size, safe_stem, file_hash
 
-        logger.info(f"Processing: {file_path.name}")
-
-        try:
-            if self.progress_callback:
-                self.progress_callback(0.0)
-
-            segments = self._transcribe_with_retry(file_path)
-
-            if self.progress_callback:
-                self.progress_callback(0.5)
-
-            suffix = file_path.suffix.lstrip('.')
-            safe_stem = self._sanitize_stem(file_path.stem)
-            if suffix:
-                safe_stem = f"{safe_stem}_{suffix}"
-
-            chunk_list = list(self._create_chunks_from_segments(segments, safe_stem, file_path, file_size))
-
-            if not chunk_list:
-                logger.warning(f"No speech chunks detected in {file_path.name}")
-
-            logger.info(f"Generated {len(chunk_list)} chunks for {file_path.name}")
-
-            if self.progress_callback:
-                self.progress_callback(1.0)
-
-            return chunk_list
-
-        except AudioProcessingError:
-            raise
-        except Exception as e:
-            logger.error(f"Unexpected error processing {file_path.name}: {e}")
-            raise AudioProcessingError(f"Failed to process {file_path.name}: {e}") from e
-
-    def process_file_streaming(self, file_path: Union[str, Path]) -> Iterator[Chunk]:
-        if self._closed:
-            raise RuntimeError("AudioIngestor has been closed")
-
-        file_path = Path(file_path)
-        file_size = self._validate_file(file_path)
-
-        logger.info(f"Processing (streaming): {file_path.name}")
+    def process_file_streaming(
+        self, file_path: Union[str, Path]
+    ) -> Iterator[Chunk]:
+        self._ensure_open()
+        resolved, file_size, safe_stem, file_hash = self._prepare_file(file_path)
+        logger.info("Processing (streaming): %s", resolved.name)
 
         try:
-            segments = self._transcribe_with_retry(file_path)
-
-            suffix = file_path.suffix.lstrip('.')
-            safe_stem = self._sanitize_stem(file_path.stem)
-            if suffix:
-                safe_stem = f"{safe_stem}_{suffix}"
-
-            chunk_count = 0
-            for chunk in self._create_chunks_from_segments(segments, safe_stem, file_path, file_size):
+            segments: Iterator[AudioSegment] = self._transcribe_with_retry(
+                resolved
+            )
+            chunk_count: int = 0
+            for chunk in self._create_chunks_from_segments(
+                segments, safe_stem, resolved, file_hash
+            ):
                 yield chunk
                 chunk_count += 1
 
-            logger.info(f"Generated {chunk_count} chunks (streaming) for {file_path.name}")
+            logger.info(
+                "Generated %d chunks (streaming) for %s",
+                chunk_count,
+                resolved.name,
+            )
+        except AudioProcessingError:
+            raise
+        except Exception as exc:
+            raise AudioProcessingError(
+                f"Failed to process {resolved.name}: {exc}"
+            ) from exc
+
+    def process_file(self, file_path: Union[str, Path]) -> List[Chunk]:
+        self._ensure_open()
+        resolved, file_size, safe_stem, file_hash = self._prepare_file(file_path)
+        logger.info("Processing: %s", resolved.name)
+
+        try:
+            if self._progress_callback:
+                self._progress_callback(0.0)
+
+            segments: Iterator[AudioSegment] = self._transcribe_with_retry(
+                resolved
+            )
+
+            if self._progress_callback:
+                self._progress_callback(0.5)
+
+            chunks: List[Chunk] = list(
+                self._create_chunks_from_segments(
+                    segments, safe_stem, resolved, file_hash
+                )
+            )
+
+            if not chunks:
+                logger.warning(
+                    "No speech chunks detected in %s", resolved.name
+                )
+
+            logger.info(
+                "Generated %d chunks for %s", len(chunks), resolved.name
+            )
+
+            if self._progress_callback:
+                self._progress_callback(1.0)
+
+            return chunks
 
         except AudioProcessingError:
             raise
-        except Exception as e:
-            logger.error(f"Unexpected error processing {file_path.name}: {e}")
-            raise AudioProcessingError(f"Failed to process {file_path.name}: {e}") from e
+        except Exception as exc:
+            raise AudioProcessingError(
+                f"Failed to process {resolved.name}: {exc}"
+            ) from exc
 
     def close(self) -> None:
-        if not self._closed:
-            self._closed = True
-            if hasattr(self, 'model'):
-                del self.model
-            logger.debug("AudioIngestor closed")
+        if self._closed:
+            return
+        self._closed = True
+        if getattr(self, "_model", None) is not None:
+            del self._model
+        logger.debug("AudioIngestor closed")
 
-    def __enter__(self):
+    def __enter__(self) -> AudioIngestor:
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: types.TracebackType | None,
+    ) -> None:
         self.close()
-        return False
 
-    def __del__(self):
-        if not self._closed:
-            self.close()
+    def __del__(self) -> None:
+        if getattr(self, "_closed", True):
+            return
+        self.close()
 
     def __repr__(self) -> str:
-        return f"AudioIngestor(model={self.model_size}, device={self.device}, compute_type={self.compute_type})"
+        status: str = "closed" if self._closed else "open"
+        return (
+            f"AudioIngestor(model={self._model_size!r}, "
+            f"device={self._device!r}, "
+            f"compute_type={self._compute_type!r}, "
+            f"status={status!r})"
+        )
