@@ -16,6 +16,7 @@ from typing import (
     List,
     Optional,
     Protocol,
+    Tuple,
     Union,
     runtime_checkable,
 )
@@ -57,11 +58,14 @@ _WORD_PATTERN: re.Pattern[str] = re.compile(r"\b\w+\b")
 
 
 class AudioProcessingError(Exception):
+    """Raised when an error occurs during audio file validation or transcription."""
     pass
 
 
 @runtime_checkable
 class AudioSegment(Protocol):
+    """Structural protocol defining speech segments produced by faster-whisper."""
+
     @property
     def text(self) -> str: ...
 
@@ -74,6 +78,8 @@ class AudioSegment(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class OverlapSegment:
+    """Internal immutable container for audio segments managed within the sliding window buffer."""
+
     text: str
     start: float
     end: float
@@ -82,11 +88,15 @@ class OverlapSegment:
     def __post_init__(self) -> None:
         if self.word_count <= 0 and self.text:
             object.__setattr__(
-                self, "word_count", len(_WORD_PATTERN.findall(self.text))
+                self,
+                "word_count",
+                len(_WORD_PATTERN.findall(self.text)),
             )
 
 
 class AudioIngestor:
+    """Production-ready offline audio ingestion pipeline for local RAG systems."""
+
     __slots__ = (
         "_model_size",
         "_device",
@@ -124,7 +134,7 @@ class AudioIngestor:
 
         if self._overlap_words >= self._target_words:
             raise ValueError(
-                f"overlap_words ({self._overlap_words}) must be less than "
+                f"overlap_words ({self._overlap_words}) must be strictly less than "
                 f"target_words ({self._target_words})"
             )
 
@@ -141,9 +151,9 @@ class AudioIngestor:
         self._device: str = self._resolve_device(device)
         self._compute_type: str = self._resolve_compute_type(compute_type)
 
-        configured_vad: Dict[str, Any] = getattr(
-            settings, "WHISPER_VAD_PARAMETERS", {}
-        ) or {}
+        configured_vad: Dict[str, Any] = (
+            getattr(settings, "WHISPER_VAD_PARAMETERS", {}) or {}
+        )
         self._vad_parameters: Dict[str, Any] = {
             **DEFAULT_VAD_PARAMETERS,
             **configured_vad,
@@ -154,10 +164,12 @@ class AudioIngestor:
         self._closed: bool = False
 
         logger.info(
-            "Loading faster-whisper model '%s' on %s (%s)",
+            "Initializing AudioIngestor (model=%s, device=%s, compute_type=%s, target_words=%d, overlap_words=%d)",
             self._model_size,
             self._device,
             self._compute_type,
+            self._target_words,
+            self._overlap_words,
         )
         self._model: WhisperModel = WhisperModel(
             self._model_size,
@@ -167,30 +179,21 @@ class AudioIngestor:
 
     @staticmethod
     def _resolve_model_size(override: Optional[str]) -> str:
-        if override and isinstance(override, str) and override.strip():
-            return override.strip()
+        if override and str(override).strip():
+            return str(override).strip()
         for attr in ("WHISPER_MODEL_SIZE", "WHISPER_MODEL", "AUDIO_MODEL"):
-            value = getattr(settings, attr, None)
-            if value and isinstance(value, str) and value.strip():
-                return value.strip()
+            val = getattr(settings, attr, None)
+            if val and str(val).strip():
+                return str(val).strip()
         return "base"
 
     @staticmethod
     def _resolve_device(override: Optional[str]) -> str:
-        if override and isinstance(override, str) and override.strip():
-            device = override.strip().lower()
-        else:
-            raw = None
-            for attr in ("WHISPER_DEVICE", "AUDIO_DEVICE"):
-                val = getattr(settings, attr, None)
-                if val and isinstance(val, str) and val.strip():
-                    raw = val.strip()
-                    break
-            device = (raw or "cpu").lower()
-
+        raw = override or getattr(settings, "WHISPER_DEVICE", None) or "cpu"
+        device = str(raw).strip().lower()
         if device not in VALID_DEVICES:
             logger.warning(
-                "Invalid device '%s', falling back to 'cpu'. Valid: %s",
+                "Invalid device '%s', falling back to 'cpu'. Valid devices: %s",
                 device,
                 sorted(VALID_DEVICES),
             )
@@ -199,20 +202,11 @@ class AudioIngestor:
 
     @staticmethod
     def _resolve_compute_type(override: Optional[str]) -> str:
-        if override and isinstance(override, str) and override.strip():
-            compute_type = override.strip().lower()
-        else:
-            raw = None
-            for attr in ("WHISPER_COMPUTE_TYPE", "AUDIO_COMPUTE_TYPE"):
-                val = getattr(settings, attr, None)
-                if val and isinstance(val, str) and val.strip():
-                    raw = val.strip()
-                    break
-            compute_type = (raw or "int8").lower()
-
+        raw = override or getattr(settings, "WHISPER_COMPUTE_TYPE", None) or "int8"
+        compute_type = str(raw).strip().lower()
         if compute_type not in VALID_COMPUTE_TYPES:
             logger.warning(
-                "Invalid compute_type '%s', falling back to 'int8'. Valid: %s",
+                "Invalid compute_type '%s', falling back to 'int8'. Valid types: %s",
                 compute_type,
                 sorted(VALID_COMPUTE_TYPES),
             )
@@ -233,161 +227,191 @@ class AudioIngestor:
     def _count_words(text: str) -> int:
         return len(_WORD_PATTERN.findall(text))
 
+    def _validate_file(self, path: Path) -> int:
+        if not path.exists():
+            raise AudioProcessingError(f"Audio file not found: {path}")
+        if not path.is_file():
+            raise AudioProcessingError(f"Path is not a regular file: {path}")
+
+        suffix = path.suffix.lower()
+        if suffix not in SUPPORTED_EXTENSIONS:
+            raise AudioProcessingError(
+                f"Unsupported audio format '{suffix}'. Supported formats: {sorted(SUPPORTED_EXTENSIONS)}"
+            )
+
+        try:
+            file_size = path.stat().st_size
+        except OSError as exc:
+            raise AudioProcessingError(
+                f"Cannot access file metadata for {path}: {exc}"
+            ) from exc
+
+        if file_size == 0:
+            raise AudioProcessingError(f"Audio file is empty (0 bytes): {path}")
+
+        if file_size > MAX_FILE_SIZE_BYTES:
+            raise AudioProcessingError(
+                f"Audio file exceeds 2 GB limit: {file_size / (1024 ** 3):.2f} GB"
+            )
+
+        return file_size
+
+    def _prepare_file(
+        self,
+        file_path: Union[str, Path],
+    ) -> Tuple[Path, int, str, str]:
+        resolved = Path(file_path)
+        file_size = self._validate_file(resolved)
+
+        stem = self._sanitize_stem(resolved.stem)
+        suffix = resolved.suffix.lstrip(".")
+        safe_stem = f"{stem}_{suffix}" if suffix else stem
+        file_hash = self._compute_file_hash(resolved.name, file_size)
+
+        return resolved, file_size, safe_stem, file_hash
+
+    @staticmethod
+    def _split_segment(
+        seg: OverlapSegment, words_to_keep: int
+    ) -> tuple[Optional[OverlapSegment], Optional[OverlapSegment]]:
+        """Splits an OverlapSegment strictly at a word boundary."""
+        matches = list(_WORD_PATTERN.finditer(seg.text))
+        
+        if words_to_keep >= len(matches):
+            return seg, None
+        if words_to_keep <= 0:
+            return None, seg
+
+        split_pos = matches[words_to_keep - 1].end()
+        text1 = seg.text[:split_pos].strip()
+        text2 = seg.text[split_pos:].strip()
+
+        duration = seg.end - seg.start
+        ratio = split_pos / max(1, len(seg.text))
+        mid_time = round(seg.start + (duration * ratio), 2)
+
+        seg1 = OverlapSegment(text1, seg.start, mid_time, words_to_keep)
+        seg2 = OverlapSegment(text2, mid_time, seg.end, len(matches) - words_to_keep)
+        
+        return seg1, seg2
+
     @classmethod
     def _trim_buffer(
-        cls,
-        buffer: List[OverlapSegment],
-        overlap_words: int = OVERLAP_WORDS,
+        cls, buffer: List[OverlapSegment], overlap_target: int
     ) -> List[OverlapSegment]:
-        if overlap_words <= 0:
+        """Trims a list of segments from the front down to the exact overlap_target."""
+        if overlap_target <= 0 or not buffer:
             return []
 
-        total_words: int = sum(seg.word_count for seg in buffer)
-        idx: int = 0
-        while (
-            idx < len(buffer) - 1
-            and (total_words - buffer[idx].word_count) >= overlap_words
-        ):
-            total_words -= buffer[idx].word_count
-            idx += 1
-        trimmed: List[OverlapSegment] = list(buffer[idx:])
+        total = sum(s.word_count for s in buffer)
+        if total <= overlap_target:
+            return list(buffer)
 
-        if len(trimmed) == 1 and trimmed[0].word_count > overlap_words:
-            sole: OverlapSegment = trimmed[0]
-            matches = list(_WORD_PATTERN.finditer(sole.text))
-            if len(matches) > overlap_words:
-                slice_start = matches[-overlap_words].start()
-                overlap_text = sole.text[slice_start:].strip()
-                trimmed[0] = OverlapSegment(
-                    text=overlap_text,
-                    start=sole.start,
-                    end=sole.end,
-                    word_count=len(matches[-overlap_words:]),
-                )
+        words_to_drop = total - overlap_target
+        trimmed: List[OverlapSegment] = []
+        dropped = 0
+
+        for seg in buffer:
+            if dropped == words_to_drop:
+                trimmed.append(seg)
+            elif dropped + seg.word_count <= words_to_drop:
+                dropped += seg.word_count
+            else:
+                needed_drop = words_to_drop - dropped
+                words_to_keep = seg.word_count - needed_drop
+                
+                matches = list(_WORD_PATTERN.finditer(seg.text))
+                split_pos = matches[-words_to_keep].start()
+                
+                text = seg.text[split_pos:].strip()
+                duration = seg.end - seg.start
+                ratio = split_pos / max(1, len(seg.text))
+                mid_time = round(seg.start + (duration * ratio), 2)
+                
+                trimmed.append(OverlapSegment(text, mid_time, seg.end, words_to_keep))
+                dropped += needed_drop
 
         return trimmed
 
-    @staticmethod
     def _format_chunk_id(
+        self,
         safe_stem: str,
         file_hash: str,
-        start: float,
+        start_s: float,
         chunk_index: int,
     ) -> str:
-        timestamp: str = f"{start:.2f}".replace(".", "p")
+        timestamp = f"{start_s:.2f}".replace(".", "p")
         return f"{safe_stem}_h{file_hash}_t{timestamp}_c{chunk_index:03d}"
-
-    def _validate_file(self, file_path: Path) -> int:
-        if not file_path.exists():
-            raise AudioProcessingError(f"Audio file not found: {file_path}")
-        if not file_path.is_file():
-            raise AudioProcessingError(f"Path is not a file: {file_path}")
-        suffix: str = file_path.suffix.lower()
-        if suffix not in SUPPORTED_EXTENSIONS:
-            raise AudioProcessingError(
-                f"Unsupported audio format '{suffix}'. "
-                f"Supported: {sorted(SUPPORTED_EXTENSIONS)}"
-            )
-        try:
-            file_size: int = file_path.stat().st_size
-        except OSError as exc:
-            raise AudioProcessingError(
-                f"Cannot access file {file_path}: {exc}"
-            ) from exc
-        if file_size == 0:
-            raise AudioProcessingError(f"Audio file is empty: {file_path}")
-        if file_size > MAX_FILE_SIZE_BYTES:
-            raise AudioProcessingError(
-                f"Audio file exceeds 2 GB limit: "
-                f"{file_size / (1024 ** 3):.1f} GB"
-            )
-        return file_size
 
     def _build_chunk(
         self,
-        buffer: Union[List[OverlapSegment], str],
-        safe_stem: str = "",
-        file_hash: str = "",
-        chunk_index: int = 0,
-        file_path: Union[str, Path] = "",
+        buffer: List[OverlapSegment],
+        safe_stem: str,
+        file_hash: str,
+        idx: int,
+        file_path: Path,
         start_s: Optional[float] = None,
         end_s: Optional[float] = None,
         *args: Any,
         **kwargs: Any,
     ) -> Chunk:
-        if isinstance(buffer, list) and buffer:
-            combined_text: str = " ".join(seg.text for seg in buffer)
-            start_time: float = round(
-                start_s if start_s is not None else buffer[0].start, 2
-            )
-            end_time: float = round(
-                end_s if end_s is not None else buffer[-1].end, 2
-            )
-        else:
-            combined_text = str(buffer)
-            start_time = round(start_s if start_s is not None else 0.0, 2)
-            end_time = round(end_s if end_s is not None else 0.0, 2)
-
-        chunk_id: str = self._format_chunk_id(
-            safe_stem, file_hash, start_time, chunk_index
+        text = " ".join(s.text for s in buffer)
+        start_val = round(
+            start_s if start_s is not None else (buffer[0].start if buffer else 0.0),
+            2,
         )
+        end_val = round(
+            end_s if end_s is not None else (buffer[-1].end if buffer else 0.0),
+            2,
+        )
+
+        chunk_id = self._format_chunk_id(safe_stem, file_hash, start_val, idx)
+
+        emb_model = getattr(
+            settings,
+            "DEFAULT_TEXT_EMBEDDING_MODEL",
+            getattr(settings, "EMBEDDING_MODEL", None),
+        )
+
         metadata: Dict[str, Any] = {
             "source": str(file_path),
             "source_type": "audio",
-            "start_time": start_time,
-            "end_time": end_time,
-            "chunk_index": chunk_index,
+            "modality": "audio",
+            "start": start_val,
+            "end": end_val,
+            "start_time": start_val,
+            "end_time": end_val,
+            "start_s": start_val,
+            "end_s": end_val,
+            "index": idx,
+            "chunk_index": idx,
+            "hash": file_hash,
             "file_hash": file_hash,
         }
-        embedding_model = (
-            getattr(settings, "DEFAULT_TEXT_EMBEDDING_MODEL", None)
-            or getattr(settings, "EMBEDDING_MODEL", None)
-        )
 
         chunk_kwargs: Dict[str, Any] = {
             "chunk_id": chunk_id,
-            "text": combined_text,
+            "text": text,
             "source": str(file_path),
             "modality": "audio",
-            "embedding_model": embedding_model,
-            "start_s": start_time,
-            "end_s": end_time,
-            "start_time": start_time,
-            "end_time": end_time,
-            "chunk_index": chunk_index,
-            "file_hash": file_hash,
+            "embedding_model": emb_model,
+            "start_s": start_val,
+            "end_s": end_val,
             "metadata": metadata,
         }
 
         try:
             sig = inspect.signature(Chunk)
-            has_var_keyword = any(
+            if any(
                 p.kind == inspect.Parameter.VAR_KEYWORD
                 for p in sig.parameters.values()
-            )
-            if has_var_keyword:
+            ):
                 return Chunk(**chunk_kwargs)
             filtered = {k: v for k, v in chunk_kwargs.items() if k in sig.parameters}
             return Chunk(**filtered)
-        except (ValueError, TypeError):
-            try:
-                return Chunk(
-                    chunk_id=chunk_id,
-                    text=combined_text,
-                    metadata=metadata,
-                )
-            except TypeError:
-                return Chunk(
-                    chunk_id=chunk_id,
-                    source=str(file_path),
-                    modality="audio",
-                    text=combined_text,
-                    embedding_model=embedding_model,
-                    start_s=start_time,
-                    end_s=end_time,
-                )
+        except Exception:
+            return Chunk(chunk_id=chunk_id, text=text, metadata=metadata)
 
-    # Alias to prevent AttributeError if invoked as _create_chunk
     _create_chunk = _build_chunk
 
     def _report_progress(self, current: float, total: float) -> None:
@@ -395,25 +419,18 @@ class AudioIngestor:
             return
         try:
             sig = inspect.signature(self._progress_callback)
-            num_params = len([
-                p for p in sig.parameters.values()
-                if p.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
-            ])
-            if num_params >= 2:
+            if len(sig.parameters) >= 2:
                 self._progress_callback(current, total)
             else:
-                ratio = min(1.0, max(0.0, current / total)) if total > 0 else 1.0
-                self._progress_callback(ratio)
+                self._progress_callback(
+                    min(1.0, current / total) if total > 0 else 1.0
+                )
         except Exception:
-            try:
-                ratio = min(1.0, max(0.0, current / total)) if total > 0 else 1.0
-                self._progress_callback(ratio)
-            except Exception:
-                logger.debug("Progress callback execution failed", exc_info=True)
+            logger.debug("Progress callback execution failed", exc_info=True)
 
     def _transcribe_with_retry(self, file_path: Path) -> Iterator[AudioSegment]:
         last_yielded_start: float = -1.0
-        last_error: Optional[Exception] = None
+        last_err: Optional[Exception] = None
 
         for attempt in range(self._max_retries):
             try:
@@ -422,35 +439,34 @@ class AudioIngestor:
                     vad_filter=True,
                     vad_parameters=self._vad_parameters,
                 )
+                duration: float = getattr(info, "duration", 0.0) or 0.0
 
                 if hasattr(info, "language") and info.language:
                     logger.debug(
-                        "Detected language: %s (prob=%.2f)",
+                        "Detected language '%s' (prob=%.2f) for %s",
                         info.language,
                         getattr(info, "language_probability", 0.0),
+                        file_path.name,
                     )
 
-                total_duration: float = getattr(info, "duration", 0.0) or 0.0
-
                 for segment in segments:
-                    if segment.start <= last_yielded_start:
+                    if segment.start <= last_yielded_start + 1e-4:
                         continue
                     last_yielded_start = segment.start
-                    if total_duration > 0:
-                        self._report_progress(segment.end, total_duration)
+                    if duration > 0:
+                        self._report_progress(segment.end, duration)
                     yield segment
 
-                if total_duration > 0:
-                    self._report_progress(total_duration, total_duration)
+                if duration > 0:
+                    self._report_progress(duration, duration)
                 return
 
             except Exception as exc:
-                last_error = exc
+                last_err = exc
                 if attempt < self._max_retries - 1:
-                    backoff: float = 2.0 ** attempt
+                    backoff = 2.0 ** attempt
                     logger.warning(
-                        "Transcription attempt %d/%d failed for '%s': %s. "
-                        "Retrying in %.0fs",
+                        "Transcription attempt %d/%d failed for '%s': %s. Retrying in %.0fs...",
                         attempt + 1,
                         self._max_retries,
                         file_path.name,
@@ -466,9 +482,8 @@ class AudioIngestor:
                     )
 
         raise AudioProcessingError(
-            f"Transcription failed after {self._max_retries} attempts "
-            f"for {file_path.name}: {last_error}"
-        ) from last_error
+            f"Transcription failed for {file_path.name} after {self._max_retries} attempts: {last_err}"
+        ) from last_err
 
     def _create_chunks_from_segments(
         self,
@@ -478,155 +493,75 @@ class AudioIngestor:
         file_hash: str,
     ) -> Iterator[Chunk]:
         buffer: List[OverlapSegment] = []
-        chunk_index: int = 0
-        has_new_content: bool = False
-        start_s: float = 0.0
-        end_s: float = 0.0
+        chunk_idx: int = 0
+        has_new: bool = False
 
         for segment in segments:
             text = segment.text.strip() if segment.text else ""
             if not text:
                 continue
 
-            word_count: int = self._count_words(text)
-            if word_count == 0:
+            wcount = self._count_words(text)
+            if wcount == 0:
                 continue
 
-            # Handle oversized single segments exceeding target word limit
-            if word_count > self._target_words:
-                matches = list(_WORD_PATTERN.finditer(text))
-                total_matches = len(matches)
-                seg_duration = max(0.0, segment.end - segment.start)
-                step = self._target_words - self._overlap_words
-                pos = 0
+            buffer.append(OverlapSegment(text, segment.start, segment.end, wcount))
+            has_new = True
 
-                while pos < total_matches:
-                    chunk_matches = matches[pos : pos + self._target_words]
-                    chunk_text = text[
-                        chunk_matches[0].start() : chunk_matches[-1].end()
-                    ].strip()
-                    sub_start = round(
-                        segment.start
-                        + (chunk_matches[0].start() / max(1, len(text)))
-                        * seg_duration,
-                        2,
-                    )
-                    sub_end = round(
-                        segment.start
-                        + (chunk_matches[-1].end() / max(1, len(text)))
-                        * seg_duration,
-                        2,
-                    )
-                    sub_count = len(chunk_matches)
+            while sum(s.word_count for s in buffer) >= self._target_words:
+                current_words = 0
+                chunk_segs: List[OverlapSegment] = []
+                remaining_buffer: List[OverlapSegment] = []
 
-                    if (
-                        pos + self._target_words >= total_matches
-                        and sub_count < self._target_words
-                    ):
-                        buffer.append(
-                            OverlapSegment(
-                                text=chunk_text,
-                                start=sub_start,
-                                end=sub_end,
-                                word_count=sub_count,
-                            )
-                        )
-                        has_new_content = True
-                        break
+                for seg in buffer:
+                    if current_words == self._target_words:
+                        remaining_buffer.append(seg)
+                        continue
 
-                    buffer.append(
-                        OverlapSegment(
-                            text=chunk_text,
-                            start=sub_start,
-                            end=sub_end,
-                            word_count=sub_count,
-                        )
-                    )
-                    start_s = round(buffer[0].start, 2)
-                    end_s = round(buffer[-1].end, 2)
-                    yield self._build_chunk(
-                        buffer,
-                        safe_stem,
-                        file_hash,
-                        chunk_index,
-                        file_path,
-                        start_s=start_s,
-                        end_s=end_s,
-                    )
-                    chunk_index += 1
-                    buffer = self._trim_buffer(buffer, self._overlap_words)
-                    has_new_content = False
-                    pos += step
-                continue
+                    if current_words + seg.word_count <= self._target_words:
+                        chunk_segs.append(seg)
+                        current_words += seg.word_count
+                    else:
+                        needed = self._target_words - current_words
+                        seg1, seg2 = self._split_segment(seg, needed)
+                        if seg1:
+                            chunk_segs.append(seg1)
+                        if seg2:
+                            remaining_buffer.append(seg2)
+                        current_words += needed
 
-            buffer.append(
-                OverlapSegment(
-                    text=text,
-                    start=segment.start,
-                    end=segment.end,
-                    word_count=word_count,
-                )
-            )
-            has_new_content = True
-
-            total_words: int = sum(s.word_count for s in buffer)
-            if total_words >= self._target_words:
-                start_s = round(buffer[0].start, 2)
-                end_s = round(buffer[-1].end, 2)
                 yield self._build_chunk(
-                    buffer,
-                    safe_stem,
-                    file_hash,
-                    chunk_index,
-                    file_path,
-                    start_s=start_s,
-                    end_s=end_s,
+                    chunk_segs, safe_stem, file_hash, chunk_idx, file_path
                 )
-                chunk_index += 1
-                buffer = self._trim_buffer(buffer, self._overlap_words)
-                has_new_content = False
+                chunk_idx += 1
+                
+                buffer = self._trim_buffer(chunk_segs, self._overlap_words) + remaining_buffer
+                has_new = False
 
-        if buffer and has_new_content:
-            start_s = round(buffer[0].start, 2)
-            end_s = round(buffer[-1].end, 2)
+        if buffer and has_new:
             yield self._build_chunk(
-                buffer,
-                safe_stem,
-                file_hash,
-                chunk_index,
-                file_path,
-                start_s=start_s,
-                end_s=end_s,
+                buffer, safe_stem, file_hash, chunk_idx, file_path
             )
 
     def _ensure_open(self) -> None:
         if self._closed:
             raise RuntimeError("AudioIngestor has been closed")
 
-    def _prepare_file(
-        self, file_path: Union[str, Path]
-    ) -> tuple[Path, int, str, str]:
-        resolved: Path = Path(file_path)
-        file_size: int = self._validate_file(resolved)
-        safe_stem: str = self._sanitize_stem(resolved.stem)
-        suffix: str = resolved.suffix.lstrip(".")
-        if suffix:
-            safe_stem = f"{safe_stem}_{suffix}"
-        file_hash: str = self._compute_file_hash(resolved.name, file_size)
-        return resolved, file_size, safe_stem, file_hash
-
     def process_file_streaming(
-        self, file_path: Union[str, Path]
+        self,
+        file_path: Union[str, Path],
     ) -> Iterator[Chunk]:
         self._ensure_open()
         resolved, file_size, safe_stem, file_hash = self._prepare_file(file_path)
-        logger.info("Processing (streaming): %s", resolved.name)
+        logger.info(
+            "Starting streaming audio ingestion: %s (%.2f MB)",
+            resolved.name,
+            file_size / (1024 * 1024),
+        )
 
         try:
-            segments: Iterator[AudioSegment] = self._transcribe_with_retry(
-                resolved
-            )
-            chunk_count: int = 0
+            segments = self._transcribe_with_retry(resolved)
+            chunk_count = 0
             for chunk in self._create_chunks_from_segments(
                 segments, safe_stem, resolved, file_hash
             ):
@@ -634,9 +569,9 @@ class AudioIngestor:
                 chunk_count += 1
 
             logger.info(
-                "Generated %d chunks (streaming) for %s",
-                chunk_count,
+                "Streaming ingestion complete for %s: generated %d chunks",
                 resolved.name,
+                chunk_count,
             )
         except AudioProcessingError:
             raise
@@ -645,18 +580,22 @@ class AudioIngestor:
                 f"Failed to process {resolved.name}: {exc}"
             ) from exc
 
-    def process_file(self, file_path: Union[str, Path]) -> List[Chunk]:
+    def process_file(
+        self,
+        file_path: Union[str, Path],
+    ) -> List[Chunk]:
         self._ensure_open()
         resolved, file_size, safe_stem, file_hash = self._prepare_file(file_path)
-        logger.info("Processing: %s", resolved.name)
+        logger.info(
+            "Starting batch audio ingestion: %s (%.2f MB)",
+            resolved.name,
+            file_size / (1024 * 1024),
+        )
 
+        start_time = time.perf_counter()
         try:
             self._report_progress(0.0, 1.0)
-
-            segments: Iterator[AudioSegment] = self._transcribe_with_retry(
-                resolved
-            )
-
+            segments = self._transcribe_with_retry(resolved)
             chunks: List[Chunk] = list(
                 self._create_chunks_from_segments(
                     segments, safe_stem, resolved, file_hash
@@ -664,12 +603,14 @@ class AudioIngestor:
             )
 
             if not chunks:
-                logger.warning(
-                    "No speech chunks detected in %s", resolved.name
-                )
+                logger.warning("No speech detected in audio file: %s", resolved.name)
 
+            elapsed = time.perf_counter() - start_time
             logger.info(
-                "Generated %d chunks for %s", len(chunks), resolved.name
+                "Batch audio ingestion complete for %s: generated %d chunks in %.2fs",
+                resolved.name,
+                len(chunks),
+                elapsed,
             )
 
             self._report_progress(1.0, 1.0)
@@ -686,14 +627,16 @@ class AudioIngestor:
         if getattr(self, "_closed", False):
             return
         self._closed = True
-        if getattr(self, "_model", None) is not None:
+
+        if hasattr(self, "_model"):
             try:
                 del self._model
             except Exception:
                 pass
+
         try:
             if logger is not None:
-                logger.debug("AudioIngestor closed")
+                logger.debug("AudioIngestor closed successfully")
         except Exception:
             pass
 
@@ -709,12 +652,10 @@ class AudioIngestor:
         self.close()
 
     def __del__(self) -> None:
-        if getattr(self, "_closed", True):
-            return
         self.close()
 
     def __repr__(self) -> str:
-        status: str = "closed" if self._closed else "open"
+        status = "closed" if self._closed else "open"
         return (
             f"AudioIngestor(model={self._model_size!r}, "
             f"device={self._device!r}, "
