@@ -58,14 +58,11 @@ _WORD_PATTERN: re.Pattern[str] = re.compile(r"\b\w+\b")
 
 
 class AudioProcessingError(Exception):
-    """Raised when an error occurs during audio file validation or transcription."""
     pass
 
 
 @runtime_checkable
 class AudioSegment(Protocol):
-    """Structural protocol defining speech segments produced by faster-whisper."""
-
     @property
     def text(self) -> str: ...
 
@@ -78,8 +75,6 @@ class AudioSegment(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class OverlapSegment:
-    """Internal immutable container for audio segments managed within the sliding window buffer."""
-
     text: str
     start: float
     end: float
@@ -95,8 +90,6 @@ class OverlapSegment:
 
 
 class AudioIngestor:
-    """Production-ready offline audio ingestion pipeline for local RAG systems."""
-
     __slots__ = (
         "_model_size",
         "_device",
@@ -274,9 +267,8 @@ class AudioIngestor:
     def _split_segment(
         seg: OverlapSegment, words_to_keep: int
     ) -> tuple[Optional[OverlapSegment], Optional[OverlapSegment]]:
-        """Splits an OverlapSegment strictly at a word boundary."""
         matches = list(_WORD_PATTERN.finditer(seg.text))
-        
+
         if words_to_keep >= len(matches):
             return seg, None
         if words_to_keep <= 0:
@@ -292,14 +284,13 @@ class AudioIngestor:
 
         seg1 = OverlapSegment(text1, seg.start, mid_time, words_to_keep)
         seg2 = OverlapSegment(text2, mid_time, seg.end, len(matches) - words_to_keep)
-        
+
         return seg1, seg2
 
     @classmethod
     def _trim_buffer(
         cls, buffer: List[OverlapSegment], overlap_target: int
     ) -> List[OverlapSegment]:
-        """Trims a list of segments from the front down to the exact overlap_target."""
         if overlap_target <= 0 or not buffer:
             return []
 
@@ -319,15 +310,15 @@ class AudioIngestor:
             else:
                 needed_drop = words_to_drop - dropped
                 words_to_keep = seg.word_count - needed_drop
-                
+
                 matches = list(_WORD_PATTERN.finditer(seg.text))
                 split_pos = matches[-words_to_keep].start()
-                
+
                 text = seg.text[split_pos:].strip()
                 duration = seg.end - seg.start
                 ratio = split_pos / max(1, len(seg.text))
                 mid_time = round(seg.start + (duration * ratio), 2)
-                
+
                 trimmed.append(OverlapSegment(text, mid_time, seg.end, words_to_keep))
                 dropped += needed_drop
 
@@ -494,7 +485,6 @@ class AudioIngestor:
     ) -> Iterator[Chunk]:
         buffer: List[OverlapSegment] = []
         chunk_idx: int = 0
-        has_new: bool = False
 
         for segment in segments:
             text = segment.text.strip() if segment.text else ""
@@ -506,7 +496,6 @@ class AudioIngestor:
                 continue
 
             buffer.append(OverlapSegment(text, segment.start, segment.end, wcount))
-            has_new = True
 
             while sum(s.word_count for s in buffer) >= self._target_words:
                 current_words = 0
@@ -534,11 +523,10 @@ class AudioIngestor:
                     chunk_segs, safe_stem, file_hash, chunk_idx, file_path
                 )
                 chunk_idx += 1
-                
-                buffer = self._trim_buffer(chunk_segs, self._overlap_words) + remaining_buffer
-                has_new = False
 
-        if buffer and has_new:
+                buffer = self._trim_buffer(chunk_segs, self._overlap_words) + remaining_buffer
+
+        if buffer:
             yield self._build_chunk(
                 buffer, safe_stem, file_hash, chunk_idx, file_path
             )
