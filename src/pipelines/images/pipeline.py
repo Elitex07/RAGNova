@@ -224,13 +224,41 @@ class ImageIngestionPipeline:
     ) -> List[ImageChunk]:
         """Processes a batch of images and produces one Chunk per image.
 
+        Splits into sub-batches of `config.batch_size` images each, so a
+        large directory (or a directory of high-resolution images) never
+        holds every decoded image and every preprocessed OpenCLIP tensor
+        in memory at once — a real Greptile finding on the original,
+        unbounded implementation. See ImageIngestionConfig.batch_size.
+
         Args:
             image_inputs: List of image paths, bytes, or PIL Images.
             extra_metadata_list: Optional list of metadata dicts corresponding to inputs.
 
         Returns:
-            List of Chunks, one per input image.
+            List of Chunks, one per input image (skipped/unreadable ones aside).
         """
+        if not image_inputs:
+            return []
+
+        batch_size = max(1, self.config.batch_size)
+        all_chunks: List[ImageChunk] = []
+        for start in range(0, len(image_inputs), batch_size):
+            sub_inputs = image_inputs[start : start + batch_size]
+            sub_extra = (
+                extra_metadata_list[start : start + batch_size]
+                if extra_metadata_list
+                else None
+            )
+            all_chunks.extend(self._ingest_batch_chunk(sub_inputs, sub_extra))
+        return all_chunks
+
+    def _ingest_batch_chunk(
+        self,
+        image_inputs: List[Union[str, Path, bytes, BinaryIO, Image.Image]],
+        extra_metadata_list: Optional[List[Dict[str, Any]]],
+    ) -> List[ImageChunk]:
+        """Processes ONE sub-batch (at most `config.batch_size` images) —
+        the original, un-chunked `ingest_batch()` body."""
         if not image_inputs:
             return []
 

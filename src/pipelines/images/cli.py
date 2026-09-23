@@ -8,8 +8,8 @@ import logging
 import sys
 from pathlib import Path
 
+from src.pipelines.images import ImageIngestionPipeline
 from src.pipelines.images.models import ImageIngestionConfig
-from src.pipelines.images.pipeline import ImageIngestionPipeline
 
 # The corrupt-image error message below (and any other message containing
 # an em-dash) renders as "?" on an unconfigured Windows console — the same

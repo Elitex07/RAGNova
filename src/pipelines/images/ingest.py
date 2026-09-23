@@ -462,8 +462,16 @@ class ImageIngestionPipeline:
     ) -> List[ImageChunk]:
         """Processes a batch of images, producing one ImageChunk per image.
 
-        OCR is run sequentially per image; OpenCLIP inference uses a single
-        batched forward pass for efficiency.
+        OCR is run sequentially per image; OpenCLIP inference batches
+        within each sub-batch of :attr:`ImageIngestionConfig.batch_size`
+        images for efficiency, without holding every decoded image and
+        every preprocessed tensor for the *entire* input in memory at
+        once — a real Greptile finding on this exact method: sending
+        every discovered image through a single `ingest_batch` call meant
+        a large directory, or a directory of high-resolution images,
+        could exhaust host or accelerator memory before ever running.
+        Each sub-batch's PIL images and tensors go out of scope (eligible
+        for garbage collection) before the next sub-batch is loaded.
 
         Parameters
         ----------
@@ -478,7 +486,35 @@ class ImageIngestionPipeline:
         Returns
         -------
         List[ImageChunk]
-            One ImageChunk per input image, in the same order.
+            One ImageChunk per input image (skipped/unreadable ones aside),
+            in the same order.
+        """
+        if not image_inputs:
+            return []
+
+        batch_size = max(1, self.config.batch_size)
+        all_chunks: List[ImageChunk] = []
+        for start in range(0, len(image_inputs), batch_size):
+            sub_inputs = image_inputs[start : start + batch_size]
+            sub_extra = (
+                extra_metadata_list[start : start + batch_size]
+                if extra_metadata_list
+                else None
+            )
+            all_chunks.extend(self._ingest_batch_chunk(sub_inputs, sub_extra, store))
+        return all_chunks
+
+    def _ingest_batch_chunk(
+        self,
+        image_inputs: List[Union[str, Path, bytes, BinaryIO, Image.Image]],
+        extra_metadata_list: Optional[List[Dict[str, Any]]],
+        store: bool,
+    ) -> List[ImageChunk]:
+        """Processes ONE sub-batch (at most `config.batch_size` images) —
+        the original, un-chunked `ingest_batch()` body. Kept as a separate
+        method so `ingest_batch()`'s job is purely "split the input and
+        call this repeatedly," not interleaved with the actual per-image
+        work.
         """
         if not image_inputs:
             return []

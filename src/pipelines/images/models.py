@@ -30,6 +30,18 @@ class ImageIngestionConfig:
     device: Optional[str] = None  # None = auto-detect ('cuda', 'mps', 'cpu')
     normalize_embeddings: bool = True
 
+    # Batch ingestion settings. Maximum images decoded and embedded together
+    # in one sub-batch during ingest_batch()/ingest_directory() — a real
+    # Greptile finding on the original implementation: sending every image
+    # discovered in a directory through a single, unbounded batch call
+    # meant a large directory, or a directory of high-resolution images,
+    # could hold every decoded image and every preprocessed OpenCLIP tensor
+    # in memory simultaneously before any of it was freed. 16 is a starting
+    # point, not a measured value — lower it for high-resolution corpora on
+    # constrained (e.g. CPU-only) hardware, raise it if memory genuinely
+    # isn't the bottleneck.
+    batch_size: int = 16
+
     @property
     def embedding_model_id(self) -> str:
         """Returns standard embedding model identifier string."""
