@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import logging
 import re
 import time
@@ -32,6 +31,11 @@ except ImportError as exc:
     ) from exc
 
 logger: logging.Logger = logging.getLogger(__name__)
+
+DEFAULT_MAX_RETRIES: int = 3
+DEFAULT_DEVICE: str = "cpu"
+DEFAULT_COMPUTE_TYPE: str = "int8"
+MAX_FILE_SIZE_BYTES: int = 2 * 1024 * 1024 * 1024
 
 SUPPORTED_EXTENSIONS: frozenset[str] = frozenset({
     ".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac",
@@ -119,17 +123,16 @@ class AudioIngestor:
         if self._overlap_words >= self._target_words:
             raise ValueError("overlap_words must be strictly less than target_words")
 
-        self._max_retries = max_retries if max_retries is not None else getattr(settings, "WHISPER_MAX_RETRIES", 3)
+        self._max_retries = max_retries if max_retries is not None else DEFAULT_MAX_RETRIES
         if self._max_retries < 1:
             raise ValueError("max_retries must be at least 1")
 
         self._model_size = (model_size or getattr(settings, "WHISPER_MODEL_SIZE", "base")).strip()
-        self._device = (device or getattr(settings, "WHISPER_DEVICE", "cpu")).strip().lower()
-        self._compute_type = (compute_type or getattr(settings, "WHISPER_COMPUTE_TYPE", "int8")).strip().lower()
+        self._device = (device or DEFAULT_DEVICE).strip().lower()
+        self._compute_type = (compute_type or DEFAULT_COMPUTE_TYPE).strip().lower()
 
         self._vad_parameters = {
             **DEFAULT_VAD_PARAMETERS,
-            **getattr(settings, "WHISPER_VAD_PARAMETERS", {}),
             **(vad_parameters or {}),
         }
 
@@ -164,7 +167,7 @@ class AudioIngestor:
         if file_size == 0:
             raise AudioProcessingError(f"Audio file is empty (0 bytes): {path.as_posix()}")
 
-        if file_size > 2 * 1024 * 1024 * 1024:
+        if file_size > MAX_FILE_SIZE_BYTES:
             raise AudioProcessingError(f"Audio file exceeds 2 GB limit")
 
         return file_size
