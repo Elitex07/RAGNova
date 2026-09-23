@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 from typing import Any, BinaryIO, Dict, List, Optional, Union
 
-from PIL import Image, UnidentifiedImageError
+from PIL import Image
 
 from src.pipelines.images.embedder import OpenCLIPEmbedder
 from src.pipelines.images.models import (
@@ -70,10 +70,28 @@ class ImageIngestionPipeline:
         output), so any caller who imports this directly, on an
         unreconfigured Windows console, would otherwise see this exact
         text mangled to "?" — confirmed live in the previous /verify pass.
+
+        Also calls `.load()` immediately, still inside this try block —
+        not just `Image.open()`. Pillow opens lazily: it reads only enough
+        of the header to identify the format and report size/mode, and
+        defers actually decoding pixel data until something needs it.
+        A truncated file can pass `Image.open()` cleanly and only fail
+        later, inside OpenCLIP's `img.convert("RGB")` during
+        `embed_batch()` — a real Greptile finding on this exact fix,
+        confirmed directly: `Image.open()` succeeded on a deliberately
+        truncated PNG, and only `.load()`/`.convert()` raised. That later
+        failure happens outside ingest_batch()'s per-file try/except
+        below, so it would abort the *entire* batch — defeating the very
+        fix that try/except exists for. Forcing the decode here, inside
+        the block ingest_batch() already catches, means a truncated file
+        is caught and skipped at load time, before it ever reaches a
+        batched embedding call it could take down with it.
         """
         try:
-            return Image.open(io.BytesIO(raw_bytes))
-        except UnidentifiedImageError as exc:
+            image = Image.open(io.BytesIO(raw_bytes))
+            image.load()
+            return image
+        except OSError as exc:
             raise ValueError(
                 f"Cannot identify image file: {source_desc} - the file may be "
                 f"corrupt, empty, or not actually an image."
