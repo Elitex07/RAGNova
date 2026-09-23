@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 import time
@@ -31,14 +32,6 @@ except ImportError as exc:
     ) from exc
 
 logger: logging.Logger = logging.getLogger(__name__)
-
-DEFAULT_TARGET_WORDS: int = 300
-DEFAULT_OVERLAP_WORDS: int = 50
-DEFAULT_MAX_RETRIES: int = 3
-DEFAULT_MODEL_SIZE: str = "base"
-DEFAULT_DEVICE: str = "cpu"
-DEFAULT_COMPUTE_TYPE: str = "int8"
-MAX_FILE_SIZE_BYTES: int = 2 * 1024 * 1024 * 1024
 
 SUPPORTED_EXTENSIONS: frozenset[str] = frozenset({
     ".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac",
@@ -116,88 +109,38 @@ class AudioIngestor:
         target_words: Optional[int] = None,
         overlap_words: Optional[int] = None,
     ) -> None:
-        self._target_words: int = (
-            target_words if target_words is not None else DEFAULT_TARGET_WORDS
-        )
-        self._overlap_words: int = (
-            overlap_words if overlap_words is not None else DEFAULT_OVERLAP_WORDS
-        )
+        self._target_words = target_words if target_words is not None else settings.CHUNK_SIZE_WORDS
+        self._overlap_words = overlap_words if overlap_words is not None else settings.CHUNK_OVERLAP_WORDS
 
         if self._target_words < 1:
             raise ValueError("target_words must be at least 1")
         if self._overlap_words < 0:
             raise ValueError("overlap_words must be non-negative")
         if self._overlap_words >= self._target_words:
-            raise ValueError(
-                f"overlap_words ({self._overlap_words}) must be strictly less than "
-                f"target_words ({self._target_words})"
-            )
+            raise ValueError("overlap_words must be strictly less than target_words")
 
-        resolved_retries: int = (
-            max_retries if max_retries is not None else DEFAULT_MAX_RETRIES
-        )
-        if resolved_retries < 1:
+        self._max_retries = max_retries if max_retries is not None else getattr(settings, "WHISPER_MAX_RETRIES", 3)
+        if self._max_retries < 1:
             raise ValueError("max_retries must be at least 1")
-        self._max_retries: int = resolved_retries
 
-        self._model_size: str = self._resolve_model_size(model_size)
-        self._device: str = self._resolve_device(device)
-        self._compute_type: str = self._resolve_compute_type(compute_type)
+        self._model_size = (model_size or getattr(settings, "WHISPER_MODEL_SIZE", "base")).strip()
+        self._device = (device or getattr(settings, "WHISPER_DEVICE", "cpu")).strip().lower()
+        self._compute_type = (compute_type or getattr(settings, "WHISPER_COMPUTE_TYPE", "int8")).strip().lower()
 
-        self._vad_parameters: Dict[str, Any] = {
+        self._vad_parameters = {
             **DEFAULT_VAD_PARAMETERS,
+            **getattr(settings, "WHISPER_VAD_PARAMETERS", {}),
             **(vad_parameters or {}),
         }
 
-        self._progress_callback: Optional[Callable[..., None]] = progress_callback
-        self._closed: bool = False
+        self._progress_callback = progress_callback
+        self._closed = False
 
-        logger.info(
-            "Initializing AudioIngestor (model=%s, device=%s, compute_type=%s, "
-            "target_words=%d, overlap_words=%d)",
-            self._model_size,
-            self._device,
-            self._compute_type,
-            self._target_words,
-            self._overlap_words,
-        )
-        self._model: WhisperModel = WhisperModel(
+        self._model = WhisperModel(
             self._model_size,
             device=self._device,
             compute_type=self._compute_type,
         )
-
-    @staticmethod
-    def _resolve_model_size(override: Optional[str]) -> str:
-        if override and override.strip():
-            return override.strip()
-        return DEFAULT_MODEL_SIZE
-
-    @staticmethod
-    def _resolve_device(override: Optional[str]) -> str:
-        device = (override or DEFAULT_DEVICE).strip().lower()
-        if device not in VALID_DEVICES:
-            logger.warning(
-                "Invalid device '%s', falling back to '%s'. Valid devices: %s",
-                device,
-                DEFAULT_DEVICE,
-                sorted(VALID_DEVICES),
-            )
-            return DEFAULT_DEVICE
-        return device
-
-    @staticmethod
-    def _resolve_compute_type(override: Optional[str]) -> str:
-        compute_type = (override or DEFAULT_COMPUTE_TYPE).strip().lower()
-        if compute_type not in VALID_COMPUTE_TYPES:
-            logger.warning(
-                "Invalid compute_type '%s', falling back to '%s'. Valid types: %s",
-                compute_type,
-                DEFAULT_COMPUTE_TYPE,
-                sorted(VALID_COMPUTE_TYPES),
-            )
-            return DEFAULT_COMPUTE_TYPE
-        return compute_type
 
     @staticmethod
     def _sanitize_stem(stem: str) -> str:
@@ -211,33 +154,18 @@ class AudioIngestor:
         if not path.exists():
             raise AudioProcessingError(f"Audio file not found: {path.as_posix()}")
         if not path.is_file():
-            raise AudioProcessingError(
-                f"Path is not a regular file: {path.as_posix()}"
-            )
+            raise AudioProcessingError(f"Path is not a regular file: {path.as_posix()}")
 
         suffix = path.suffix.lower()
         if suffix not in SUPPORTED_EXTENSIONS:
-            raise AudioProcessingError(
-                f"Unsupported audio format '{suffix}'. "
-                f"Supported formats: {sorted(SUPPORTED_EXTENSIONS)}"
-            )
+            raise AudioProcessingError(f"Unsupported audio format '{suffix}'")
 
-        try:
-            file_size = path.stat().st_size
-        except OSError as exc:
-            raise AudioProcessingError(
-                f"Cannot access file metadata for {path.as_posix()}: {exc}"
-            ) from exc
-
+        file_size = path.stat().st_size
         if file_size == 0:
-            raise AudioProcessingError(
-                f"Audio file is empty (0 bytes): {path.as_posix()}"
-            )
+            raise AudioProcessingError(f"Audio file is empty (0 bytes): {path.as_posix()}")
 
-        if file_size > MAX_FILE_SIZE_BYTES:
-            raise AudioProcessingError(
-                f"Audio file exceeds 2 GB limit: {file_size / (1024 ** 3):.2f} GB"
-            )
+        if file_size > 2 * 1024 * 1024 * 1024:
+            raise AudioProcessingError(f"Audio file exceeds 2 GB limit")
 
         return file_size
 
@@ -328,50 +256,26 @@ class AudioIngestor:
         safe_stem: str,
         idx: int,
         file_path: Path,
-        start_s: Optional[float] = None,
-        end_s: Optional[float] = None,
     ) -> Chunk:
         text = " ".join(s.text for s in buffer).strip()
-        start_val = round(
-            start_s if start_s is not None else (buffer[0].start if buffer else 0.0),
-            2,
-        )
-        end_val = round(
-            end_s if end_s is not None else (buffer[-1].end if buffer else 0.0),
-            2,
-        )
-
-        source = file_path.as_posix()
+        start_val = round(buffer[0].start, 2)
+        end_val = round(buffer[-1].end, 2)
 
         return Chunk(
             chunk_id=self._format_chunk_id(safe_stem, start_val, idx),
             text=text,
-            source=source,
+            source=file_path.as_posix(),
             modality="audio",
             embedding_model=settings.TEXT_EMBEDDING_MODEL,
             start_s=start_val,
             end_s=end_val,
-            metadata={
-                "source": source,
-                "source_type": "audio",
-                "modality": "audio",
-                "start_s": start_val,
-                "end_s": end_val,
-                "chunk_index": idx,
-            },
         )
 
     def _report_progress(self, current: float, total: float) -> None:
-        if not self._progress_callback:
-            return
-        try:
-            self._progress_callback(current, total)
-        except Exception:
-            logger.debug("Progress callback execution failed", exc_info=True)
+        if self._progress_callback:
+            self._progress_callback(min(1.0, current / total) if total > 0 else 1.0)
 
     def _transcribe_with_retry(self, file_path: Path) -> Iterator[AudioSegment]:
-        last_err: Optional[Exception] = None
-
         for attempt in range(self._max_retries):
             try:
                 segments, info = self._model.transcribe(
@@ -380,15 +284,6 @@ class AudioIngestor:
                     vad_parameters=self._vad_parameters,
                 )
                 duration: float = getattr(info, "duration", 0.0) or 0.0
-                language = getattr(info, "language", None)
-
-                if language:
-                    logger.debug(
-                        "Detected language '%s' (prob=%.2f) for %s",
-                        language,
-                        getattr(info, "language_probability", 0.0) or 0.0,
-                        file_path.name,
-                    )
 
                 for segment in segments:
                     if duration > 0:
@@ -399,31 +294,11 @@ class AudioIngestor:
                     self._report_progress(duration, duration)
                 return
 
-            except Exception as exc:
-                last_err = exc
+            except Exception:
                 if attempt < self._max_retries - 1:
-                    backoff = 2.0 ** attempt
-                    logger.warning(
-                        "Transcription attempt %d/%d failed for '%s': %s. "
-                        "Retrying in %.0fs...",
-                        attempt + 1,
-                        self._max_retries,
-                        file_path.name,
-                        exc,
-                        backoff,
-                    )
-                    time.sleep(backoff)
+                    time.sleep(2.0 ** attempt)
                 else:
-                    logger.error(
-                        "All %d transcription attempts failed for '%s'",
-                        self._max_retries,
-                        file_path.name,
-                    )
-
-        raise AudioProcessingError(
-            f"Transcription failed for {file_path.name} after "
-            f"{self._max_retries} attempts: {last_err}"
-        ) from last_err
+                    raise
 
     def _create_chunks_from_segments(
         self,
@@ -471,14 +346,7 @@ class AudioIngestor:
                 chunk_idx += 1
 
                 overlap = self._trim_buffer(chunk_segs, self._overlap_words)
-                new_buffer = overlap + remaining_buffer
-
-                if sum(s.word_count for s in new_buffer) >= sum(
-                    s.word_count for s in buffer
-                ):
-                    buffer = remaining_buffer
-                else:
-                    buffer = new_buffer
+                buffer = overlap + remaining_buffer
 
         if buffer:
             yield self._build_chunk(buffer, safe_stem, chunk_idx, file_path)
@@ -492,86 +360,23 @@ class AudioIngestor:
         file_path: Union[str, Path],
     ) -> Iterator[Chunk]:
         self._ensure_open()
-        resolved, file_size, safe_stem = self._prepare_file(file_path)
-        logger.info(
-            "Starting streaming audio ingestion: %s (%.2f MB)",
-            resolved.name,
-            file_size / (1024 * 1024),
-        )
+        resolved, _, safe_stem = self._prepare_file(file_path)
 
-        try:
-            segments = self._transcribe_with_retry(resolved)
-            chunk_count = 0
-            for chunk in self._create_chunks_from_segments(
-                segments, safe_stem, resolved
-            ):
-                yield chunk
-                chunk_count += 1
-
-            logger.info(
-                "Streaming ingestion complete for %s: generated %d chunks",
-                resolved.name,
-                chunk_count,
-            )
-        except AudioProcessingError:
-            raise
-        except Exception as exc:
-            raise AudioProcessingError(
-                f"Failed to process {resolved.name}: {exc}"
-            ) from exc
+        segments = self._transcribe_with_retry(resolved)
+        yield from self._create_chunks_from_segments(segments, safe_stem, resolved)
 
     def process_file(
         self,
         file_path: Union[str, Path],
     ) -> List[Chunk]:
-        self._ensure_open()
-        resolved, file_size, safe_stem = self._prepare_file(file_path)
-        logger.info(
-            "Starting batch audio ingestion: %s (%.2f MB)",
-            resolved.name,
-            file_size / (1024 * 1024),
-        )
-
-        start_time = time.perf_counter()
-        try:
-            self._report_progress(0.0, 1.0)
-            segments = self._transcribe_with_retry(resolved)
-            chunks: List[Chunk] = list(
-                self._create_chunks_from_segments(segments, safe_stem, resolved)
-            )
-
-            if not chunks:
-                logger.warning("No speech detected in audio file: %s", resolved.name)
-
-            elapsed = time.perf_counter() - start_time
-            logger.info(
-                "Batch audio ingestion complete for %s: generated %d chunks in %.2fs",
-                resolved.name,
-                len(chunks),
-                elapsed,
-            )
-
-            self._report_progress(1.0, 1.0)
-            return chunks
-
-        except AudioProcessingError:
-            raise
-        except Exception as exc:
-            raise AudioProcessingError(
-                f"Failed to process {resolved.name}: {exc}"
-            ) from exc
+        return list(self.process_file_streaming(file_path))
 
     def close(self) -> None:
         if getattr(self, "_closed", True):
             return
         self._closed = True
-
-        try:
+        if hasattr(self, "_model"):
             del self._model
-        except AttributeError:
-            pass
-
-        logger.debug("AudioIngestor closed successfully")
 
     def __enter__(self) -> AudioIngestor:
         return self
@@ -590,55 +395,7 @@ class AudioIngestor:
         except Exception:
             pass
 
-    def __repr__(self) -> str:
-        status = "closed" if self._closed else "open"
-        return (
-            f"AudioIngestor(model={self._model_size!r}, "
-            f"device={self._device!r}, "
-            f"compute_type={self._compute_type!r}, "
-            f"target_words={self._target_words}, "
-            f"overlap_words={self._overlap_words}, "
-            f"status={status!r})"
-        )
 
-
-def ingest_audio(
-    file: Union[str, Path],
-    *,
-    model_size: Optional[str] = None,
-    device: Optional[str] = None,
-    compute_type: Optional[str] = None,
-    target_words: Optional[int] = None,
-    overlap_words: Optional[int] = None,
-    progress_callback: Optional[Callable[..., None]] = None,
-) -> List[Chunk]:
-    with AudioIngestor(
-        model_size=model_size,
-        device=device,
-        compute_type=compute_type,
-        target_words=target_words,
-        overlap_words=overlap_words,
-        progress_callback=progress_callback,
-    ) as ingestor:
+def ingest_audio(file: Union[str, Path]) -> List[Chunk]:
+    with AudioIngestor() as ingestor:
         return ingestor.process_file(file)
-
-
-def ingest_audio_streaming(
-    file: Union[str, Path],
-    *,
-    model_size: Optional[str] = None,
-    device: Optional[str] = None,
-    compute_type: Optional[str] = None,
-    target_words: Optional[int] = None,
-    overlap_words: Optional[int] = None,
-    progress_callback: Optional[Callable[..., None]] = None,
-) -> Iterator[Chunk]:
-    with AudioIngestor(
-        model_size=model_size,
-        device=device,
-        compute_type=compute_type,
-        target_words=target_words,
-        overlap_words=overlap_words,
-        progress_callback=progress_callback,
-    ) as ingestor:
-        yield from ingestor.process_file_streaming(file)
