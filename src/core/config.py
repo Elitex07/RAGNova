@@ -43,6 +43,30 @@ class Settings:
     OLLAMA_HOST: str = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
     LLM_TEMPERATURE: float = _get_float("LLM_TEMPERATURE", 0.1)
 
+    # Bounds Ollama's num_predict — how many tokens generation is allowed to
+    # emit before it's cut off. Not a measured value; a safety cap so a
+    # degenerate completion can't hang the CLI/UI indefinitely (Chapter 10).
+    LLM_MAX_TOKENS: int = _get_int("LLM_MAX_TOKENS", 512)
+
+    # Bounds Ollama's num_ctx — the context window, in tokens, the model is
+    # actually allowed to see. Ollama's own default (2048) is tight once
+    # TOP_K (5) retrieved chunks are stuffed into the prompt: each chunk is
+    # up to CHUNK_SIZE_WORDS (300) words, roughly ~1.3 tokens/word, so
+    # 5 x 300 x 1.3 =~ 1950 tokens of context alone, before the system
+    # instructions, provenance headers, the question, and the answer budget
+    # (LLM_MAX_TOKENS) are counted. 4096 leaves real headroom; a starting
+    # point, not a measured value — revisit if TOP_K or CHUNK_SIZE_WORDS grow.
+    LLM_NUM_CTX: int = _get_int("LLM_NUM_CTX", 4096)
+
+    # Cosine-similarity floor a retrieved chunk must clear before it's
+    # allowed into the generation prompt at all (ADR-009). Below this, a
+    # chunk is closer to noise than to an answer, and stuffing it into
+    # context only invites the LLM to hallucinate a connection that isn't
+    # there. 0.3 is a starting point picked by inspecting real scores
+    # against the Chapter 6 corpus (Chapter 10 §3.x), not a literature
+    # value — tune as the gold set (data/README.md) grows.
+    MIN_RELEVANCE_SCORE: float = _get_float("MIN_RELEVANCE_SCORE", 0.3)
+
     TEXT_EMBEDDING_MODEL: str = os.environ.get("TEXT_EMBEDDING_MODEL", "all-MiniLM-L6-v2")
     CLIP_MODEL: str = os.environ.get("CLIP_MODEL", "ViT-B-32")
     CLIP_PRETRAINED: str = os.environ.get("CLIP_PRETRAINED", "laion2b_s34b_b79k")

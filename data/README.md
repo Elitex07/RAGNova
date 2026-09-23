@@ -50,8 +50,8 @@ The evaluation set from Chapter 1 §1.10. Start with 5 questions on Day 1; grow 
 | T1 | If I don't get my system actually running by evaluation day, how many marks am I giving up? | `documents/notice.pdf` | page 2 | Pure paraphrase — shares no words with "the working prototype... will carry forty percent." Answer: 40%. |
 | T2 | As an undergrad, how many items can I check out from the library at once, and for how long? | `documents/library_hours.pdf` | page 1 | Paraphrase — shares no words with "borrow up to four books... fourteen days." Answer: 4 books, 14 days. |
 | T3 | What happens the first time someone gets caught sharing their login with a friend? | `documents/it_onboarding.docx` | page 2 | Paraphrase — shares no words with "network access will be suspended for a period of two weeks." |
-| T4 | | | | |
-| T5 | | | | |
+| T4 | How many earlier projects are we expected to briefly cover for context before explaining what makes ours different? | `documents/notice.pdf` | page 1 | Paraphrase — shares no words with "literature review summarising at least five related systems." Answer: 5. |
+| T5 | If I return a book really late, what's the most I could end up owing for it? | `documents/library_hours.pdf` | page 1 | Paraphrase — shares no words with "fine... capped at two hundred rupees." Answer: Rs. 200. |
 
 > Include at least three questions whose wording shares **no keywords** with the source text (pure paraphrase). Those are the questions that prove semantic search beats Ctrl+F — and they are the ones to demo.
 
@@ -83,8 +83,8 @@ Questions the corpus genuinely cannot answer. These test whether the system **re
 
 | # | Question | Expected behaviour |
 |---|---|---|
-| N1 | | Refuses / states the sources don't cover it |
-| N2 | | Refuses / states the sources don't cover it |
+| N1 | How much is the tuition fee for one semester? | Refuses / states the sources don't cover it. Deliberately *topically adjacent* (same campus-notice domain) but genuinely absent from all 3 files — a harder, more honest test than an obviously unrelated question. |
+| N2 | What is the capital of France? | Refuses / states the sources don't cover it. A second control, wholly outside the corpus's domain. |
 
 ---
 
@@ -95,6 +95,7 @@ Fill in as each chapter's evaluation runs. Numbers, not adjectives (Chapter 1 §
 | Date | Chapter | Recall@5 | MRR | Cross-modal Recall@5 | Notes / what changed |
 |---|---|---|---|---|---|
 | 2026-09-15 | Ch7 | 1.00 | 1.00 | N/A (no images/audio yet) | First real semantic search, 3 text queries (T1–T3) against the 6-chunk Ch6 starter corpus. All 3 hit at rank 1. Read alongside Ch7 §3.3: with only 3 questions, one miss would swing Recall@5 to 0.67 — promising, not yet strong evidence. Grow the gold set (T4 onward) before trusting this number in a report. |
+| 2026-09-23 | Ch10 | N/A (this row is generation, not retrieval) | N/A | N/A | Answer-quality check (`scripts/evaluate_answers.py`), 7 questions (T1–T5, N1–N2), real Ollama (`llama3.2:3b`) + real text_index. Self-rated 1–5 (Ch1 §1.10's faithfulness criterion): T1/T2/T3/N1/N2 = 5 (correct, well-cited or correctly refused); T4/T5 = 4 (correct *answer text* — 5 related systems, Rs. 200 cap — but a citation-number error: T4 cited `[2]` for a fact actually on the `[1]` chunk, T5 cited `[2]` when only one chunk (`[1]`) had cleared the relevance threshold, i.e. the model invented an out-of-range number). Average 4.71/5. Both errors were caught automatically by `answer_query()`'s citation-range check (a logged warning, not a crash) — see Ch10 §6.3. Real, disclosed limitation: a low citation number is not independently verified against the claim it's attached to; only the **Sources list itself** (built from real Chunk metadata, never model text) is guaranteed correct. |
 
 ---
 

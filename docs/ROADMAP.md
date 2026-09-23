@@ -142,7 +142,13 @@ With 2 members: merge Track C into A and B (each owns half the UI).
       and fixed during verification — see Ch7's framing note and §2.3/§5.3)
 - [ ] Ch 8 — Image Pipeline
 - [ ] Ch 9 — Audio Pipeline
-- [ ] Ch 10 — RAG Core
+- [x] Ch 10 — RAG Core (docs + real, tested code written — src/core/llm.py, src/pipelines/rag/{prompt,answer}.py,
+      scripts/{ask,evaluate_answers}.py, tests/test_rag_core.py, ADR-009; real end-to-end answers with
+      citations against the Ch6/7 text_index via real Ollama (llama3.2:3b) — see Ch10 §5 for captured
+      output. Deliberately text-only for now: image_index/audio have no write path into ChromaDB yet
+      (Ch8/9), so ADR-007's cross-modal merge has nothing to merge with — the retrieval interface is
+      shaped so wiring in a second collection later is additive, not a redesign. Answer-quality check run
+      against 7 gold questions (T1-T5, N1-N2), self-rated 4.71/5 average — see data/README.md's Results log)
 - [ ] Ch 11 — UI
 - [ ] Ch 12 — Integration & Feedback
 - [ ] Ch 13 — Mid-Term Report
