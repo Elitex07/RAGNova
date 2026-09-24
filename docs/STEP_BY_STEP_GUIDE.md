@@ -71,14 +71,14 @@ Here is the exact record of every file created, modified, or generated across th
 ### File 3: `data/audio/*` [NEW DIRECTORY — 4 Files]
 - **Directory Path**: [`data/audio/`](../data/audio/)
 - **Target Met**: 4 spoken audio clips created via multi-backend speech synthesis with genuine speech (requirement: 3–5 audio clips, 15s to 3 min each).
-- **Format**: Standard 16-bit PCM WAV, 16000 Hz, single channel mono (optimal for `faster-whisper` transcription in Task 2).
+- **Format**: Standard 16-bit PCM WAV, 16000 Hz, single channel mono (guaranteed host-independent via automated generator post-normalization across Windows, macOS, and Linux platforms, matching Whisper's native 16 kHz acoustic input).
 
 | # | Filename | Size | Duration | Transcript Summary | Semantic Pairing |
 |---|---|---|---|---|---|
-| 1 | `hod_project_announcement.wav` | 1.46 MB | ~33s | Head of Dept briefing on 40% prototype demo, 35% project report, 25% individual viva, and August 21st deadline. | Cross-modal pair with `notice.pdf` and `notice_midterm_schedule.png` |
-| 2 | `library_orientation_excerpt.wav` | 1.24 MB | ~28s | Central Library orientation on working hours (8am–10pm), undergrad borrowing quota (4 books for 14 days), and 2 Rs/day overdue fines. | Cross-modal pair with `library_hours.pdf` and `notice_library_fines.png` |
-| 3 | `it_helpdesk_wifi_instructions.wav` | 1.51 MB | ~35s | Instructions on connecting to `RAGNOVA-STUDENT` with campus email, validating CA certificates, restarting adapters, and credential sharing prohibitions. | Cross-modal pair with `it_onboarding.docx` and `screenshot_wifi_setup.png` |
-| 4 | `lab_assistant_briefing.wav` | 1.14 MB | ~26s | Briefing on installing the institute VPN client from the portal for journal access and acceptable network use. | Cross-modal pair with `it_onboarding.docx` and `screenshot_vpn_client.png` |
+| 1 | `hod_project_announcement.wav` | 1.06 MB | ~33s | Head of Dept briefing on 40% prototype demo, 35% project report, 25% individual viva, and August 21st deadline. | Cross-modal pair with `notice.pdf` and `notice_midterm_schedule.png` |
+| 2 | `library_orientation_excerpt.wav` | 0.90 MB | ~28s | Central Library orientation on working hours (8am–10pm), undergrad borrowing quota (4 books for 14 days), and 2 Rs/day overdue fines. | Cross-modal pair with `library_hours.pdf` and `notice_library_fines.png` |
+| 3 | `it_helpdesk_wifi_instructions.wav` | 1.10 MB | ~34s | Instructions on connecting to `RAGNOVA-STUDENT` with campus email, validating CA certificates, restarting adapters, and credential sharing prohibitions. | Cross-modal pair with `it_onboarding.docx` and `screenshot_wifi_setup.png` |
+| 4 | `lab_assistant_briefing.wav` | 0.83 MB | ~26s | Briefing on installing the institute VPN client from the portal for journal access and acceptable network use. | Cross-modal pair with `it_onboarding.docx` and `screenshot_vpn_client.png` |
 
 ---
 

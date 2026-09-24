@@ -64,8 +64,8 @@ def test_audio_corpus_target_reached():
                 sample_rate = w.getframerate()
                 n_frames = w.getnframes()
                 duration = n_frames / float(sample_rate)
-                assert n_channels in (1, 2)
-                assert sample_rate in (16000, 22050, 44100, 48000)
+                assert n_channels == 1, f"Audio {audio_path.name} expected mono (1 channel), got {n_channels}"
+                assert sample_rate == 16000, f"Audio {audio_path.name} expected 16000 Hz, got {sample_rate}"
                 assert duration >= 5.0, f"Audio {audio_path.name} duration {duration:.1f}s is less than 5s"
 
 
@@ -113,8 +113,18 @@ def test_app_process_query_mock_and_citations():
     assert "could not find" in ans_neg2.lower()
     assert len(cit_neg2) == 0, "Negative control N2 emitted false citations"
 
+    # Broad keywords that previously bypassed refusal (must NOT match wifi, library, etc.)
+    ans_neural, cit_neural = process_query("What is a neural network?")
+    assert "could not find" in ans_neural.lower()
+    assert len(cit_neural) == 0, "Query 'What is a neural network?' falsely routed to Wi-Fi"
+
+    ans_book_lab, cit_book_lab = process_query("How do I book the AI lab?")
+    assert "could not find" in ans_book_lab.lower()
+    assert len(cit_book_lab) == 0, "Query 'How do I book the AI lab?' falsely routed to Library"
+
     # Unsupported query (P2: must NOT claim false grounding or invent citations)
     ans_unsupported, cit_unsupported = process_query("What is the population of Jupiter?")
     assert "could not find" in ans_unsupported.lower()
     assert len(cit_unsupported) == 0, "Unsupported query emitted false citations"
+
 

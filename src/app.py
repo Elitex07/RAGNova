@@ -181,7 +181,14 @@ def process_query(user_query: str) -> tuple[str, list[dict]]:
         )
         return mock_answer, []
 
-    if "mark" in q or "prototype" in q or "eval" in q or "viva" in q:
+    # 1. Project Evaluation Weighting & Prototype Marks (Gold-standard T1, A1)
+    is_proto_marks = (
+        ("prototype" in q and any(k in q for k in ["mark", "demo", "percent", "weight", "score", "carry", "viva"]))
+        or ("viva" in q and any(k in q for k in ["voce", "mark", "percent", "weight", "person", "eval"]))
+        or ("evaluation" in q and any(k in q for k in ["weight", "mark", "scheme", "prototype", "breakdown"]))
+        or ("how many marks" in q)
+    )
+    if is_proto_marks:
         mock_answer = (
             "According to the department notice and presentation timetable, the **working prototype** "
             "demonstrated on evaluation day carries **40% of the total marks** [1]. The written project "
@@ -206,7 +213,14 @@ def process_query(user_query: str) -> tuple[str, list[dict]]:
         ]
         return mock_answer, fake_citations
 
-    if "wifi" in q or "network" in q or "connect" in q or "ssid" in q:
+    # 2. Campus Wi-Fi Configuration (Gold-standard T3, I1, M2)
+    # Avoid matching generic words like 'network' or 'connect' in isolation (e.g. 'neural network')
+    is_wifi = (
+        ("wifi" in q or "wi-fi" in q or "ssid" in q or "ragnova-student" in q)
+        or ("wireless" in q and any(k in q for k in ["adapter", "network", "connect", "setup", "setting", "lan"]))
+        or ("connect" in q and any(k in q for k in ["campus", "internet", "wireless", "wifi", "wi-fi"]))
+    )
+    if is_wifi:
         mock_answer = (
             "To connect to campus Wi-Fi, select the SSID **`RAGNOVA-STUDENT`** [1]. Use your institute email "
             "address and the password set during account activation. The network uses WPA2-Enterprise (802.1X PEAP) "
@@ -232,7 +246,16 @@ def process_query(user_query: str) -> tuple[str, list[dict]]:
         ]
         return mock_answer, fake_citations
 
-    if "library" in q or "book" in q or "fine" in q or "borrow" in q:
+    # 3. Library Borrowing, Quotas & Overdue Fines (Gold-standard T2, A2)
+    # Avoid matching 'book' alone (e.g. 'book the AI lab') or 'fine' alone (e.g. 'fine-tuning')
+    is_library = (
+        ("library" in q)
+        or ("borrow" in q)
+        or ("overdue" in q)
+        or ("fine" in q and any(k in q for k in ["overdue", "late", "rupee", "library", "return", "cap", "title"]))
+        or ("book" in q and any(k in q for k in ["borrow", "return", "quota", "checkout", "overdue", "library", "title", "renew"]))
+    )
+    if is_library:
         mock_answer = (
             "Undergraduate students can borrow up to **4 books for 14 days** [1][2]. Overdue fines are **Rs 2 per day "
             "per title**, capped at a maximum of **Rs 200** [1][3]. The library is open from 8:00 AM to 10:00 PM on "
@@ -263,7 +286,13 @@ def process_query(user_query: str) -> tuple[str, list[dict]]:
         ]
         return mock_answer, fake_citations
 
-    if "synopsis" in q or "deadline" in q or "submission" in q:
+    # 4. Project Synopsis Submission (Gold-standard T5, M1)
+    is_synopsis = (
+        ("synopsis" in q)
+        or ("submission deadline" in q and any(k in q for k in ["project", "august", "final year"]))
+        or ("21st august" in q and "deadline" in q)
+    )
+    if is_synopsis:
         mock_answer = (
             "The submission deadline for the project synopsis is **21st August** [1]. The document should not exceed "
             "3 pages excluding the cover page and references, and must be submitted as a single PDF via the department "
@@ -287,7 +316,18 @@ def process_query(user_query: str) -> tuple[str, list[dict]]:
         ]
         return mock_answer, fake_citations
 
-    if "project" in q or "ragnova" in q or "architecture" in q or "system" in q:
+    # 5. RAGNova Architecture & System Pipeline Overview
+    # Avoid matching 'system' in isolation (e.g. 'operating system', 'database system')
+    is_architecture = (
+        ("what is this project" in q)
+        or ("what is ragnova" in q)
+        or ("tell me about ragnova" in q)
+        or ("rag architecture" in q)
+        or ("ragnova architecture" in q)
+        or ("pipeline architecture" in q)
+        or ("vector stores" in q or "chromadb collections" in q)
+    )
+    if is_architecture:
         mock_answer = (
             "**RAGNova** is an offline multimodal Retrieval-Augmented Generation system designed for campus environments [1]. "
             "It indexes documents (PDF/DOCX), images (screenshots and physical photo plaques via OCR and OpenCLIP), "
@@ -311,7 +351,16 @@ def process_query(user_query: str) -> tuple[str, list[dict]]:
         ]
         return mock_answer, fake_citations
 
-    if "lab" in q or "room 302" in q:
+    # 6. AIML Research Lab Location Plaque (Gold-standard I4)
+    # Asking about location / Room 302 / faculty in-charge. (Booking the lab is not supported and will fall through).
+    is_lab_location = (
+        ("room 302" in q)
+        or (
+            any(k in q for k in ["ai lab", "aiml lab", "research lab", "computing lab"])
+            and any(k in q for k in ["where", "locate", "in-charge", "faculty", "door", "sign", "plaque", "hours", "superintendent", "who heads"])
+        )
+    )
+    if is_lab_location:
         mock_answer = (
             "The AI & Machine Learning Research Laboratory is located in **Academic Block B, Room 302** [1]. "
             "The faculty in-charge is **Dr. S. Rao**. Operating hours are 9:00 AM to 5:00 PM, and a smart card ID badge "

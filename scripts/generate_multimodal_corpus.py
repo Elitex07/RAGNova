@@ -524,14 +524,64 @@ def generate_all_images():
     )
 
 
+def _normalize_wav_to_16k_mono(filepath: Path) -> None:
+    """Normalize WAV file to standard 16-bit PCM, 16000 Hz, single-channel mono.
+
+    Guarantees host-independent, deterministic audio parameters across Windows,
+    macOS, and Linux platforms, matching Whisper's native 16 kHz acoustic input.
+    """
+    import numpy as np
+
+    with wave.open(str(filepath), "rb") as w:
+        n_channels = w.getnchannels()
+        sampwidth = w.getsampwidth()
+        framerate = w.getframerate()
+        n_frames = w.getnframes()
+        raw_data = w.readframes(n_frames)
+
+    if framerate == 16000 and n_channels == 1 and sampwidth == 2:
+        return
+
+    # Parse audio samples
+    if sampwidth == 2:
+        samples = np.frombuffer(raw_data, dtype=np.int16)
+    elif sampwidth == 1:
+        samples = ((np.frombuffer(raw_data, dtype=np.uint8).astype(np.float32) - 128.0) * 256.0).astype(np.int16)
+    elif sampwidth == 4:
+        samples = (np.frombuffer(raw_data, dtype=np.int32) // 65536).astype(np.int16)
+    else:
+        return
+
+    # Downmix stereo to mono if necessary
+    if n_channels > 1:
+        samples = samples.reshape(-1, n_channels).mean(axis=1).astype(np.int16)
+
+    # Resample to 16000 Hz via linear interpolation
+    if framerate != 16000:
+        target_len = int(len(samples) * 16000 / framerate)
+        indices = np.linspace(0, len(samples) - 1, target_len)
+        samples = np.interp(indices, np.arange(len(samples)), samples).astype(np.int16)
+
+    with wave.open(str(filepath), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(16000)
+        w.writeframes(samples.tobytes())
+
+
 def _generate_synthetic_speech_wav(filepath: Path, text: str) -> None:
     """Generate spoken speech .wav file using available platform TTS backends.
 
     Tries Windows PowerShell System.Speech, PowerShell Core, Windows SAPI VBScript,
     macOS 'say', Linux 'espeak-ng' / 'espeak', or 'pyttsx3'.
+    Always wipes any pre-existing file before generating to avoid accepting stale audio.
     Fails loudly if no TTS engine is found: acoustic sine-wave tones contain NO speech
     and cannot be used for Whisper ASR.
+    Normalizes generated audio to 16 kHz 16-bit mono PCM to prevent host-dependent formats.
     """
+    # Remove any existing target file to prevent failed attempts from accepting stale audio
+    filepath.unlink(missing_ok=True)
+
     # 1. Windows PowerShell System.Speech
     escaped_text = text.replace("'", "''")
     ps_cmd = (
@@ -545,7 +595,8 @@ def _generate_synthetic_speech_wav(filepath: Path, text: str) -> None:
         try:
             res = subprocess.run([ps_bin, "-NoProfile", "-Command", ps_cmd], capture_output=True, text=True, timeout=30)
             if res.returncode == 0 and filepath.exists() and filepath.stat().st_size > 1000:
-                print(f"wrote audio via {ps_bin} TTS: {filepath.name} ({filepath.stat().st_size} bytes)")
+                _normalize_wav_to_16k_mono(filepath)
+                print(f"wrote audio via {ps_bin} TTS: {filepath.name} ({filepath.stat().st_size} bytes, 16000Hz mono)")
                 return
         except Exception:
             pass
@@ -565,8 +616,9 @@ def _generate_synthetic_speech_wav(filepath: Path, text: str) -> None:
             )
             vbs_script.write_text(vbs_content, encoding="utf-8")
             res = subprocess.run(["cscript", "//nologo", str(vbs_script)], capture_output=True, text=True, timeout=30)
-            if filepath.exists() and filepath.stat().st_size > 1000:
-                print(f"wrote audio via Windows SAPI: {filepath.name} ({filepath.stat().st_size} bytes)")
+            if res.returncode == 0 and filepath.exists() and filepath.stat().st_size > 1000:
+                _normalize_wav_to_16k_mono(filepath)
+                print(f"wrote audio via Windows SAPI: {filepath.name} ({filepath.stat().st_size} bytes, 16000Hz mono)")
                 return
         except Exception:
             pass
@@ -579,7 +631,8 @@ def _generate_synthetic_speech_wav(filepath: Path, text: str) -> None:
         try:
             res = subprocess.run(["say", "-o", str(filepath), "--data-format=LEI16@16000", text], capture_output=True, timeout=30)
             if res.returncode == 0 and filepath.exists() and filepath.stat().st_size > 1000:
-                print(f"wrote audio via macOS say: {filepath.name} ({filepath.stat().st_size} bytes)")
+                _normalize_wav_to_16k_mono(filepath)
+                print(f"wrote audio via macOS say: {filepath.name} ({filepath.stat().st_size} bytes, 16000Hz mono)")
                 return
         except Exception:
             pass
@@ -589,7 +642,8 @@ def _generate_synthetic_speech_wav(filepath: Path, text: str) -> None:
         try:
             res = subprocess.run([espeak_bin, "-w", str(filepath), text], capture_output=True, timeout=30)
             if res.returncode == 0 and filepath.exists() and filepath.stat().st_size > 1000:
-                print(f"wrote audio via {espeak_bin}: {filepath.name} ({filepath.stat().st_size} bytes)")
+                _normalize_wav_to_16k_mono(filepath)
+                print(f"wrote audio via {espeak_bin}: {filepath.name} ({filepath.stat().st_size} bytes, 16000Hz mono)")
                 return
         except Exception:
             pass
@@ -602,7 +656,8 @@ def _generate_synthetic_speech_wav(filepath: Path, text: str) -> None:
         engine.save_to_file(text, str(filepath))
         engine.runAndWait()
         if filepath.exists() and filepath.stat().st_size > 1000:
-            print(f"wrote audio via pyttsx3: {filepath.name} ({filepath.stat().st_size} bytes)")
+            _normalize_wav_to_16k_mono(filepath)
+            print(f"wrote audio via pyttsx3: {filepath.name} ({filepath.stat().st_size} bytes, 16000Hz mono)")
             return
     except Exception:
         pass
