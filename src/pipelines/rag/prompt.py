@@ -41,7 +41,24 @@ def format_provenance(chunk: Chunk) -> str:
         return f"{chunk.source}, page {chunk.page}"
     if chunk.modality == "audio" and chunk.start_s is not None and chunk.end_s is not None:
         return f"{chunk.source}, {chunk.start_s:.0f}s–{chunk.end_s:.0f}s"
+    if chunk.modality == "image":
+        return f"{chunk.source} (image)"
     return chunk.source
+
+
+# What the model is shown for an image whose OCR found no text. The LLM
+# reads text only, so it can't look at the picture — saying so plainly
+# stops it from inventing a description, while still letting the image
+# appear as a numbered, citable source ("see [3]").
+_IMAGE_WITHOUT_TEXT = "(An image matching the question. No readable text was found in it.)"
+
+
+def _context_text(chunk: Chunk) -> str:
+    if chunk.modality == "image" and not chunk.text.strip():
+        return _IMAGE_WITHOUT_TEXT
+    if chunk.modality == "image":
+        return f"Text read from the image (OCR): {chunk.text}"
+    return chunk.text
 
 
 def build_prompt(query: str, chunks: list[Chunk]) -> str:
@@ -57,7 +74,7 @@ def build_prompt(query: str, chunks: list[Chunk]) -> str:
     if chunks:
         blocks = []
         for i, chunk in enumerate(chunks, start=1):
-            blocks.append(f"[{i}] {format_provenance(chunk)}\n{chunk.text}")
+            blocks.append(f"[{i}] {format_provenance(chunk)}\n{_context_text(chunk)}")
         context_section = "\n\n".join(blocks)
     else:
         context_section = _NO_CONTEXT_NOTICE

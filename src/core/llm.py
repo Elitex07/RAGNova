@@ -17,6 +17,8 @@ concern.
 
 from __future__ import annotations
 
+from typing import Iterator
+
 import ollama
 
 from src.core.config import settings
@@ -29,8 +31,8 @@ def generate(prompt: str) -> str:
     Uses `ollama.Client(host=...).generate(...)`, the client's wrapper
     around `POST /api/generate` — the same endpoint ch05 §2.2 documents as
     "what Chapter 10's RAG core calls." `stream=False` so this function
-    returns one complete string rather than a generator of tokens; a
-    streaming variant is future UI work (Chapter 11), not needed here.
+    returns one complete string rather than a generator of tokens; see
+    generate_stream() below for the streaming variant Chapter 11's UI uses.
 
     `options` bounds generation deliberately: `temperature` from
     settings.LLM_TEMPERATURE (already low, 0.1, so answers stay close to
@@ -61,3 +63,38 @@ def generate(prompt: str) -> str:
         ) from exc
 
     return response["response"]
+
+
+def generate_stream(prompt: str) -> Iterator[str]:
+    """Same call as generate(), with `stream=True`: yields the answer a
+    piece at a time as Ollama produces it, instead of one string at the end.
+
+    This is the streaming variant Chapter 10 deferred to Chapter 11's UI.
+    A CPU-only 3B model can take 10+ seconds for a full answer;
+    showing words as they arrive makes the UI feel alive instead of frozen,
+    even though the total time is identical.
+
+    Ollama is only contacted when the caller starts iterating, so the
+    connection error is raised from inside the loop, re-wrapped in the
+    same RuntimeError message generate() uses.
+    """
+    client = ollama.Client(host=settings.OLLAMA_HOST)
+    try:
+        for part in client.generate(
+            model=settings.OLLAMA_MODEL,
+            prompt=prompt,
+            stream=True,
+            options={
+                "temperature": settings.LLM_TEMPERATURE,
+                "num_predict": settings.LLM_MAX_TOKENS,
+                "num_ctx": settings.LLM_NUM_CTX,
+            },
+        ):
+            yield part["response"]
+    except Exception as exc:
+        raise RuntimeError(
+            f"Could not reach Ollama at {settings.OLLAMA_HOST} — "
+            f"is `ollama serve` running, and is {settings.OLLAMA_MODEL!r} "
+            f"pulled (`ollama pull {settings.OLLAMA_MODEL}`)? "
+            f"Underlying error: {exc}"
+        ) from exc
