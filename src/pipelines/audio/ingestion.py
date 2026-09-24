@@ -293,8 +293,19 @@ class AudioIngestor:
         )
 
     def _report_progress(self, current: float, total: float) -> None:
-        if self._progress_callback:
+        if not self._progress_callback:
+            return
+        try:
             self._progress_callback(min(1.0, current / total) if total > 0 else 1.0)
+        except Exception:
+            # A broken caller-supplied callback must never take down
+            # ingestion with it. Without this isolation, an exception here
+            # propagates into _transcribe_with_retry's own try/except
+            # (this is called from inside that loop), gets treated as a
+            # transcription failure, burns every retry, and aborts the
+            # whole file for a callback bug that has nothing to do with
+            # the actual audio.
+            logger.debug("Progress callback raised; ignoring it.", exc_info=True)
 
     def _transcribe_with_retry(self, file_path: Path) -> Iterator[AudioSegment]:
         for attempt in range(self._max_retries):
