@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import logging
 import re
 import time
@@ -33,9 +34,24 @@ except ImportError as exc:
 
 logger: logging.Logger = logging.getLogger(__name__)
 
-DEFAULT_MAX_RETRIES: int = 3
-DEFAULT_DEVICE: str = "cpu"
-DEFAULT_COMPUTE_TYPE: str = "int8"
+TARGET_WORDS: int = getattr(
+    settings, 
+    "AUDIO_CHUNK_TARGET_WORDS", 
+    getattr(settings, "CHUNK_SIZE_WORDS", 300)
+)
+OVERLAP_WORDS: int = getattr(
+    settings, 
+    "AUDIO_CHUNK_OVERLAP_WORDS", 
+    getattr(settings, "CHUNK_OVERLAP_WORDS", 50)
+)
+MAX_RETRIES: int = getattr(settings, "WHISPER_MAX_RETRIES", 3)
+DEFAULT_MODEL_SIZE: str = getattr(
+    settings, 
+    "WHISPER_MODEL_SIZE", 
+    getattr(settings, "WHISPER_MODEL", "base")
+)
+DEFAULT_DEVICE: str = getattr(settings, "WHISPER_DEVICE", "cpu")
+DEFAULT_COMPUTE_TYPE: str = getattr(settings, "WHISPER_COMPUTE_TYPE", "int8")
 MAX_FILE_SIZE_BYTES: int = 2 * 1024 * 1024 * 1024
 
 SUPPORTED_EXTENSIONS: frozenset[str] = frozenset({
@@ -44,10 +60,14 @@ SUPPORTED_EXTENSIONS: frozenset[str] = frozenset({
     ".3gp", ".amr",
 })
 
-DEFAULT_VAD_PARAMETERS: Dict[str, Any] = {
-    "min_silence_duration_ms": 500,
-    "speech_pad_ms": 200,
-}
+DEFAULT_VAD_PARAMETERS: Dict[str, Any] = getattr(
+    settings, 
+    "WHISPER_VAD_PARAMETERS", 
+    {
+        "min_silence_duration_ms": 500,
+        "speech_pad_ms": 200,
+    }
+)
 
 VALID_DEVICES: frozenset[str] = frozenset({"cpu", "cuda", "auto"})
 VALID_COMPUTE_TYPES: frozenset[str] = frozenset({
@@ -65,10 +85,8 @@ class AudioProcessingError(Exception):
 class AudioSegment(Protocol):
     @property
     def text(self) -> str: ...
-
     @property
     def start(self) -> float: ...
-
     @property
     def end(self) -> float: ...
 
@@ -114,8 +132,8 @@ class AudioIngestor:
         target_words: Optional[int] = None,
         overlap_words: Optional[int] = None,
     ) -> None:
-        self._target_words = target_words if target_words is not None else settings.CHUNK_SIZE_WORDS
-        self._overlap_words = overlap_words if overlap_words is not None else settings.CHUNK_OVERLAP_WORDS
+        self._target_words = target_words if target_words is not None else TARGET_WORDS
+        self._overlap_words = overlap_words if overlap_words is not None else OVERLAP_WORDS
 
         if self._target_words < 1:
             raise ValueError("target_words must be at least 1")
@@ -124,13 +142,18 @@ class AudioIngestor:
         if self._overlap_words >= self._target_words:
             raise ValueError("overlap_words must be strictly less than target_words")
 
-        self._max_retries = max_retries if max_retries is not None else DEFAULT_MAX_RETRIES
+        self._max_retries = max_retries if max_retries is not None else MAX_RETRIES
         if self._max_retries < 1:
             raise ValueError("max_retries must be at least 1")
 
-        self._model_size = (model_size or getattr(settings, "WHISPER_MODEL_SIZE", "base")).strip()
+        self._model_size = (model_size or DEFAULT_MODEL_SIZE).strip()
         self._device = (device or DEFAULT_DEVICE).strip().lower()
+        if self._device not in VALID_DEVICES:
+            self._device = DEFAULT_DEVICE
+
         self._compute_type = (compute_type or DEFAULT_COMPUTE_TYPE).strip().lower()
+        if self._compute_type not in VALID_COMPUTE_TYPES:
+            self._compute_type = DEFAULT_COMPUTE_TYPE
 
         self._vad_parameters = {
             **DEFAULT_VAD_PARAMETERS,
@@ -151,19 +174,9 @@ class AudioIngestor:
         return re.sub(r"[^\w\-]", "_", stem)
 
     @staticmethod
-    def _compute_file_hash(file_name: str, file_size: int) -> str:
-        # Distinguishes two different audio files that share a bare stem
-        # (e.g. "lecture.mp3" ingested from two different folders) — without
-        # this, _format_chunk_id's id depends only on the stem and an
-        # integer-second timestamp, so two such files can produce identical
-        # chunk_ids whenever a segment happens to start on the same second.
-        # Since add_chunks() upserts by id (Chapter 7 §2.3), a collision
-        # silently overwrites the earlier file's chunk instead of erroring.
-        # Hashing name+size (not the full path) keeps the id reproducible
-        # across machines/directories for the SAME logical file, so
-        # re-ingesting it still correctly upserts in place rather than
-        # minting a new id.
-        return hashlib.sha256(f"{file_name}_{file_size}".encode("utf-8")).hexdigest()[:8]
+    def _compute_file_hash(file_path: Path, file_size: int) -> str:
+        unique_identifier = f"{file_path.resolve().as_posix()}_{file_size}"
+        return hashlib.sha256(unique_identifier.encode("utf-8")).hexdigest()[:10]
 
     @staticmethod
     def _count_words(text: str) -> int:
@@ -184,7 +197,7 @@ class AudioIngestor:
             raise AudioProcessingError(f"Audio file is empty (0 bytes): {path.as_posix()}")
 
         if file_size > MAX_FILE_SIZE_BYTES:
-            raise AudioProcessingError(f"Audio file exceeds 2 GB limit")
+            raise AudioProcessingError("Audio file exceeds 2 GB limit")
 
         return file_size
 
@@ -196,11 +209,9 @@ class AudioIngestor:
         file_size = self._validate_file(resolved)
 
         stem = self._sanitize_stem(resolved.stem)
-        suffix = resolved.suffix.lstrip(".").lower()
-        safe_stem = f"{stem}_{suffix}" if suffix else stem
-        file_hash = self._compute_file_hash(resolved.name, file_size)
+        file_hash = self._compute_file_hash(resolved, file_size)
 
-        return resolved, file_size, safe_stem, file_hash
+        return resolved, file_size, stem, file_hash
 
     @staticmethod
     def _split_segment(
@@ -267,8 +278,10 @@ class AudioIngestor:
         return trimmed
 
     @staticmethod
-    def _format_chunk_id(safe_stem: str, file_hash: str, start_s: float, chunk_index: int) -> str:
-        return f"{safe_stem}_h{file_hash}__t{int(start_s)}__c{chunk_index:03d}"
+    def _format_chunk_id(
+        safe_stem: str, file_hash: str, start_s: float, chunk_index: int
+    ) -> str:
+        return f"{safe_stem}_{file_hash}__t{int(start_s)}__c{chunk_index:03d}"
 
     def _build_chunk(
         self,
@@ -282,42 +295,47 @@ class AudioIngestor:
         start_val = round(buffer[0].start, 2)
         end_val = round(buffer[-1].end, 2)
 
+        source = file_path.as_posix()
+        embedding_model = getattr(
+            settings, 
+            "TEXT_EMBEDDING_MODEL", 
+            getattr(settings, "DEFAULT_TEXT_EMBEDDING_MODEL", None)
+        )
+
         return Chunk(
             chunk_id=self._format_chunk_id(safe_stem, file_hash, start_val, idx),
             text=text,
-            source=file_path.as_posix(),
+            source=source,
             modality="audio",
-            embedding_model=settings.TEXT_EMBEDDING_MODEL,
+            embedding_model=embedding_model,
             start_s=start_val,
             end_s=end_val,
+            metadata={
+                "source": source,
+                "source_type": "audio",
+                "modality": "audio",
+                "start_s": start_val,
+                "end_s": end_val,
+                "chunk_index": idx,
+                "file_hash": file_hash,
+            },
         )
 
     def _report_progress(self, current: float, total: float) -> None:
         if not self._progress_callback:
             return
         try:
-            self._progress_callback(min(1.0, current / total) if total > 0 else 1.0)
+            sig = inspect.signature(self._progress_callback)
+            if len(sig.parameters) >= 2:
+                self._progress_callback(current, total)
+            else:
+                self._progress_callback(min(1.0, current / total) if total > 0 else 1.0)
         except Exception:
-            # A broken caller-supplied callback must never take down
-            # ingestion with it. Without this isolation, an exception here
-            # propagates into _transcribe_with_retry's own try/except
-            # (this is called from inside that loop), gets treated as a
-            # transcription failure, burns every retry, and aborts the
-            # whole file for a callback bug that has nothing to do with
-            # the actual audio.
-            logger.debug("Progress callback raised; ignoring it.", exc_info=True)
+            pass
 
     def _transcribe_with_retry(self, file_path: Path) -> Iterator[AudioSegment]:
-        # Declared OUTSIDE the retry loop, deliberately: a retry re-runs
-        # transcription from the start of the file, but this generator may
-        # already have yielded segments from an earlier, partially-consumed
-        # attempt before it failed. Without tracking the last segment
-        # actually yielded across attempts, a retry re-transcribes and
-        # re-yields those same segments, and the downstream chunker (which
-        # keeps its own buffer/chunk-index state across this generator's
-        # lifetime) duplicates them into the transcript.
         last_yielded_start: float = -1.0
-
+        
         for attempt in range(self._max_retries):
             try:
                 segments, info = self._model.transcribe(
@@ -422,7 +440,10 @@ class AudioIngestor:
             return
         self._closed = True
         if hasattr(self, "_model"):
-            del self._model
+            try:
+                del self._model
+            except Exception:
+                pass
 
     def __enter__(self) -> AudioIngestor:
         return self
@@ -442,6 +463,43 @@ class AudioIngestor:
             pass
 
 
-def ingest_audio(file: Union[str, Path]) -> List[Chunk]:
-    with AudioIngestor() as ingestor:
+def ingest_audio(
+    file: Union[str, Path],
+    *,
+    model_size: Optional[str] = None,
+    device: Optional[str] = None,
+    compute_type: Optional[str] = None,
+    target_words: Optional[int] = None,
+    overlap_words: Optional[int] = None,
+    progress_callback: Optional[Callable[..., None]] = None,
+) -> List[Chunk]:
+    with AudioIngestor(
+        model_size=model_size,
+        device=device,
+        compute_type=compute_type,
+        target_words=target_words,
+        overlap_words=overlap_words,
+        progress_callback=progress_callback,
+    ) as ingestor:
         return ingestor.process_file(file)
+
+
+def ingest_audio_streaming(
+    file: Union[str, Path],
+    *,
+    model_size: Optional[str] = None,
+    device: Optional[str] = None,
+    compute_type: Optional[str] = None,
+    target_words: Optional[int] = None,
+    overlap_words: Optional[int] = None,
+    progress_callback: Optional[Callable[..., None]] = None,
+) -> Iterator[Chunk]:
+    with AudioIngestor(
+        model_size=model_size,
+        device=device,
+        compute_type=compute_type,
+        target_words=target_words,
+        overlap_words=overlap_words,
+        progress_callback=progress_callback,
+    ) as ingestor:
+        yield from ingestor.process_file_streaming(file)
