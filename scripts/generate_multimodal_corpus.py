@@ -596,7 +596,8 @@ def _generate_synthetic_speech_wav(filepath: Path, text: str) -> None:
 
     # 5. Python pyttsx3 (if installed in virtual environment)
     try:
-        import pyttsx3
+        import importlib
+        pyttsx3 = importlib.import_module("pyttsx3")
         engine = pyttsx3.init()
         engine.save_to_file(text, str(filepath))
         engine.runAndWait()
