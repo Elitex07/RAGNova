@@ -154,7 +154,8 @@ for msg in st.session_state.messages:
 def process_query(user_query: str) -> tuple[str, list[dict]]:
     """Process a user query and return (answer_text, citations_list).
 
-    Currently returns a mocked answer with fake citations as required by Task 4.
+    Currently returns a mocked answer with grounded citations for supported topics,
+    and explicitly refuses without citations for unsupported queries and negative controls (Task 4 / O4).
     Once Chapter 10 (RAG Core) is implemented, the real retrieval and LLM call
     will replace the mock below.
     """
@@ -170,6 +171,16 @@ def process_query(user_query: str) -> tuple[str, list[dict]]:
     # =========================================================================
 
     q = user_query.lower()
+
+    # Negative controls (P2 fix): explicitly refuse without hallucinating or claiming false grounding
+    if any(k in q for k in ["mess", "lunch", "dinner", "meal", "menu", "refund", "tuition fee", "fee refund"]):
+        mock_answer = (
+            "I could not find information about that in the provided offline sources (documents, images, or audio recordings). "
+            "The indexed campus corpus does not cover hostel mess menus or tuition fee refund procedures. "
+            "Under RAGNova Objective O4, the system refuses to hallucinate facts absent from the corpus."
+        )
+        return mock_answer, []
+
     if "mark" in q or "prototype" in q or "eval" in q or "viva" in q:
         mock_answer = (
             "According to the department notice and presentation timetable, the **working prototype** "
@@ -193,10 +204,14 @@ def process_query(user_query: str) -> tuple[str, list[dict]]:
                 "snippet": "Please remember that the working prototype carries forty percent... viva voce carries twenty-five percent...",
             },
         ]
-    elif "wifi" in q or "network" in q or "connect" in q:
+        return mock_answer, fake_citations
+
+    if "wifi" in q or "network" in q or "connect" in q or "ssid" in q:
         mock_answer = (
             "To connect to campus Wi-Fi, select the SSID **`RAGNOVA-STUDENT`** [1]. Use your institute email "
-            "address and the password set during account activation. The network uses WPA2-Enterprise [2]. "
+            "address and the password set during account activation. The network uses WPA2-Enterprise (802.1X PEAP) "
+            "with mandatory CA certificate validation (`ragnova.edu`) [2]. "
+            "Never select 'Do not validate' for certificates to avoid credential theft attacks. "
             "If your device fails to connect, restart your wireless adapter before visiting the IT help desk."
         )
         fake_citations = [
@@ -212,14 +227,47 @@ def process_query(user_query: str) -> tuple[str, list[dict]]:
                 "modality": "image",
                 "source": "data/images/screenshot_wifi_setup.png",
                 "location": "Dialog Window",
-                "snippet": "Security Protocol: WPA2-Enterprise (802.1X PEAP), Identity: username@ragnova.edu",
+                "snippet": "Security Protocol: WPA2-Enterprise (802.1X PEAP), CA Certificate: Use system certificates (Domain: ragnova.edu)",
             },
         ]
-    else:
+        return mock_answer, fake_citations
+
+    if "library" in q or "book" in q or "fine" in q or "borrow" in q:
         mock_answer = (
-            f"*(Mock Response for query: \"{user_query}\")*\n\n"
-            "RAGNova retrieved relevant chunks across indexed documents, images, and audio transcripts [1][2]. "
-            "All retrieved facts are grounded in the offline corpus without hallucination."
+            "Undergraduate students can borrow up to **4 books for 14 days** [1][2]. Overdue fines are **Rs 2 per day "
+            "per title**, capped at a maximum of **Rs 200** [1][3]. The library is open from 8:00 AM to 10:00 PM on "
+            "working days, with an after-hours return drop box beside the ground floor exit [2]."
+        )
+        fake_citations = [
+            {
+                "id": 1,
+                "modality": "pdf",
+                "source": "data/documents/library_hours.pdf",
+                "location": "Page 1",
+                "snippet": "Undergraduate students may borrow up to four books at a time for a period of fourteen days...",
+            },
+            {
+                "id": 2,
+                "modality": "image",
+                "source": "data/images/photo_library_desk_sign.png",
+                "location": "Desk Sign",
+                "snippet": "Circulation Desk: Undergraduate Quota 4 books for 14 days, After-Hours Drop Box at Ground Floor Exit",
+            },
+            {
+                "id": 3,
+                "modality": "audio",
+                "source": "data/audio/library_orientation_excerpt.wav",
+                "location": "Timestamp 00:15 - 00:30",
+                "snippet": "Overdue fines are two rupees per day, capped at two hundred rupees per title.",
+            },
+        ]
+        return mock_answer, fake_citations
+
+    if "synopsis" in q or "deadline" in q or "submission" in q:
+        mock_answer = (
+            "The submission deadline for the project synopsis is **21st August** [1]. The document should not exceed "
+            "3 pages excluding the cover page and references, and must be submitted as a single PDF via the department "
+            "portal [1][2]. Teams must comprise 2 or 3 members."
         )
         fake_citations = [
             {
@@ -227,17 +275,67 @@ def process_query(user_query: str) -> tuple[str, list[dict]]:
                 "modality": "pdf",
                 "source": "data/documents/notice.pdf",
                 "location": "Page 1",
-                "snippet": "All B.Tech CSE-AIML final year students working in project teams are required to submit...",
+                "snippet": "The submission deadline for the project synopsis is 21st August. The synopsis document should not exceed three pages...",
             },
             {
                 "id": 2,
                 "modality": "image",
-                "source": "data/images/diagram_rag_architecture.png",
-                "location": "System Diagram",
-                "snippet": "Dual Vector Stores: text_index and image_index with verifiable citations.",
+                "source": "data/images/screenshot_synopsis_portal.png",
+                "location": "Upload Portal",
+                "snippet": "Submission Deadline: 21st August (Strict deadline), Document format: Single PDF file",
             },
         ]
+        return mock_answer, fake_citations
 
+    if "project" in q or "ragnova" in q or "architecture" in q or "system" in q:
+        mock_answer = (
+            "**RAGNova** is an offline multimodal Retrieval-Augmented Generation system designed for campus environments [1]. "
+            "It indexes documents (PDF/DOCX), images (screenshots and physical photo plaques via OCR and OpenCLIP), "
+            "and audio briefings (via faster-whisper speech transcription) into dual ChromaDB vector collections [1][2]."
+        )
+        fake_citations = [
+            {
+                "id": 1,
+                "modality": "image",
+                "source": "data/images/diagram_rag_architecture.png",
+                "location": "System Diagram",
+                "snippet": "RAGNova Offline Multimodal Architecture: Documents, Images, and Audio pipelines with dual ChromaDB stores.",
+            },
+            {
+                "id": 2,
+                "modality": "pdf",
+                "source": "data/documents/notice.pdf",
+                "location": "Page 1",
+                "snippet": "Department of Computer Science and Engineering (Artificial Intelligence and Machine Learning)...",
+            },
+        ]
+        return mock_answer, fake_citations
+
+    if "lab" in q or "room 302" in q:
+        mock_answer = (
+            "The AI & Machine Learning Research Laboratory is located in **Academic Block B, Room 302** [1]. "
+            "The faculty in-charge is **Dr. S. Rao**. Operating hours are 9:00 AM to 5:00 PM, and a smart card ID badge "
+            "is required for entry [1]."
+        )
+        fake_citations = [
+            {
+                "id": 1,
+                "modality": "image",
+                "source": "data/images/photo_lab_door_sign.png",
+                "location": "Room 302 Door Plaque",
+                "snippet": "AI & Machine Learning Research Laboratory, Location: Academic Block B — Room 302, Faculty In-Charge: Dr. S. Rao",
+            },
+        ]
+        return mock_answer, fake_citations
+
+    # Catch-all for unsupported / unindexed queries:
+    # Crucial fix for P2 (False Grounding): Do NOT claim false grounding or emit fake citations!
+    mock_answer = (
+        f"I could not find sufficient information in the indexed corpus to answer: \"{user_query}\".\n\n"
+        "The offline knowledge base contains academic policies, library regulations, IT network setup, "
+        "project evaluation guidelines, and campus facilities. Please query one of these indexed topics."
+    )
+    fake_citations = []
     return mock_answer, fake_citations
 
 

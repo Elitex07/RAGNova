@@ -51,7 +51,7 @@ Here is the exact record of every file created, modified, or generated across th
 | # | Filename | Dimensions | Category | Visible Content / OCR Text | Semantic / Cross-Modal Purpose |
 |---|---|---|---|---|---|
 | 1 | `screenshot_portal_login.png` | 700×480 | Screenshot | Single Sign-On, Student ID field, password input, admission letter instructions | Links with IT onboarding credentials policy |
-| 2 | `screenshot_wifi_setup.png` | 650×450 | Screenshot | `RAGNOVA-STUDENT` SSID, WPA2-Enterprise (802.1X PEAP), troubleshooting | Direct cross-modal pair with `it_onboarding.docx` |
+| 2 | `screenshot_wifi_setup.png` | 650×450 | Screenshot | `RAGNOVA-STUDENT` SSID, WPA2-Enterprise (802.1X PEAP), CA certificate validation | Direct cross-modal pair with `it_onboarding.docx` (secure Wi-Fi) |
 | 3 | `screenshot_error_403.png` | 650×400 | Screenshot | 403 Forbidden alert, mass downloading restriction, Acceptable Use Policy §3.2 | Proves retrieval on policy infractions |
 | 4 | `screenshot_synopsis_portal.png` | 700×500 | Screenshot | Synopsis portal, August 21st deadline, 3-page limit, 40%/35%/25% weighting | Direct cross-modal pair with `notice.pdf` |
 | 5 | `screenshot_vpn_client.png` | 640×420 | Screenshot | SecureConnect VPN client, status Connected, digital library journal access | Matches remote journal access in `it_onboarding.docx` |
@@ -61,20 +61,23 @@ Here is the exact record of every file created, modified, or generated across th
 | 9 | `notice_midterm_schedule.png` | 650×460 | Notice | Project timetable, 40% prototype, 35% report, 25% individual viva | Direct cross-modal pair with `notice.pdf` |
 | 10 | `diagram_rag_architecture.png` | 720×520 | Diagram | System flow: PDF/Audio/Image -> PyMuPDF/Whisper/CLIP -> ChromaDB -> Ollama | Cross-modal technical architecture query |
 | 11 | `diagram_campus_map.png` | 680×480 | Blueprint | Facility blueprint: Central Library (Bldg 3), IT Desk (Bldg 4), AIML (Bldg 2) | Tests spatial and facility entity queries |
-| 12 | `photo_id_card_sample.png` | 580×360 | Graphic | Student ID card, Alex Morgan, Roll 23AIML042, barcode, valid thru 2027 | Tests photo ID card metadata extraction |
+| 12 | `photo_id_card_sample.png` | 600×380 | Photo Asset | Student ID card, Alex Morgan, Roll 23AIML042, barcode, valid thru 2027 | Tests photo ID card metadata extraction |
+| 13 | `photo_lab_door_sign.png` | 620×390 | Photo Asset | Physical door plaque: AI Research Lab (Room 302), Dr. S. Rao, 9am-5pm | Tests physical sign / room location queries |
+| 14 | `photo_library_desk_sign.png` | 620×390 | Photo Asset | Central Library circulation counter standing desk sign (4 books/14 days) | Tests desk policy and return drop box retrieval |
+| 15 | `photo_campus_building_plaque.png` | 640×400 | Photo Asset | Academic Block B directory plaque (floors, departments, classrooms) | Tests building facility entity queries |
 
 ---
 
 ### File 3: `data/audio/*` [NEW DIRECTORY — 4 Files]
 - **Directory Path**: [`data/audio/`](../data/audio/)
-- **Target Met**: 4 audio clips created (requirement: 3–5 audio clips, 15s to 3 min each).
-- **Format**: Standard 16-bit PCM WAV, 16000/22050 Hz, single channel mono (optimal for `faster-whisper` transcription in Task 2).
+- **Target Met**: 4 spoken audio clips created via multi-backend speech synthesis with genuine speech (requirement: 3–5 audio clips, 15s to 3 min each).
+- **Format**: Standard 16-bit PCM WAV, 16000 Hz, single channel mono (optimal for `faster-whisper` transcription in Task 2).
 
 | # | Filename | Size | Duration | Transcript Summary | Semantic Pairing |
 |---|---|---|---|---|---|
 | 1 | `hod_project_announcement.wav` | 1.46 MB | ~33s | Head of Dept briefing on 40% prototype demo, 35% project report, 25% individual viva, and August 21st deadline. | Cross-modal pair with `notice.pdf` and `notice_midterm_schedule.png` |
 | 2 | `library_orientation_excerpt.wav` | 1.24 MB | ~28s | Central Library orientation on working hours (8am–10pm), undergrad borrowing quota (4 books for 14 days), and 2 Rs/day overdue fines. | Cross-modal pair with `library_hours.pdf` and `notice_library_fines.png` |
-| 3 | `it_helpdesk_wifi_instructions.wav` | 1.26 MB | ~29s | Instructions on connecting to `RAGNOVA-STUDENT` with campus email, restarting adapters, and credential sharing prohibitions. | Cross-modal pair with `it_onboarding.docx` and `screenshot_wifi_setup.png` |
+| 3 | `it_helpdesk_wifi_instructions.wav` | 1.51 MB | ~35s | Instructions on connecting to `RAGNOVA-STUDENT` with campus email, validating CA certificates, restarting adapters, and credential sharing prohibitions. | Cross-modal pair with `it_onboarding.docx` and `screenshot_wifi_setup.png` |
 | 4 | `lab_assistant_briefing.wav` | 1.14 MB | ~26s | Briefing on installing the institute VPN client from the portal for journal access and acceptable network use. | Cross-modal pair with `it_onboarding.docx` and `screenshot_vpn_client.png` |
 
 ---
@@ -86,13 +89,13 @@ Here is the exact record of every file created, modified, or generated across th
      - Image & Document: `screenshot_wifi_setup.png` ↔ `it_onboarding.docx`
      - Audio & Document: `hod_project_announcement.wav` ↔ `notice.pdf`
      - Screenshot & Document: `screenshot_synopsis_portal.png` ↔ `notice.pdf`
-  2. **File Inventory Table**: Replaced placeholder rows for `images/` and `audio/` with full metadata rows for all 12 images and 4 audio clips.
+  2. **File Inventory Table**: Replaced placeholder rows for `images/` and `audio/` with full metadata rows for all 15 images (including 4 photo assets) and 4 spoken audio clips.
   3. **Gold-Standard Evaluation Question Set**:
      - **Text queries**: Added T4 (VPN remote journals) and T5 (guide allotment announcement).
-     - **Text → Image queries**: Added I1 (Wi-Fi authentication screenshot), I2 (RAGNova architecture diagram), I3 (seminar poster).
+     - **Text → Image queries**: Added I1 (Wi-Fi authentication screenshot), I2 (RAGNova architecture diagram), I3 (seminar poster), I4 (AI lab door plaque).
      - **Image → Document queries**: Added M1 (`screenshot_synopsis_portal.png` ↔ `notice.pdf`), M2 (`screenshot_wifi_setup.png` ↔ `it_onboarding.docx`).
      - **Audio → Anything queries**: Added A1 (`hod_project_announcement.wav` ↔ `notice.pdf`), A2 (`library_orientation_excerpt.wav` ↔ `library_hours.pdf`).
-     - **Negative controls**: Added N1 (mess menu inquiry) and N2 (fee refund inquiry) to verify refusal to hallucinate.
+     - **Negative controls**: Added N1 (mess menu inquiry) and N2 (fee refund inquiry) to verify refusal to hallucinate without false grounding.
 
 ---
 
@@ -104,7 +107,6 @@ Here is the exact record of every file created, modified, or generated across th
      - Modern dark-accent typography (`#1E293B`, `#64748B`).
      - Blue left-bordered citation cards (`#3B82F6`) with modality badges (`PDF`, `DOCX`, `IMAGE`, `AUDIO`).
   2. **Sidebar Metadata**:
-  
      - Active settings read directly from `src.core.config.settings` (`OLLAMA_MODEL`, `TEXT_EMBEDDING_MODEL`, `CLIP_MODEL`, `WHISPER_MODEL_SIZE`, ChromaDB directory).
      - Dynamic corpus counter querying `data/documents/`, `data/images/`, and `data/audio/`.
      - Conversation reset button.
@@ -113,7 +115,8 @@ Here is the exact record of every file created, modified, or generated across th
      - Bottom input using `st.chat_input()`.
      - Persistent chat history in `st.session_state.messages`.
   4. **Mock Processing Engine (`process_query`)**:
-     - Returns grounded answers and fake citations for project marks, Wi-Fi connectivity, or generic queries.
+     - Returns grounded answers and citations for project marks, Wi-Fi connectivity (safe certificates), library rules, synopsis deadlines, lab locations, and ID cards.
+     - Strictly honors negative controls (N1, N2) and unsupported queries by refusing without hallucination and returning empty citations (no false grounding).
      - Contains the exact integration anchor:
        ```python
        # =========================================================================
@@ -137,10 +140,10 @@ Here is the exact record of every file created, modified, or generated across th
 - **Role**: Automated verification test suite for Task 1 and Task 4 deliverables.
 - **Test Cases**:
   1. `test_documents_corpus_present`: Verifies starter documents exist in `data/documents/`.
-  2. `test_images_corpus_target_reached`: Verifies >= 10 images exist, >= 3 are screenshots, and all images are valid and readable by PIL.
+  2. `test_images_corpus_target_reached`: Verifies 10-15 images exist, >= 3 screenshots, >= 3 photo assets with visible text, all valid and readable by PIL.
   3. `test_audio_corpus_target_reached`: Verifies >= 3 audio files exist, file sizes > 1000 bytes, valid WAV headers, and duration >= 5.0 seconds.
   4. `test_app_scaffold_present_and_has_todo`: Verifies `src/app.py` exists, defines `process_query`, and includes `# TODO: to wire the real call here`.
-  5. `test_app_process_query_mock_and_citations`: Tests `process_query` for marks queries, Wi-Fi queries, and citation structures.
+  5. `test_app_process_query_mock_and_citations`: Tests `process_query` for marks queries, Wi-Fi queries, photo queries, negative controls refusal, and verified absence of false grounding citations.
 
 ---
 

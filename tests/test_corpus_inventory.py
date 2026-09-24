@@ -36,10 +36,13 @@ def test_documents_corpus_present():
 def test_images_corpus_target_reached():
     assert IMAGES_DIR.exists(), "data/images/ directory missing"
     images = list(IMAGES_DIR.glob("*.png")) + list(IMAGES_DIR.glob("*.jpg"))
-    assert len(images) >= 10, f"Expected 10-15 images, found {len(images)}"
+    assert 10 <= len(images) <= 15, f"Expected 10-15 images, found {len(images)}"
 
     screenshots = [img for img in images if "screenshot" in img.name.lower()]
     assert len(screenshots) >= 3, f"Expected >=3 screenshots, found {len(screenshots)}"
+
+    photos = [img for img in images if "photo" in img.name.lower()]
+    assert len(photos) >= 3, f"Expected >=3 photo assets with visible text, found {len(photos)}"
 
     for img_path in images:
         assert img_path.stat().st_size > 0, f"Image {img_path.name} is empty"
@@ -88,9 +91,30 @@ def test_app_process_query_mock_and_citations():
     # Query matching wifi
     ans2, cit2 = process_query("How do I connect to wifi?")
     assert "RAGNOVA-STUDENT" in ans2
+    assert "certificate" in ans2.lower()
     assert any(c["modality"] == "docx" for c in cit2)
     assert any(c["modality"] == "image" for c in cit2)
 
-    # General query
+    # General supported query
     ans3, cit3 = process_query("What is this project?")
     assert len(cit3) >= 1
+
+    # Photo query
+    ans_photo, cit_photo = process_query("Where is the AI research lab room 302?")
+    assert "room 302" in ans_photo.lower()
+    assert any("photo" in c["source"] for c in cit_photo)
+
+    # Negative controls (P2: must refuse and must NOT claim false grounding or emit citations)
+    ans_neg1, cit_neg1 = process_query("What is the hostel mess menu for Wednesday lunch?")
+    assert "could not find" in ans_neg1.lower()
+    assert len(cit_neg1) == 0, "Negative control N1 emitted false citations"
+
+    ans_neg2, cit_neg2 = process_query("How do I apply for a refund on tuition fees?")
+    assert "could not find" in ans_neg2.lower()
+    assert len(cit_neg2) == 0, "Negative control N2 emitted false citations"
+
+    # Unsupported query (P2: must NOT claim false grounding or invent citations)
+    ans_unsupported, cit_unsupported = process_query("What is the population of Jupiter?")
+    assert "could not find" in ans_unsupported.lower()
+    assert len(cit_unsupported) == 0, "Unsupported query emitted false citations"
+

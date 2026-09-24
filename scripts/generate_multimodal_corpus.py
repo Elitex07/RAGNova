@@ -101,8 +101,87 @@ def create_image(
     print(f"wrote image: {out_path.name} ({width}x{height})")
 
 
+def create_photo_image(
+    filename: str,
+    width: int,
+    height: int,
+    bg_color: tuple[int, int, int],
+    title: str,
+    sections: list[tuple[str, str | list[str]]],
+    border_color: tuple[int, int, int] | None = None,
+    badge: str | None = None,
+    photo_type: str = "PLAQUE",  # "ID_CARD", "PLAQUE", "SIGN"
+):
+    """Render a realistic physical photo asset (sign, plaque, or ID card) containing visible text."""
+    img = Image.new("RGB", (width, height), bg_color)
+    draw = ImageDraw.Draw(img)
+
+    header_font = _get_font(18, bold=True)
+    subhead_font = _get_font(14, bold=True)
+    body_font = _get_font(13, bold=False)
+    small_font = _get_font(11, bold=False)
+
+    # Physical frame / outer matte border (photo asset, NOT an OS window)
+    frame_width = 8
+    frame_color = border_color if border_color else (180, 180, 180)
+    for i in range(frame_width):
+        draw.rectangle([(i, i), (width - 1 - i, height - 1 - i)], outline=frame_color)
+
+    # Inner plaque margin
+    pad = 20
+    draw.rectangle([(pad, pad), (width - pad, height - pad)], outline=(148, 163, 184), width=1)
+
+    # Top banner / institution bar
+    banner_h = 42
+    draw.rectangle([(pad + 1, pad + 1), (width - pad - 1, pad + banner_h)], fill=(30, 41, 59))
+    draw.text((pad + 16, pad + 12), title, font=header_font, fill=(255, 255, 255))
+
+    if badge:
+        b_w = len(badge) * 8 + 16
+        badge_bg = (225, 29, 72) if photo_type == "SIGN" else ((16, 185, 129) if photo_type == "ID_CARD" else (37, 99, 235))
+        draw.rectangle([(width - pad - b_w - 12, pad + 9), (width - pad - 12, pad + 33)], fill=badge_bg)
+        draw.text((width - pad - b_w - 4, pad + 13), badge, font=small_font, fill=(255, 255, 255))
+
+    y = pad + banner_h + 16
+    margin_x = pad + 16
+
+    # If ID card, draw an ID photo avatar box
+    if photo_type == "ID_CARD":
+        avatar_w, avatar_h = 95, 115
+        av_x = width - pad - avatar_w - 16
+        av_y = y
+        draw.rectangle([(av_x, av_y), (av_x + avatar_w, av_y + avatar_h)], fill=(226, 232, 240), outline=(148, 163, 184), width=2)
+        draw.ellipse([(av_x + 32, av_y + 18), (av_x + 62, av_y + 48)], fill=(100, 116, 139))
+        draw.pieslice([(av_x + 18, av_y + 55), (av_x + 77, av_y + 110)], 180, 360, fill=(100, 116, 139))
+        draw.text((av_x + 12, av_y + avatar_h + 4), "[PHOTO ID]", font=small_font, fill=(100, 116, 139))
+
+    for sec_title, sec_content in sections:
+        if sec_title:
+            draw.text((margin_x, y), sec_title, font=subhead_font, fill=(15, 23, 42))
+            y += 24
+
+        if isinstance(sec_content, str):
+            lines = sec_content.split("\n")
+        else:
+            lines = sec_content
+
+        for line in lines:
+            if y > height - pad - 20:
+                break
+            draw.text((margin_x + 8, y), line, font=body_font, fill=(30, 41, 59))
+            y += 20
+        y += 10
+
+    # Physical asset photo caption
+    draw.text((pad + 12, height - pad - 15), "CAMPUS PHYSICAL ASSET PHOTOGRAPH — RAGNOVA CORPUS", font=small_font, fill=(148, 163, 184))
+
+    out_path = IMAGES_DIR / filename
+    img.save(out_path, format="PNG")
+    print(f"wrote photo asset: {out_path.name} ({width}x{height})")
+
+
 def generate_all_images():
-    """Generates 12 deliberate images covering screenshots, posters, and diagrams."""
+    """Generates 15 deliberate images covering screenshots, posters, diagrams, and photos with visible text."""
     IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 
     # 1. Portal Login Screenshot
@@ -130,19 +209,20 @@ def generate_all_images():
         badge="STUDENT PORTAL"
     )
 
-    # 2. Wi-Fi Setup Screenshot
+    # 2. Wi-Fi Setup Screenshot (SECURE enterprise configuration)
     create_image(
         "screenshot_wifi_setup.png",
-        650, 450, (241, 245, 249),
+        650, 460, (241, 245, 249),
         "Network Settings — Wireless Connection",
         [
             ("Wireless Network: RAGNOVA-STUDENT", [
                 "Status: Available across Hostel, Library, and Academic Blocks",
                 "Security Protocol: WPA2-Enterprise (802.1X PEAP)",
-                "",
                 "Identity (Email): username@ragnova.edu",
                 "Password: Same password as campus email activation",
-                "CA Certificate: Do not validate (or Use System Certs)",
+                "CA Certificate: RAGNova Root CA (or System Trust Store)",
+                "Server Domain Validation: ragnova.edu (Mandatory)",
+                "Security Policy: Do NOT select 'Do not validate' (prevents rogue AP attacks)",
                 "",
                 "Troubleshooting:",
                 "If connection fails repeatedly, restart the wireless adapter.",
@@ -365,30 +445,94 @@ def generate_all_images():
         badge="CAMPUS MAP"
     )
 
-    # 12. Student ID Card Mockup
-    create_image(
+    # 12. Photo Asset 1: Student Identity Card (Photo with visible text)
+    create_photo_image(
         "photo_id_card_sample.png",
-        580, 360, (241, 245, 249),
-        "RAGNova Institute of Technology — Student ID",
+        600, 380, (248, 250, 252),
+        "RAGNova Institute of Technology",
         [
-            ("INSTITUTE IDENTITY CARD", [
-                "Student Name: Alex Morgan",
-                "Roll Number: 23AIML042",
+            ("Alex Morgan | Roll No: 23AIML042", [
                 "Program: B.Tech Computer Science (AIML)",
+                "Department: Computer Science & Engineering",
                 "Library Barcode: *LIB-884920*",
-                "Valid Through: June 2027",
-                "",
-                "Borrowing Privilege: 4 books / 14 days renewal",
-                "Night Reading Room Access: Valid during examination fortnight."
+                "Valid Session: 2023 - 2027",
+                "Borrowing Privilege: 4 Books / 14 Days",
+                "Campus Access: 24/7 Hostel & Library Reading Room"
             ])
         ],
         border_color=(79, 70, 229),
-        badge="STUDENT ID"
+        badge="STUDENT ID",
+        photo_type="ID_CARD"
+    )
+
+    # 13. Photo Asset 2: AI & ML Research Lab Door Sign (Photo with visible text)
+    create_photo_image(
+        "photo_lab_door_sign.png",
+        620, 390, (245, 245, 245),
+        "Department of Computer Science & Engineering",
+        [
+            ("AI & Machine Learning Research Laboratory", [
+                "Location: Academic Block B — Room 302",
+                "Faculty In-Charge: Dr. S. Rao (Associate Professor)",
+                "Lab Superintendent: Mr. V. Sharma",
+                "Operating Hours: Monday to Friday 09:00 AM - 05:00 PM",
+                "Access Requirement: Smart Card ID Badge Required for Entry",
+                "Safety Guideline: No food or unauthorized downloading."
+            ])
+        ],
+        border_color=(30, 41, 59),
+        badge="ROOM 302",
+        photo_type="PLAQUE"
+    )
+
+    # 14. Photo Asset 3: Central Library Circulation Desk Sign (Photo with visible text)
+    create_photo_image(
+        "photo_library_desk_sign.png",
+        620, 390, (254, 252, 232),
+        "Central Library — Service Counter Notice",
+        [
+            ("Circulation Desk — Borrowing & Returns", [
+                "Undergraduate Quota: 4 books for 14 days renewal",
+                "Late Return Fine: Rs 2.00 per day per overdue book",
+                "Overdue Fine Cap: Maximum Rs 200 per title",
+                "After-Hours Drop Box: Located beside Ground Floor Main Exit",
+                "Digital Resource Centre: Floor 2 (WiFi and Workstations)"
+            ])
+        ],
+        border_color=(202, 138, 4),
+        badge="CIRCULATION DESK",
+        photo_type="SIGN"
+    )
+
+    # 15. Photo Asset 4: Campus Building B Directory Plaque (Photo with visible text)
+    create_photo_image(
+        "photo_campus_building_plaque.png",
+        640, 400, (241, 245, 249),
+        "Academic Block B Directory Plaque",
+        [
+            ("Department of CSE & AIML — Directory", [
+                "Ground Floor: Department Office & Seminar Auditorium B",
+                "Floor 1: B.Tech Classrooms & Faculty Cabins",
+                "Floor 2: AI Research Lab (Room 302) & Compute Server Room",
+                "Wireless Coverage: RAGNOVA-STUDENT (802.1X PEAP)",
+                "IT Help Desk: Ground Floor Room 104 (Mon-Fri 9am-5pm)"
+            ])
+        ],
+        border_color=(71, 85, 105),
+        badge="BLOCK B",
+        photo_type="PLAQUE"
     )
 
 
-def _generate_synthetic_speech_wav(filepath: Path, text: str):
-    """Attempt Windows PowerShell TTS for natural speech; fallback to synthetic acoustic waveform."""
+def _generate_synthetic_speech_wav(filepath: Path, text: str) -> None:
+    """Generate spoken speech .wav file using available platform TTS backends.
+
+    Tries Windows PowerShell System.Speech, PowerShell Core, Windows SAPI VBScript,
+    macOS 'say', Linux 'espeak-ng' / 'espeak', or 'pyttsx3'.
+    Fails loudly if no TTS engine is found: acoustic sine-wave tones contain NO speech
+    and cannot be used for Whisper ASR.
+    """
+    # 1. Windows PowerShell System.Speech
     escaped_text = text.replace("'", "''")
     ps_cmd = (
         f"Add-Type -AssemblyName System.Speech; "
@@ -397,37 +541,79 @@ def _generate_synthetic_speech_wav(filepath: Path, text: str):
         f"$synth.Speak('{escaped_text}'); "
         f"$synth.Dispose()"
     )
+    for ps_bin in ["powershell", "pwsh"]:
+        try:
+            res = subprocess.run([ps_bin, "-NoProfile", "-Command", ps_cmd], capture_output=True, text=True, timeout=30)
+            if res.returncode == 0 and filepath.exists() and filepath.stat().st_size > 1000:
+                print(f"wrote audio via {ps_bin} TTS: {filepath.name} ({filepath.stat().st_size} bytes)")
+                return
+        except Exception:
+            pass
+
+    # 2. Windows SAPI via VBScript
+    if sys.platform.startswith("win"):
+        vbs_script = filepath.with_suffix(".vbs")
+        try:
+            clean_text = text.replace('"', '""')
+            vbs_content = (
+                f'Set voice = CreateObject("SAPI.SpVoice")\n'
+                f'Set stream = CreateObject("SAPI.SpFileStream")\n'
+                f'stream.Open "{filepath.as_posix()}", 3, False\n'
+                f'Set voice.AudioOutputStream = stream\n'
+                f'voice.Speak "{clean_text}"\n'
+                f'stream.Close\n'
+            )
+            vbs_script.write_text(vbs_content, encoding="utf-8")
+            res = subprocess.run(["cscript", "//nologo", str(vbs_script)], capture_output=True, text=True, timeout=30)
+            if filepath.exists() and filepath.stat().st_size > 1000:
+                print(f"wrote audio via Windows SAPI: {filepath.name} ({filepath.stat().st_size} bytes)")
+                return
+        except Exception:
+            pass
+        finally:
+            if vbs_script.exists():
+                vbs_script.unlink(missing_ok=True)
+
+    # 3. macOS 'say' command
+    if sys.platform == "darwin":
+        try:
+            res = subprocess.run(["say", "-o", str(filepath), "--data-format=LEI16@16000", text], capture_output=True, timeout=30)
+            if res.returncode == 0 and filepath.exists() and filepath.stat().st_size > 1000:
+                print(f"wrote audio via macOS say: {filepath.name} ({filepath.stat().st_size} bytes)")
+                return
+        except Exception:
+            pass
+
+    # 4. Linux / cross-platform espeak-ng / espeak
+    for espeak_bin in ["espeak-ng", "espeak"]:
+        try:
+            res = subprocess.run([espeak_bin, "-w", str(filepath), text], capture_output=True, timeout=30)
+            if res.returncode == 0 and filepath.exists() and filepath.stat().st_size > 1000:
+                print(f"wrote audio via {espeak_bin}: {filepath.name} ({filepath.stat().st_size} bytes)")
+                return
+        except Exception:
+            pass
+
+    # 5. Python pyttsx3 (if installed in virtual environment)
     try:
-        res = subprocess.run(["powershell", "-NoProfile", "-Command", ps_cmd], capture_output=True, text=True, timeout=30)
-        if res.returncode == 0 and filepath.exists() and filepath.stat().st_size > 1000:
-            print(f"wrote audio via Windows TTS: {filepath.name} ({filepath.stat().st_size} bytes)")
+        import pyttsx3
+        engine = pyttsx3.init()
+        engine.save_to_file(text, str(filepath))
+        engine.runAndWait()
+        if filepath.exists() and filepath.stat().st_size > 1000:
+            print(f"wrote audio via pyttsx3: {filepath.name} ({filepath.stat().st_size} bytes)")
             return
-    except Exception as e:
-        print(f"Windows TTS exception: {e}")
+    except Exception:
+        pass
 
-    # Fallback: Generate a clean multi-tone synthetic acoustic wav file
-    sample_rate = 16000
-    duration_s = max(10.0, len(text.split()) * 0.4)
-    total_frames = int(sample_rate * duration_s)
-
-    with wave.open(str(filepath), "wb") as w:
-        w.setnchannels(1)
-        w.setsampwidth(2)
-        w.setframerate(sample_rate)
-
-        frames = bytearray()
-        for i in range(total_frames):
-            t = float(i) / sample_rate
-            val = 0.3 * math.sin(2.0 * math.pi * 220.0 * t) + \
-                  0.2 * math.sin(2.0 * math.pi * 440.0 * t + math.sin(2 * math.pi * 2.5 * t)) + \
-                  0.1 * math.sin(2.0 * math.pi * 880.0 * t)
-            envelope = 0.5 * (1.0 + math.sin(2.0 * math.pi * 3.5 * t))
-            val *= envelope
-            sample = int(max(-32767, min(32767, val * 32767)))
-            frames.extend(struct.pack("<h", sample))
-
-        w.writeframes(frames)
-    print(f"wrote synthetic audio: {filepath.name} ({duration_s:.1f}s, {filepath.stat().st_size} bytes)")
+    # If no speech engine succeeded, NEVER emit sine-wave beeps.
+    # Spoken audio is required for faster-whisper ASR.
+    raise RuntimeError(
+        f"Failed to generate speech audio for '{filepath.name}'. "
+        f"No functional Text-to-Speech (TTS) engine was detected. "
+        f"Tested: Windows PowerShell System.Speech, Windows SAPI, macOS 'say', Linux 'espeak-ng'/'espeak', and 'pyttsx3'. "
+        f"Non-speech acoustic waveforms are rejected because faster-whisper requires spoken human language."
+    )
 
 
 def generate_all_audio():
@@ -455,7 +641,7 @@ def generate_all_audio():
             "it_helpdesk_wifi_instructions.wav",
             "Hello students. If you are experiencing difficulty connecting to the campus wireless network named "
             "RAGNOVA-STUDENT, please follow these steps. Enter your full institute email address and the password set "
-            "during account activation. If the connection fails, restart your wireless adapter before visiting the help "
+            "during account activation. Ensure your device validates server certificates using domain ragnova.edu. If the connection fails, restart your wireless adapter before visiting the help "
             "desk. Remember that sharing your credentials with any other student is strictly prohibited and results in a "
             "two-week network suspension."
         ),
@@ -482,3 +668,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

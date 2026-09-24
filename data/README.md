@@ -27,7 +27,7 @@ Make sure the corpus contains, on purpose:
 
 ## File inventory
 
-> **Corpus status: Multimodal corpus populated.** The documents folder contains the Ch6 validated starter set (preserving contract and retrieval test invariants). `images/` contains 12 images (including screenshots of portals/WiFi dialogs, campus posters with visible OCR text, and architecture diagrams). `audio/` contains 4 spoken speech clips generated via Windows Speech Synthesis matching the campus academic guidelines.
+> **Corpus status: Multimodal corpus populated.** The documents folder contains the Ch6 validated starter set (preserving contract and retrieval test invariants). `images/` contains 15 images (5 screenshots of portals/WiFi dialogs with secure CA certificate validation, 4 campus posters with visible OCR text, 2 architecture/map diagrams, and 4 physical photo assets with visible text). `audio/` contains 4 spoken speech clips generated via speech synthesis matching the campus academic guidelines.
 
 | File | Modality | What it contains | Notes |
 |---|---|---|---|
@@ -35,7 +35,7 @@ Make sure the corpus contains, on purpose:
 | `documents/library_hours.pdf` | pdf | 1-page library policy — hours, borrowing limits, fines | Generated (Ch6). |
 | `documents/it_onboarding.docx` | docx | 2-page IT onboarding guide, one explicit page break | Generated (Ch6) — exercises ADR-008's page-break detection. |
 | `images/screenshot_portal_login.png` | image | SSO login screen with student email and password fields | Screenshot with OCR-readable authentication guidelines. |
-| `images/screenshot_wifi_setup.png` | image | Wi-Fi settings dialog for `RAGNOVA-STUDENT` (WPA2-Enterprise) | Screenshot matching `it_onboarding.docx`. |
+| `images/screenshot_wifi_setup.png` | image | Wi-Fi settings dialog for `RAGNOVA-STUDENT` (WPA2-Enterprise) | Screenshot matching `it_onboarding.docx`. Configures secure 802.1X certificate validation (`ragnova.edu`). |
 | `images/screenshot_error_403.png` | image | 403 Forbidden screen warning against unauthorized downloads | Screenshot matching Acceptable Use Policy in `it_onboarding.docx`. |
 | `images/screenshot_synopsis_portal.png` | image | Synopsis portal upload screen with 21st August deadline | Screenshot matching `notice.pdf`. |
 | `images/screenshot_vpn_client.png` | image | SecureConnect VPN client connected to remote library gateway | Screenshot for off-campus journal access. |
@@ -45,10 +45,13 @@ Make sure the corpus contains, on purpose:
 | `images/notice_midterm_schedule.png` | image | Final year project evaluation timetable & marking breakdown | Noticeboard graphic (40% prototype, 35% report, 25% viva). |
 | `images/diagram_rag_architecture.png` | image | Architectural block diagram of RAGNova pipeline | System diagram covering PyMuPDF, Whisper, OpenCLIP, ChromaDB. |
 | `images/diagram_campus_map.png` | image | Schematic campus map showing Library, IT Centre, AIML Block | Blueprint diagram for cross-modal queries. |
-| `images/photo_id_card_sample.png` | image | Sample Student ID Card with barcode and borrowing limits | Photo graphic for student identification. |
+| `images/photo_id_card_sample.png` | image | Sample Student ID Card with photo, barcode, borrowing limits | Physical ID card photo asset for student identification. |
+| `images/photo_lab_door_sign.png` | image | AIML Research Lab entrance door sign (Room 302, Dr. S. Rao) | Physical lab sign photo asset with visible OCR text. |
+| `images/photo_library_desk_sign.png` | image | Central Library circulation counter standing desk sign | Physical counter sign photo asset (4 books/14 days, fines, drop box). |
+| `images/photo_campus_building_plaque.png` | image | Academic Block B directory wall plaque | Physical plaque photo asset detailing department floor directory. |
 | `audio/hod_project_announcement.wav` | audio | Spoken briefing on project evaluation weighting & August 21 deadline | Speech audio matching `notice.pdf` (40% demo, 35% report, 25% viva). |
 | `audio/library_orientation_excerpt.wav` | audio | Orientation speech on library hours, 4 books loan, overdue fines | Speech audio matching `library_hours.pdf`. |
-| `audio/it_helpdesk_wifi_instructions.wav` | audio | Helpdesk voice guide on connecting to RAGNOVA-STUDENT network | Speech audio matching `it_onboarding.docx`. |
+| `audio/it_helpdesk_wifi_instructions.wav` | audio | Helpdesk voice guide on connecting to RAGNOVA-STUDENT network | Speech audio matching `it_onboarding.docx` (secure CA cert guidance). |
 | `audio/lab_assistant_briefing.wav` | audio | Briefing on VPN installation for remote journals & no pirated media | Speech audio matching Acceptable Use Policy. |
 
 ---
@@ -76,6 +79,7 @@ The evaluation set from Chapter 1 §1.10. Start with 5 questions on Day 1; grow 
 | I1 | Where can I see the Wi-Fi authentication screen for campus wireless? | `images/screenshot_wifi_setup.png` | Semantic text query retrieving the wireless configuration screenshot. |
 | I2 | Find the diagram showing how ChromaDB and OpenCLIP connect together | `images/diagram_rag_architecture.png` | Conceptual query matching the system architecture diagram. |
 | I3 | What poster shows the upcoming AI and Machine Learning seminar venue? | `images/notice_seminar_poster.png` | Text search retrieving the guest lecture seminar poster. |
+| I4 | Where is the AI & Machine Learning Research Laboratory located and who heads it? | `images/photo_lab_door_sign.png` | Visual sign retrieval locating Room 302 and Dr. S. Rao. |
 
 ### Image → document queries (cross-modal)
 
@@ -93,12 +97,12 @@ The evaluation set from Chapter 1 §1.10. Start with 5 questions on Day 1; grow 
 
 ### Negative controls (should return "not found in the provided sources")
 
-Questions the corpus genuinely cannot answer. These test whether the system **refuses to hallucinate** — objective O4.
+Questions the corpus genuinely cannot answer. These test whether the system **refuses to hallucinate** — objective O4. The UI scaffold and retrieval pipeline must refuse these without claiming false grounding or emitting fake citations.
 
 | # | Question | Expected behaviour |
 |---|---|---|
-| N1 | What is the hostel mess menu for Wednesday lunch? | Refuses / states the sources don't cover it |
-| N2 | How do I apply for a refund on tuition fees? | Refuses / states the sources don't cover it |
+| N1 | What is the hostel mess menu for Wednesday lunch? | Refuses / states the sources don't cover it (empty citations) |
+| N2 | How do I apply for a refund on tuition fees? | Refuses / states the sources don't cover it (empty citations) |
 
 ---
 
