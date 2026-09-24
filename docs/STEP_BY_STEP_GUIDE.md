@@ -104,6 +104,7 @@ Here is the exact record of every file created, modified, or generated across th
      - Modern dark-accent typography (`#1E293B`, `#64748B`).
      - Blue left-bordered citation cards (`#3B82F6`) with modality badges (`PDF`, `DOCX`, `IMAGE`, `AUDIO`).
   2. **Sidebar Metadata**:
+  
      - Active settings read directly from `src.core.config.settings` (`OLLAMA_MODEL`, `TEXT_EMBEDDING_MODEL`, `CLIP_MODEL`, `WHISPER_MODEL_SIZE`, ChromaDB directory).
      - Dynamic corpus counter querying `data/documents/`, `data/images/`, and `data/audio/`.
      - Conversation reset button.
