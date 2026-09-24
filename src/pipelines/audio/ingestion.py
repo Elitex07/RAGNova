@@ -308,6 +308,16 @@ class AudioIngestor:
             logger.debug("Progress callback raised; ignoring it.", exc_info=True)
 
     def _transcribe_with_retry(self, file_path: Path) -> Iterator[AudioSegment]:
+        # Declared OUTSIDE the retry loop, deliberately: a retry re-runs
+        # transcription from the start of the file, but this generator may
+        # already have yielded segments from an earlier, partially-consumed
+        # attempt before it failed. Without tracking the last segment
+        # actually yielded across attempts, a retry re-transcribes and
+        # re-yields those same segments, and the downstream chunker (which
+        # keeps its own buffer/chunk-index state across this generator's
+        # lifetime) duplicates them into the transcript.
+        last_yielded_start: float = -1.0
+
         for attempt in range(self._max_retries):
             try:
                 segments, info = self._model.transcribe(
@@ -318,6 +328,9 @@ class AudioIngestor:
                 duration: float = getattr(info, "duration", 0.0) or 0.0
 
                 for segment in segments:
+                    if segment.start <= last_yielded_start + 1e-4:
+                        continue
+                    last_yielded_start = segment.start
                     if duration > 0:
                         self._report_progress(segment.end, duration)
                     yield segment
