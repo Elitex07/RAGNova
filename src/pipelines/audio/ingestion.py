@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 import time
@@ -150,6 +151,21 @@ class AudioIngestor:
         return re.sub(r"[^\w\-]", "_", stem)
 
     @staticmethod
+    def _compute_file_hash(file_name: str, file_size: int) -> str:
+        # Distinguishes two different audio files that share a bare stem
+        # (e.g. "lecture.mp3" ingested from two different folders) — without
+        # this, _format_chunk_id's id depends only on the stem and an
+        # integer-second timestamp, so two such files can produce identical
+        # chunk_ids whenever a segment happens to start on the same second.
+        # Since add_chunks() upserts by id (Chapter 7 §2.3), a collision
+        # silently overwrites the earlier file's chunk instead of erroring.
+        # Hashing name+size (not the full path) keeps the id reproducible
+        # across machines/directories for the SAME logical file, so
+        # re-ingesting it still correctly upserts in place rather than
+        # minting a new id.
+        return hashlib.sha256(f"{file_name}_{file_size}".encode("utf-8")).hexdigest()[:8]
+
+    @staticmethod
     def _count_words(text: str) -> int:
         return len(_WORD_PATTERN.findall(text))
 
@@ -175,15 +191,16 @@ class AudioIngestor:
     def _prepare_file(
         self,
         file_path: Union[str, Path],
-    ) -> Tuple[Path, int, str]:
+    ) -> Tuple[Path, int, str, str]:
         resolved = Path(file_path)
         file_size = self._validate_file(resolved)
 
         stem = self._sanitize_stem(resolved.stem)
         suffix = resolved.suffix.lstrip(".").lower()
         safe_stem = f"{stem}_{suffix}" if suffix else stem
+        file_hash = self._compute_file_hash(resolved.name, file_size)
 
-        return resolved, file_size, safe_stem
+        return resolved, file_size, safe_stem, file_hash
 
     @staticmethod
     def _split_segment(
@@ -250,13 +267,14 @@ class AudioIngestor:
         return trimmed
 
     @staticmethod
-    def _format_chunk_id(safe_stem: str, start_s: float, chunk_index: int) -> str:
-        return f"{safe_stem}__t{int(start_s)}__c{chunk_index:03d}"
+    def _format_chunk_id(safe_stem: str, file_hash: str, start_s: float, chunk_index: int) -> str:
+        return f"{safe_stem}_h{file_hash}__t{int(start_s)}__c{chunk_index:03d}"
 
     def _build_chunk(
         self,
         buffer: List[OverlapSegment],
         safe_stem: str,
+        file_hash: str,
         idx: int,
         file_path: Path,
     ) -> Chunk:
@@ -265,7 +283,7 @@ class AudioIngestor:
         end_val = round(buffer[-1].end, 2)
 
         return Chunk(
-            chunk_id=self._format_chunk_id(safe_stem, start_val, idx),
+            chunk_id=self._format_chunk_id(safe_stem, file_hash, start_val, idx),
             text=text,
             source=file_path.as_posix(),
             modality="audio",
@@ -307,6 +325,7 @@ class AudioIngestor:
         self,
         segments: Iterator[AudioSegment],
         safe_stem: str,
+        file_hash: str,
         file_path: Path,
     ) -> Iterator[Chunk]:
         buffer: List[OverlapSegment] = []
@@ -345,14 +364,14 @@ class AudioIngestor:
                             remaining_buffer.append(seg2)
                         current_words += needed
 
-                yield self._build_chunk(chunk_segs, safe_stem, chunk_idx, file_path)
+                yield self._build_chunk(chunk_segs, safe_stem, file_hash, chunk_idx, file_path)
                 chunk_idx += 1
 
                 overlap = self._trim_buffer(chunk_segs, self._overlap_words)
                 buffer = overlap + remaining_buffer
 
         if buffer:
-            yield self._build_chunk(buffer, safe_stem, chunk_idx, file_path)
+            yield self._build_chunk(buffer, safe_stem, file_hash, chunk_idx, file_path)
 
     def _ensure_open(self) -> None:
         if self._closed:
@@ -363,10 +382,10 @@ class AudioIngestor:
         file_path: Union[str, Path],
     ) -> Iterator[Chunk]:
         self._ensure_open()
-        resolved, _, safe_stem = self._prepare_file(file_path)
+        resolved, _, safe_stem, file_hash = self._prepare_file(file_path)
 
         segments = self._transcribe_with_retry(resolved)
-        yield from self._create_chunks_from_segments(segments, safe_stem, resolved)
+        yield from self._create_chunks_from_segments(segments, safe_stem, file_hash, resolved)
 
     def process_file(
         self,
