@@ -18,6 +18,9 @@ Tests performed
 
 from __future__ import annotations
 
+# Tell pytest not to collect this script as a test suite
+__test__ = False
+
 import sys
 import traceback
 from pathlib import Path
@@ -209,20 +212,22 @@ with check("9. Chunk.to_dict / to_json / from_dict round-trip"):
 # ---------------------------------------------------------------------------
 # Report
 # ---------------------------------------------------------------------------
-print()
-print(f"{BOLD}{'─' * 62}{RESET}")
-print(f"{BOLD}  Smoke Test Results{RESET}")
-print(f"{'─' * 62}")
-for name, status, detail in results:
-    tail = f"  ({detail})" if detail else ""
-    print(f"  {status}  {name}{tail}")
-print(f"{'─' * 62}")
+if __name__ == "__main__":
+    print()
+    print(f"{BOLD}{'─' * 62}{RESET}")
+    print(f"{BOLD}  Smoke Test Results{RESET}")
+    print(f"{'─' * 62}")
+    for name, status, detail in results:
+        tail = f"  ({detail})" if detail else ""
+        print(f"  {status}  {name}{tail}")
+    print(f"{'─' * 62}")
 
-passed  = sum(1 for _, s, _ in results if s == PASS)
-skipped = sum(1 for _, s, _ in results if s == SKIP)
-failed  = sum(1 for _, s, _ in results if s == FAIL)
-total   = len(results)
-print(f"  {BOLD}{passed}/{total} passed  |  {skipped} skipped  |  {failed} failed{RESET}")
-print(f"{'─' * 62}\n")
+    passed  = sum(1 for _, s, _ in results if s == PASS)
+    skipped = sum(1 for _, s, _ in results if s == SKIP)
+    failed  = sum(1 for _, s, _ in results if s == FAIL)
+    total   = len(results)
+    print(f"  {BOLD}{passed}/{total} passed  |  {skipped} skipped  |  {failed} failed{RESET}")
+    print(f"{'─' * 62}\n")
 
-sys.exit(1 if failed else 0)
+    sys.exit(1 if failed else 0)
+
