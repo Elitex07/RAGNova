@@ -175,7 +175,16 @@ class AudioIngestor:
 
     @staticmethod
     def _compute_file_hash(file_path: Path, file_size: int) -> str:
-        unique_identifier = f"{file_path.resolve().as_posix()}_{file_size}"
+        # Deliberately name + size, NOT the resolved absolute path: hashing
+        # an absolute path means the SAME logical file gets a different
+        # hash (and therefore a different chunk_id) depending on which
+        # machine or working directory ingests it, so a later re-ingest of
+        # the identical file mints new IDs instead of upserting over the
+        # old ones — the exact "Existing Audio Chunks Remain" duplication
+        # Greptile flagged. Name+size stays reproducible across machines
+        # for the same file while still distinguishing two different files
+        # that happen to share a bare filename.
+        unique_identifier = f"{file_path.name}_{file_size}"
         return hashlib.sha256(unique_identifier.encode("utf-8")).hexdigest()[:10]
 
     @staticmethod
