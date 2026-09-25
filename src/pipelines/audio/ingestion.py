@@ -287,10 +287,24 @@ class AudioIngestor:
         return trimmed
 
     @staticmethod
-    def _format_chunk_id(
-        safe_stem: str, file_hash: str, start_s: float, chunk_index: int
-    ) -> str:
-        return f"{safe_stem}_{file_hash}__t{int(start_s)}__c{chunk_index:03d}"
+    def _format_chunk_id(safe_stem: str, file_hash: str, chunk_index: int) -> str:
+        # Deliberately no timestamp in the id, even though start_s is
+        # available: CTranslate2's CPU backend isn't guaranteed bit-exact
+        # across runs with a different thread count (a real, documented
+        # class of floating-point nondeterminism), so a segment's rounded
+        # start time can shift by a fraction of a second between two
+        # transcriptions of the IDENTICAL file. Near a whole-second
+        # boundary that flips int(start_s), which changes the id even
+        # though nothing about the file changed — re-ingesting would then
+        # insert new chunks instead of upserting over the old ones,
+        # leaving stale duplicates (Greptile: "Existing Audio Chunks
+        # Remain"). file_hash (stable, from name+size) + chunk_index
+        # (the chunk's sequential position, stable as long as segmentation
+        # itself doesn't change) is enough to identify a chunk uniquely
+        # without depending on a value the model itself produces. This is
+        # the same scheme the document pipeline already uses — stem + a
+        # positional index, not a content-derived timestamp.
+        return f"{safe_stem}_{file_hash}__c{chunk_index:03d}"
 
     def _build_chunk(
         self,
@@ -318,7 +332,7 @@ class AudioIngestor:
         # modality, start_s, end_s) or derivable from it (chunk_index/
         # file_hash are encoded in chunk_id itself).
         return Chunk(
-            chunk_id=self._format_chunk_id(safe_stem, file_hash, start_val, idx),
+            chunk_id=self._format_chunk_id(safe_stem, file_hash, idx),
             text=text,
             source=source,
             modality="audio",
