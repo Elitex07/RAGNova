@@ -311,6 +311,12 @@ class AudioIngestor:
             getattr(settings, "DEFAULT_TEXT_EMBEDDING_MODEL", None)
         )
 
+        # The shared Chunk dataclass (src/core/schemas.py) has no `metadata`
+        # field — passing one raises TypeError on every single chunk, for
+        # both process_file() and process_file_streaming(). Every value
+        # that dict carried is already a real Chunk field above (source,
+        # modality, start_s, end_s) or derivable from it (chunk_index/
+        # file_hash are encoded in chunk_id itself).
         return Chunk(
             chunk_id=self._format_chunk_id(safe_stem, file_hash, start_val, idx),
             text=text,
@@ -319,15 +325,6 @@ class AudioIngestor:
             embedding_model=embedding_model,
             start_s=start_val,
             end_s=end_val,
-            metadata={
-                "source": source,
-                "source_type": "audio",
-                "modality": "audio",
-                "start_s": start_val,
-                "end_s": end_val,
-                "chunk_index": idx,
-                "file_hash": file_hash,
-            },
         )
 
     def _report_progress(self, current: float, total: float) -> None:
