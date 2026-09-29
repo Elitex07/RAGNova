@@ -184,6 +184,17 @@ def test_retrieve_searches_images_by_the_uploaded_image_when_given(fake_searches
     assert calls["image"] is img
 
 
+def test_retrieve_searches_images_when_given_an_image_even_without_include_images(fake_searches):
+    # A passed-in query_image must never be silently dropped just because
+    # the caller forgot include_images=True — the image itself is enough
+    # of a signal that image search was wanted.
+    calls, image_search = fake_searches
+    img = Image.new("RGB", (4, 4))
+    ids = [c.chunk_id for c in retrieve("q", query_image=img, image_search=image_search)]
+    assert calls["image"] is img
+    assert "i_hi" in ids
+
+
 def test_retrieve_skips_text_search_for_an_empty_question(fake_searches):
     calls, image_search = fake_searches
     ids = [c.chunk_id for c in retrieve("  ", include_images=True, image_search=image_search)]
