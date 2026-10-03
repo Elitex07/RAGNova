@@ -8,7 +8,9 @@ import logging
 import sys
 from pathlib import Path
 
+from src.core.config import settings
 from src.pipelines.images import ImageIngestionPipeline
+from src.pipelines.images.index import index_image_files, index_images_directory
 from src.pipelines.images.models import ImageIngestionConfig
 
 # The corrupt-image error message below (and any other message containing
@@ -25,7 +27,7 @@ if hasattr(sys.stderr, "reconfigure"):
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Ingest image(s) with Tesseract OCR + OpenCLIP embeddings producing one Chunk per image."
+        description="Ingest image(s) with Tesseract OCR + OpenCLIP embeddings and index them into image_index."
     )
     parser.add_argument(
         "input_path",
@@ -37,19 +39,21 @@ def main() -> None:
         "-o",
         type=str,
         default=None,
-        help="Optional path to write output JSON chunks.",
+        help="Optional path to write indexing summary JSON (e.g. {\"indexed\": count}) rather than chunk data.",
     )
     parser.add_argument(
         "--model",
         type=str,
-        default="ViT-B-32",
-        help="OpenCLIP model architecture (default: ViT-B-32).",
+        default=settings.CLIP_MODEL,
+        help="OpenCLIP model architecture. Must equal settings.CLIP_MODEL "
+             f"(currently {settings.CLIP_MODEL}): search embeds queries with that model.",
     )
     parser.add_argument(
         "--pretrained",
         type=str,
-        default="laion2b_s34b_b79k",
-        help="OpenCLIP pretrained weights tag (default: laion2b_s34b_b79k).",
+        default=settings.CLIP_PRETRAINED,
+        help="OpenCLIP pretrained weights tag. Must equal settings.CLIP_PRETRAINED "
+             f"(currently {settings.CLIP_PRETRAINED}).",
     )
     parser.add_argument(
         "--device",
@@ -82,6 +86,25 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    if args.no_embedding:
+        sys.stderr.write(
+            "Error: Cannot index images into image_index with --no-embedding (embeddings are required for retrieval).\n"
+        )
+        sys.exit(1)
+
+    # This CLI now writes into the shared image_index, and search_images()
+    # always embeds queries with settings.CLIP_MODEL / CLIP_PRETRAINED. Vectors
+    # from any other model either fail Chroma's dimension check or, worse
+    # (same dimension, different model), silently rank nonsense.
+    if (args.model, args.pretrained) != (settings.CLIP_MODEL, settings.CLIP_PRETRAINED):
+        sys.stderr.write(
+            f"Error: --model/--pretrained ({args.model}/{args.pretrained}) differ from "
+            f"settings.CLIP_MODEL/CLIP_PRETRAINED ({settings.CLIP_MODEL}/{settings.CLIP_PRETRAINED}). "
+            "image_index must be built with the same model that search uses; "
+            "change CLIP_MODEL / CLIP_PRETRAINED in .env (and re-index everything) instead.\n"
+        )
+        sys.exit(1)
+
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -104,33 +127,33 @@ def main() -> None:
         sys.exit(1)
 
     if target.is_dir():
-        # ingest_directory()/ingest_batch() already skip an individual
-        # unreadable file with a logged warning rather than raising — a
-        # single corrupt image in a real directory scan doesn't need a
-        # try/except here.
-        chunks = pipeline.ingest_directory(target)
+        # index_images_directory() calls the pipeline internally and hands
+        # every ImageChunk with a non-None embedding to add_chunks() —
+        # skipping unreadable files with a logged warning, same policy as
+        # before.
+        count = index_images_directory(target, pipeline=pipeline, recursive=True)
     else:
-        # A single explicitly-named file, unlike a directory scan, is
-        # exactly the case verified directly (Chapter 7 /verify pass): a
-        # text file renamed .png raised a raw PIL.UnidentifiedImageError
-        # traceback here, unlike the clean "Error: ..." message the
-        # missing-path check above already gives. Same clean treatment now.
+        # A single explicitly-named file — wrap in a list for index_image_files().
+        # Validate that the file can be loaded so corrupt/non-image files are
+        # caught and reported cleanly through the error handler instead of
+        # silently swallowed by ingest_batch's skip policy.
         try:
-            chunks = [pipeline.ingest_image(target)]
+            pipeline._load_image(target)
+            count = index_image_files([target], pipeline=pipeline)
         except ValueError as exc:
             sys.stderr.write(f"Error: {exc}\n")
             sys.exit(1)
 
-    chunk_dicts = [chunk.to_dict() for chunk in chunks]
+    summary = {"indexed": count}
 
     if args.output:
         out_path = Path(args.output)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         with open(out_path, "w", encoding="utf-8") as f:
-            json.dump(chunk_dicts, f, indent=2, ensure_ascii=False)
-        print(f"Ingested {len(chunks)} image(s) -> saved to {out_path}")
+            json.dump(summary, f, indent=2)
+        print(f"Indexed {count} image(s) into image_index -> summary saved to {out_path}")
     else:
-        print(json.dumps(chunk_dicts, indent=2, ensure_ascii=False))
+        print(f"Indexed {count} image(s) into image_index.")
 
 
 if __name__ == "__main__":
