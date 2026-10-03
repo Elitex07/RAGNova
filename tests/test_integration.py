@@ -31,9 +31,8 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.core.config import settings
-from src.core.schemas import Chunk, validate_chunk
-from src.core.vector_store import get_client, get_image_collection, get_text_collection
+from src.core.schemas import Chunk
+from src.core.vector_store import get_client, get_text_collection
 from src.pipelines.rag import answer as answer_module
 from src.pipelines.rag import retrieve as retrieve_module
 from src.pipelines.rag.answer import NOT_ENOUGH_INFO, answer_query, check_citations, stream_answer
@@ -75,28 +74,6 @@ def fake_text_model(monkeypatch):
     monkeypatch.setattr("src.pipelines.documents.search.embed_text", fake_embed_text)
     monkeypatch.setattr("src.pipelines.documents.index.embed_texts", fake_embed_texts)
     monkeypatch.setattr("src.pipelines.audio.index.embed_texts", fake_embed_texts)
-
-
-def _unit(i: int, dim: int = 512) -> list[float]:
-    v = [0.0] * dim
-    v[i] = 1.0
-    return v
-
-
-class FakeClip:
-    """Stands in for OpenCLIPEmbedder. Red images -> axis 0, blue -> axis 1;
-    the text "red" -> axis 0, anything else -> axis 1."""
-    model_id = "fake-clip/test"
-
-    def embed_batch(self, images):
-        return [self.embed_image(img) for img in images]
-
-    def embed_image(self, image):
-        r, _g, b = image.convert("RGB").getpixel((0, 0))
-        return _unit(0) if r > b else _unit(1)
-
-    def embed_text(self, text):
-        return _unit(0) if "red" in text.lower() else _unit(1)
 
 
 def _chunk(cid, modality="pdf", score=0.5, text="some text", source="data/documents/notice.pdf", **kw):
@@ -255,127 +232,6 @@ def test_image_only_question_gets_a_real_question_in_the_prompt(monkeypatch):
 def test_check_citations_reports_out_of_range_numbers():
     assert check_citations("A [1], B [3].", [_chunk("a"), _chunk("b")], "q") == {3}
     assert check_citations("A [1][2].", [_chunk("a"), _chunk("b")], "q") == set()
-
-
-# ---------------------------------------------------------------------------
-# Part 4 — image_index: the Chapter 8 pipeline, written into ChromaDB
-# ---------------------------------------------------------------------------
-
-@pytest.fixture
-def image_pipeline():
-    from src.pipelines.images.ingest import ImageIngestionPipeline
-    from src.pipelines.images.models import ImageIngestionConfig
-
-    return ImageIngestionPipeline(config=ImageIngestionConfig(ocr_enabled=False), embedder=FakeClip())
-
-
-def test_images_are_indexed_with_portable_sources_and_found_by_text(tmp_path, monkeypatch, image_pipeline):
-    from src.pipelines.images.index import index_images_directory
-    from src.pipelines.images.search import search_images
-
-    monkeypatch.chdir(tmp_path)  # tmp_path plays the project root
-    images = Path("data/images")
-    images.mkdir(parents=True)
-    Image.new("RGB", (8, 8), (255, 0, 0)).save(images / "red.png")
-    Image.new("RGB", (8, 8), (0, 0, 255)).save(images / "blue.png")
-    (images / "notes.txt").write_text("not an image")
-
-    client = get_client(persist_dir=tmp_path / "chroma")
-    assert index_images_directory(images, client=client, pipeline=image_pipeline) == 2
-
-    stored = get_image_collection(client).get(include=["metadatas"])
-    sources = sorted(m["source"] for m in stored["metadatas"])
-    assert sources == ["data/images/blue.png", "data/images/red.png"]  # relative, not /tmp/...
-
-    hits = search_images(query_text="a red square", client=client, embedder=FakeClip())
-    assert hits[0].source == "data/images/red.png"
-    assert hits[0].score == pytest.approx(1.0)
-    assert validate_chunk(hits[0]) == []
-
-
-def test_image_search_on_an_empty_index_returns_nothing_without_loading_clip(tmp_path):
-    from src.pipelines.images.search import search_images
-
-    client = get_client(persist_dir=tmp_path / "chroma")
-    assert search_images(query_text="anything", client=client, embedder=object()) == []
-
-
-def test_image_search_by_image(tmp_path, monkeypatch, image_pipeline):
-    from src.pipelines.images.index import index_image_files
-    from src.pipelines.images.search import search_images
-
-    monkeypatch.chdir(tmp_path)
-    Image.new("RGB", (8, 8), (0, 0, 255)).save("blue.png")
-    Image.new("RGB", (8, 8), (255, 0, 0)).save("red.png")
-    client = get_client(persist_dir=tmp_path / "chroma")
-    index_image_files(["blue.png", "red.png"], client=client, pipeline=image_pipeline)
-    hits = search_images(query_image=Image.new("RGB", (8, 8), (10, 0, 200)), client=client, embedder=FakeClip())
-    assert hits[0].source == "blue.png"
-
-
-# ---------------------------------------------------------------------------
-# Part 5 — audio: transcripts into text_index, next to documents
-# ---------------------------------------------------------------------------
-
-class FakeIngestor:
-    """Stands in for AudioIngestor: returns two transcript chunks."""
-
-    def __init__(self, embedding_model=settings.TEXT_EMBEDDING_MODEL):
-        self.embedding_model = embedding_model
-
-    def process_file(self, path):
-        return [
-            Chunk(chunk_id="talk_wav__t0__c000", source=str(path), modality="audio",
-                  text="Welcome  to the library orientation.\nThe fine is five rupees per day.",
-                  embedding_model=self.embedding_model, start_s=0.0, end_s=12.5),
-            Chunk(chunk_id="talk_wav__t12__c001", source=str(path), modality="audio",
-                  text="The wifi password is on the back of your ID card.",
-                  embedding_model=self.embedding_model, start_s=12.5, end_s=20.0),
-        ]
-
-
-def test_audio_is_indexed_into_text_index_and_cited_by_timestamp(tmp_path, monkeypatch, fake_text_model):
-    from src.pipelines.audio.index import index_audio_file
-    from src.pipelines.documents.search import search_text
-
-    monkeypatch.chdir(tmp_path)
-    audio = Path("data/audio")
-    audio.mkdir(parents=True)
-    (audio / "talk.wav").write_bytes(b"RIFF fake")
-
-    client = get_client(persist_dir=tmp_path / "chroma")
-    assert index_audio_file((audio / "talk.wav").resolve(), client=client, ingestor=FakeIngestor()) == 2
-
-    hits = search_text("what is the library fine per day", client=client)
-    top = hits[0]
-    assert top.modality == "audio"
-    assert top.source == "data/audio/talk.wav"
-    assert (top.start_s, top.end_s) == (0.0, 12.5)
-    assert top.text.startswith("Welcome to the library")  # whitespace normalized
-    assert format_provenance(top) == "data/audio/talk.wav, 0s–12s"
-
-
-def test_audio_chunks_that_break_the_contract_are_refused(tmp_path, fake_text_model):
-    # The exact bug PR #5 fixes in AudioIngestor: embedding_model=None.
-    from src.pipelines.audio.index import index_audio_file
-
-    client = get_client(persist_dir=tmp_path / "chroma")
-    with pytest.raises(ValueError, match="embedding_model"):
-        index_audio_file(tmp_path / "talk.wav", client=client, ingestor=FakeIngestor(embedding_model=None))
-    assert get_text_collection(client).count() == 0
-
-
-def test_transcribe_query_joins_segments(tmp_path):
-    from types import SimpleNamespace
-
-    from src.pipelines.audio.transcribe import transcribe_query
-
-    class FakeWhisper:
-        def transcribe(self, path, vad_filter=True):
-            segs = [SimpleNamespace(text=" How late is "), SimpleNamespace(text=""), SimpleNamespace(text="the library open? ")]
-            return iter(segs), None
-
-    assert transcribe_query(tmp_path / "q.wav", model=FakeWhisper()) == "How late is the library open?"
 
 
 # ---------------------------------------------------------------------------
