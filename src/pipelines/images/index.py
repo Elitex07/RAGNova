@@ -51,7 +51,7 @@ def index_images_directory(
     directory: str | Path,
     client=None,
     pipeline=None,
-    recursive: bool = True,
+    recursive: bool = False,
 ) -> int:
     """Index every supported image under `directory`.
 
@@ -64,7 +64,12 @@ def index_images_directory(
     pipeline:
         ImageIngestionPipeline instance.
     recursive:
-        Whether to search subdirectories recursively (default True).
+        Whether to search subdirectories too. Defaults to False (flat):
+        scripts/build_index.py and the UI index data/images/ this way, and
+        index_documents_directory() / index_audio_directory() are flat for
+        the same reason — one folder per modality, nothing nested is
+        indexed by accident. The image CLI opts in with recursive=True,
+        which is the behaviour its old ingest_directory() call had.
     """
     directory = Path(directory)
     if not directory.is_dir():

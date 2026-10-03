@@ -293,6 +293,22 @@ def test_images_are_indexed_with_portable_sources_and_found_by_text(tmp_path, mo
     assert validate_chunk(hits[0]) == []
 
 
+def test_index_images_directory_is_flat_by_default_and_recurses_on_request(tmp_path, monkeypatch, image_pipeline):
+    from src.pipelines.images.index import index_images_directory
+
+    monkeypatch.chdir(tmp_path)
+    images = Path("data/images")
+    (images / "nested").mkdir(parents=True)
+    Image.new("RGB", (8, 8), (255, 0, 0)).save(images / "red.png")
+    Image.new("RGB", (8, 8), (0, 0, 255)).save(images / "nested" / "blue.png")
+
+    flat = get_client(persist_dir=tmp_path / "chroma_flat")
+    assert index_images_directory(images, client=flat, pipeline=image_pipeline) == 1
+
+    deep = get_client(persist_dir=tmp_path / "chroma_deep")
+    assert index_images_directory(images, client=deep, pipeline=image_pipeline, recursive=True) == 2
+
+
 def test_image_search_on_an_empty_index_returns_nothing_without_loading_clip(tmp_path):
     from src.pipelines.images.search import search_images
 
