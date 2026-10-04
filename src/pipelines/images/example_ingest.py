@@ -254,4 +254,3 @@ def programmatic_example(image_folder: str) -> None:
 
 if __name__ == "__main__":
     main()
-
