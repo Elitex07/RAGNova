@@ -1,6 +1,6 @@
 # Chapter 9 — Audio Pipeline: Whisper Transcription (Day 10)
 
-> **Deliverables today:** a complete audio ingestion pipeline (`src/pipelines/audio/`): Whisper transcription with VAD (voice activity detection), sliding-window chunking with word-level timestamps, transcript chunks written into `text_index` (not a third collection — ADR-005's transcription-over-native-audio decision), portable source paths with timestamp ranges for citations, and `tests/test_audio_pipeline.py`.
+> **Deliverables today:** a complete audio ingestion pipeline (`src/pipelines/audio/`): Whisper transcription with VAD (voice activity detection), sliding-window chunking over timestamped Whisper segments, transcript chunks written into `text_index` (not a third collection — ADR-005's transcription-over-native-audio decision), portable source paths with timestamp ranges for citations, and `tests/test_audio_pipeline.py`.
 >
 > **Prerequisites:** [Chapter 7](ch07-embeddings-and-vector-database.md) (the `text_index` collection and `add_chunks()` primitive this chapter reuses for audio transcripts) and [ADR-005](../decisions/adr-005-transcription-over-clap.md) (why transcription, not native audio embeddings like CLAP).
 >
@@ -19,7 +19,7 @@
 | **Part 5 — BUILD** | Writing each file, transcribing real audio, indexing into `text_index`, citations with timestamps. | ~2 hours |
 | **Part 6 — CHECK** | Rubric, question bank, troubleshooting, completion checklist. | ~30 min |
 
-**Learning outcomes.** You will be able to: call faster-whisper to transcribe audio with VAD; explain why VAD matters for chunking; implement sliding-window chunking with word-level timestamps; explain why audio transcripts are embedded with MiniLM and written into `text_index`, not a separate collection; and trace through the timestamp-based citation format (`data/audio/talk.wav, 12s–20s`).
+**Learning outcomes.** You will be able to: call faster-whisper to transcribe audio with VAD; explain why VAD matters for chunking; explain sliding-window chunking over timestamped segments; explain why audio transcripts are embedded with MiniLM and written into `text_index`, not a separate collection; and trace through the timestamp-based citation format (`data/audio/talk.wav, 12s–20s`).
 
 ---
 
@@ -52,7 +52,7 @@ print(f"Detected language: {info.language} (probability={info.language_probabili
 
 Whisper auto-detects the spoken language from the first few seconds of audio. For this project (English-language corpus), this is a logging convenience, not a feature — but it's available if the corpus ever expands to non-English audio.
 
-## 1.4 Word-level timestamps
+## 1.4 Word-level timestamps (available, but not used here)
 
 ```python
 segments, info = model.transcribe("audio.mp3", word_timestamps=True)
@@ -61,7 +61,7 @@ for segment in segments:
         print(f"{word.word} [{word.start:.2f}s - {word.end:.2f}s]")
 ```
 
-Each segment (a sentence or phrase) contains word-level timing data. This is what enables sliding-window chunking (Part 2) to split a segment at a precise word boundary when a chunk reaches its target size, rather than cutting mid-sentence arbitrarily.
+`word_timestamps=True` gives per-word timing. RAGNova's `AudioIngestor` does **not** turn it on: it works from segment-level timestamps only, and when it has to split a segment to hit the chunk target it *estimates* the split time by proportion (see §2.4). Word-level timing would make those splits exact, at the cost of slower transcription, which makes it a reasonable future improvement rather than something the current code relies on.
 
 ---
 
@@ -73,15 +73,15 @@ A 10-minute recording transcribed in one piece would produce a single, multi-par
 
 ## 2.2 Target chunk size in words, not seconds
 
-`settings.AUDIO_CHUNK_TARGET_WORDS = 300` (same target as document chunks, Chapter 6's `CHUNK_SIZE_WORDS`). The ingestion pipeline buffers Whisper segments until the accumulated word count reaches 300, then emits a chunk and starts a new buffer. This produces semantically-coherent chunks (not split mid-sentence unless absolutely necessary) of roughly uniform size (better retrieval ranking than wildly variable chunk lengths).
+Audio chunks target `settings.CHUNK_SIZE_WORDS` (300) words, the very same setting Chapter 6's document chunker uses. (`ingestion.py` also looks for an optional `AUDIO_CHUNK_TARGET_WORDS` via `getattr`, but no such field exists on `Settings`, so in practice audio simply inherits the document setting.) The ingestion pipeline buffers Whisper segments until the accumulated word count reaches 300, then emits a chunk and starts a new buffer. This produces semantically-coherent chunks (not split mid-sentence unless absolutely necessary) of roughly uniform size (better retrieval ranking than wildly variable chunk lengths).
 
 ## 2.3 Overlap for context continuity
 
-`settings.AUDIO_CHUNK_OVERLAP_WORDS = 50` — the last 50 words of chunk N are repeated as the first 50 words of chunk N+1. Same rationale as Chapter 6's document overlap: a fact mentioned once, right at a chunk boundary, appears in two chunks' context rather than being unretrievable if it's on the "wrong" side of the split.
+`settings.CHUNK_OVERLAP_WORDS` (50) — the last 50 words of chunk N are repeated as the first 50 words of chunk N+1. Same rationale as Chapter 6's document overlap: a fact mentioned once, right at a chunk boundary, appears in two chunks' context rather than being unretrievable if it's on the "wrong" side of the split.
 
 ## 2.4 Splitting mid-segment when necessary
 
-If a single Whisper segment contains 400 words and the current buffer already has 250 words, adding the entire segment would overshoot the 300-word target by 350 words. The chunker splits the segment at the 50-word mark (using word-level timestamps to determine the split time), emits the first 50 words in the current chunk, and carries the remaining 350 words into the next chunk's buffer. This is `_split_segment()` in `src/pipelines/audio/ingestion.py` — the exact logic that makes "target 300 words" a real target, not just an average.
+If a single Whisper segment contains 400 words and the current buffer already has 250 words, adding the entire segment would overshoot the 300-word target by 350 words. The chunker splits the segment at the 50-word mark (estimating the split time from the split point's position within the segment's text, since there is no per-word timing, §1.4), emits the first 50 words in the current chunk, and carries the remaining 350 words into the next chunk's buffer. This is `_split_segment()` in `src/pipelines/audio/ingestion.py` — the exact logic that makes "target 300 words" a real target, not just an average.
 
 ---
 
@@ -110,10 +110,10 @@ The same `embed_texts()` function Chapter 7 built for documents. Audio transcrip
 A document chunk cites `(source, page)` — e.g., `data/documents/notice.pdf, page 2`. An audio chunk cites `(source, start_s, end_s)` — e.g., `data/audio/talk.wav, 12s–20s`. Chapter 10's `format_provenance()` already handles both modalities:
 
 ```python
+# simplified from src/pipelines/rag/prompt.py (the real function also handles images)
 if chunk.modality == "audio":
-    return f"{chunk.source}, {int(chunk.start_s)}s–{int(chunk.end_s)}s"
-else:
-    return f"{chunk.source}, page {chunk.page}"
+    return f"{chunk.source}, {chunk.start_s:.0f}s–{chunk.end_s:.0f}s"
+return f"{chunk.source}, page {chunk.page}"  # documents
 ```
 
 The user sees "listen starting at 12 seconds" — a directly actionable citation, same principle as "page 2."
@@ -132,7 +132,7 @@ src/pipelines/audio/
 ├── index.py           ← index_audio_file(), index_audio_directory()
 ```
 
-Kept under `pipelines/audio/` (not `core/`) for the same reason images are under `pipelines/images/` — this is Track C's domain code. Only the ChromaDB write primitive (`add_chunks()`) and text embedding (`embed_texts()`) are shared with other tracks.
+Kept under `pipelines/audio/` (not `core/`) for the same reason images are under `pipelines/images/` — this is Track B's domain code. Only the ChromaDB write primitive (`add_chunks()`) and text embedding (`embed_texts()`) are shared with other tracks.
 
 ## 4.2 Binding to `settings.TEXT_EMBEDDING_MODEL`
 
@@ -140,11 +140,13 @@ Kept under `pipelines/audio/` (not `core/`) for the same reason images are under
 
 ## 4.3 Target chunk size — 300 words, matching documents
 
-`AUDIO_CHUNK_TARGET_WORDS = 300` matches `CHUNK_SIZE_WORDS = 300` (Chapter 6). Same reasoning: too small (e.g., 50 words) and retrieval is noisy (many short, low-context chunks per query); too large (e.g., 1000 words) and retrieval is coarse (one question about a 2-second fact retrieves 5 minutes of transcript). 300 is the starting point Chapter 6 already justified — revisit if audio-specific evaluation (gold questions about spoken content) shows a different optimum.
+Audio has no chunk-size setting of its own. It reads `settings.CHUNK_SIZE_WORDS = 300` (Chapter 6), so documents and transcripts always chunk the same way. Same reasoning: too small (e.g., 50 words) and retrieval is noisy (many short, low-context chunks per query); too large (e.g., 1000 words) and retrieval is coarse (one question about a 2-second fact retrieves 5 minutes of transcript). 300 is the starting point Chapter 6 already justified — revisit if audio-specific evaluation (gold questions about spoken content) shows a different optimum.
 
 ## 4.4 Retry strategy with exponential backoff
 
-`AudioIngestor._transcribe_with_retry()` wraps `model.transcribe()` in a 3-attempt loop with exponential backoff (1s, 2s, 4s). Whisper transcription on CPU can occasionally timeout or fail on specific audio formats — retrying with a brief delay succeeds more often than raising immediately. Logged clearly (attempt X/3 failed, retrying in Ns) so transient failures are visible, not silent.
+`AudioIngestor._transcribe_with_retry()` wraps `model.transcribe()` in a 3-attempt loop with exponential backoff: after the first failure it waits 1 s, after the second 2 s, and a third failure is re-raised to the caller. Whisper transcription on CPU can occasionally fail on specific audio files, and retrying after a brief pause succeeds more often than giving up immediately.
+
+One subtlety worth knowing: `transcribe()` is lazy, so a failure can happen *after* some segments were already handed to the chunker, and a retry starts again from the beginning of the file. The loop therefore remembers the start time of the last segment it yielded (`last_yielded_start`) and skips anything at or before it; otherwise the repeated segments would be duplicated into the transcript. This was a real bug in an earlier version of this file (PR #5), and `test_real_audio_ingestor_does_not_duplicate_segments_when_a_retry_restarts_transcription` now guards it. Retries are currently silent; a `logger.warning` per failed attempt would be a worthwhile small improvement.
 
 ---
 
@@ -170,39 +172,42 @@ Key details:
 
 ## 5.4 Test the pipeline with real audio
 
+`data/audio/` ships four short spoken clips (see `data/README.md`). Index one into a throwaway Chroma directory and search for what it says:
+
 ```bash
 python -c "
+import tempfile
 from pathlib import Path
+from src.core.vector_store import get_client
 from src.pipelines.audio.index import index_audio_file
 from src.pipelines.documents.search import search_text
-from src.core.vector_store import get_client
+from src.pipelines.rag.prompt import format_provenance
 
-# Create test audio (requires ffmpeg or a real .mp3 file)
-# For this example, assume 'data/audio/sample.mp3' exists
+with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+    client = get_client(persist_dir=Path(tmp) / 'chroma')
+    count = index_audio_file('data/audio/hod_project_announcement.wav', client=client)
+    print(f'Indexed {count} chunk(s) from audio')
 
-client = get_client()
-count = index_audio_file('data/audio/sample.mp3', client=client)
-print(f'Indexed {count} chunks from audio')
-
-# Search
-results = search_text('what is the deadline', client=client, top_k=3)
-for r in results:
-    if r.modality == 'audio':
-        print(f'{r.source}, {int(r.start_s)}s–{int(r.end_s)}s: {r.text[:60]}...')
+    for hit in search_text('how many marks does the prototype carry', top_k=3, client=client):
+        print(f'{format_provenance(hit)}  score={hit.score:.3f}')
+        print('   ', hit.text[:90].replace(chr(10), ' '), '...')
 "
 ```
 
-**Expected output:**
+**Real captured output** (Windows, Python 3.14, real faster-whisper `base`; the first run also downloads the model):
 ```
-Indexed 4 chunks from audio
-data/audio/sample.mp3, 12s–34s: The project deadline is March 15th. Make sure to submit...
+Indexed 1 chunk(s) from audio
+data/audio/hod_project_announcement.wav, 0s–32s  score=0.357
+    Good morning final year students. This is an important announcement regarding your B.Tex C ...
 ```
+
+The whole 32-second clip became a single chunk (it is far below the 300-word target), so its citation is the clip's full time range. Notice the transcript says "B.Tex C" where the clip's script says "B.Tech CSE-AIML": Whisper's `base` model makes small slips, which is one reason retrieval quality is measured rather than assumed.
 
 Audio chunks are searchable alongside documents, using the same text query.
 
 ## 5.5 Run `tests/test_audio_pipeline.py`
 
-Extracted from `test_integration.py` (Part 5 of the original file, lines 305–368):
+Moved out of `test_integration.py` (its old Part 5), plus three new tests that run the **real** `AudioIngestor` with only Whisper faked. The older tests replace the whole ingestor with a `FakeIngestor`, so they never execute `ingestion.py` itself; the new ones do, and each fails if one of the bugs this file went through during review comes back (`embedding_model=None`, an unsupported `metadata=` argument to `Chunk`, chunk ids that change with Whisper's timestamp jitter, segments duplicated by a retry).
 
 ```bash
 pytest tests/test_audio_pipeline.py -v
@@ -210,11 +215,14 @@ pytest tests/test_audio_pipeline.py -v
 
 **Real captured output:**
 ```
-tests/test_audio_pipeline.py::test_audio_is_indexed_into_text_index PASSED
-tests/test_audio_pipeline.py::test_audio_chunks_have_timestamps PASSED
-tests/test_audio_pipeline.py::test_audio_chunks_validate_against_contract PASSED
-tests/test_audio_pipeline.py::test_transcribe_query_joins_segments PASSED
-======================== 4 passed in 8.21s =========================
+tests/test_audio_pipeline.py::test_audio_is_indexed_into_text_index_and_cited_by_timestamp PASSED [ 16%]
+tests/test_audio_pipeline.py::test_audio_chunks_that_break_the_contract_are_refused PASSED [ 33%]
+tests/test_audio_pipeline.py::test_transcribe_query_joins_segments PASSED [ 50%]
+tests/test_audio_pipeline.py::test_real_audio_ingestor_chunks_satisfy_the_contract PASSED [ 66%]
+tests/test_audio_pipeline.py::test_real_audio_chunk_ids_ignore_timestamp_jitter_and_differ_per_file PASSED [ 83%]
+tests/test_audio_pipeline.py::test_real_audio_ingestor_does_not_duplicate_segments_when_a_retry_restarts_transcription PASSED [100%]
+
+======================== 6 passed, 1 warning in 12.47s =========================
 ```
 
 ## 5.6 Git hygiene for today
@@ -250,7 +258,7 @@ tests/test_audio_pipeline.py::test_transcribe_query_joins_segments PASSED
 2. What does `vad_filter=True` do, and why does it matter? → §1.2; enables voice activity detection, skips silence and background noise, prevents empty/hallucinated chunks.
 3. Why chunk audio at all instead of embedding the entire transcript? → §2.1; a 10-minute transcript in one chunk loses granularity — every query retrieves the whole thing, burying the relevant sentence.
 4. Why is chunk size measured in words (300) instead of seconds (e.g., 30s)? → §2.2; spoken word rate varies — 30s of fast speech could be 150 words, 30s of slow speech 75 words. Word count is more uniform.
-5. What does `AUDIO_CHUNK_OVERLAP_WORDS = 50` prevent? → §2.3; a fact mentioned once at a chunk boundary wouldn't be retrievable if it's split across two chunks with no overlap.
+5. What does `CHUNK_OVERLAP_WORDS = 50` prevent (for audio, as for documents)? → §2.3; a fact mentioned once at a chunk boundary wouldn't be retrievable if it's split across two chunks with no overlap.
 6. What is `_split_segment()` and why does it exist? → §2.4; splits a long Whisper segment mid-way (at a word boundary) so the target 300-word chunk size is a real target, not just an average.
 7. Why did ADR-005 choose transcription over CLAP (native audio embeddings)? → §3.1; LLMs need text for context (not audio clips), and transcripts are searchable by the same MiniLM model as documents.
 8. How are audio transcripts embedded? → §3.2; the same `embed_texts()` / MiniLM model as documents — they're just text with timestamps.
@@ -264,7 +272,7 @@ tests/test_audio_pipeline.py::test_transcribe_query_joins_segments PASSED
 | `ModuleNotFoundError: No module named 'faster_whisper'` | `faster-whisper` not installed | `pip install -r requirements.txt` |
 | Transcription is very slow (>1 minute for a 2-minute audio file) | Using a large model (`large-v2`) or `device="cpu"` with no optimization | Confirm `WhisperModel("base", device="cpu", compute_type="int8")` — `base` is the default, `large` is much slower |
 | Empty audio chunks (no text) even though the audio has speech | VAD too aggressive, or audio quality too poor | Try `vad_filter=False` temporarily to confirm; if that works, adjust `vad_parameters` (lower `min_silence_duration_ms`) |
-| Audio chunks have `embedding_model=None`, contract validation fails | `AudioIngestor` not reading `settings.TEXT_EMBEDDING_MODEL` | Confirm `ingestion.py` line ~362: `emb_model = getattr(settings, "DEFAULT_TEXT_EMBEDDING_MODEL", ...)` |
+| Audio chunks have `embedding_model=None`, contract validation fails | `AudioIngestor._build_chunk()` isn't resolving the model name from `Settings`. The real field is `TEXT_EMBEDDING_MODEL`; an earlier version of this file looked up two names that don't exist (`DEFAULT_TEXT_EMBEDDING_MODEL`, `EMBEDDING_MODEL`) and got `None` on every chunk | Confirm `_build_chunk()` reads `settings.TEXT_EMBEDDING_MODEL` first. `test_real_audio_ingestor_chunks_satisfy_the_contract` exists to catch exactly this |
 | Whisper detects the wrong language | Audio has background music or heavy accents | Check `info.language` and `info.language_probability` — if probability <0.8, the audio may be unclear. Pre-process to remove background noise, or force language: `model.transcribe(..., language="en")` |
 | `FileNotFoundError` when indexing audio files | Audio file path incorrect or not in a supported format | Confirm path exists and extension is in `SUPPORTED_EXTENSIONS` (`.mp3`, `.wav`, `.m4a`, etc.) |
 
@@ -280,4 +288,4 @@ tests/test_audio_pipeline.py::test_transcribe_query_joins_segments PASSED
 
 ---
 
-**Next:** Chapter 10 (already completed) — RAG Core: Retrieval + Generation, where the three modalities (documents, images, audio) are merged at query time, ranked by RRF (ADR-007), and passed to the LLM for grounded, cited answers.
+**Next:** Chapter 10 (already completed) — RAG Core: Retrieval + Generation + Citations, built on `text_index`, which as of this chapter holds both document chunks and audio transcripts. Chapter 12 later adds `image_index` to retrieval and merges the lists by rank (ADR-007).

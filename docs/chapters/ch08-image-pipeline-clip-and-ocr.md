@@ -33,6 +33,7 @@ Chapter 7's MiniLM model (`all-MiniLM-L6-v2`) embeds *text only* — sentences �
 
 ```python
 import open_clip
+import torch
 from PIL import Image
 
 model, _, preprocess = open_clip.create_model_and_transforms(
@@ -62,7 +63,7 @@ L2-normalizing the output vectors (dividing by their length) makes cosine simila
 
 ## 1.4 Model selection — why `"ViT-B-32/laion2b_s34b_b79k"`
 
-ViT-B-32 is OpenCLIP's base Vision Transformer (86M parameters), pretrained on LAION-2B — a web-scale image-text dataset. It balances quality and inference speed for CPU-only deployment (Chapter 5's 8GB RAM budget). Larger models (`ViT-L-14`) would give better retrieval but exceed memory constraints. `laion2b_s34b_b79k` is the specific checkpoint ID; different pretraining datasets are available for the same architecture.
+ViT-B-32 is OpenCLIP's base Vision Transformer (about 150M parameters across its image and text encoders), pretrained on LAION-2B — a web-scale image-text dataset. It balances quality and inference speed for CPU-only deployment (Chapter 5's 8GB RAM budget). Larger models (`ViT-L-14`) would give better retrieval but exceed memory constraints. `laion2b_s34b_b79k` is the specific checkpoint ID; different pretraining datasets are available for the same architecture.
 
 ---
 
@@ -150,13 +151,21 @@ Kept under `pipelines/images/` (not `core/`) because this is Track B's domain-sp
 **The fix:** `ImageIngestionConfig` now defaults to `settings.CLIP_MODEL` and `settings.CLIP_PRETRAINED`:
 
 ```python
-from src.core.config import settings
+def _get_clip_model() -> str:
+    from src.core.config import settings
+    return settings.CLIP_MODEL
+
+def _get_clip_pretrained() -> str:
+    from src.core.config import settings
+    return settings.CLIP_PRETRAINED
 
 @dataclass
 class ImageIngestionConfig:
-    model_name: str = field(default_factory=lambda: settings.CLIP_MODEL)
-    pretrained: str = field(default_factory=lambda: settings.CLIP_PRETRAINED)
+    model_name: str = field(default_factory=_get_clip_model)
+    pretrained: str = field(default_factory=_get_clip_pretrained)
 ```
+
+The now-unused `DEFAULT_MODEL_NAME` / `DEFAULT_PRETRAINED` constants in `embedding.py` were deleted for the same reason: a second hardcoded copy of the model name is exactly the drift being fixed.
 
 One source of truth, same discipline as audio (`settings.TEXT_EMBEDDING_MODEL`) and generation (`settings.OLLAMA_MODEL`).
 
@@ -203,41 +212,46 @@ tesseract 5.3.0
 
 ## 5.6 Test the pipeline with real images
 
+Use a throwaway folder and a throwaway Chroma directory, not `data/images/` or the real `chroma_db/`, which hold the project's real corpus and index:
+
 ```bash
 python -c "
+import tempfile
 from pathlib import Path
 from PIL import Image
+from src.core.vector_store import get_client
 from src.pipelines.images.index import index_images_directory
 from src.pipelines.images.search import search_images
-from src.core.vector_store import get_client
 
-# Create test images
-Path('data/images').mkdir(parents=True, exist_ok=True)
-Image.new('RGB', (100, 100), (255, 0, 0)).save('data/images/red.png')
-Image.new('RGB', (100, 100), (0, 0, 255)).save('data/images/blue.png')
+# ignore_cleanup_errors: on Windows, ChromaDB can still hold its files open when the folder is deleted
+with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
+    images = Path(tmp) / 'images'
+    images.mkdir()
+    Image.new('RGB', (100, 100), (255, 0, 0)).save(images / 'red.png')
+    Image.new('RGB', (100, 100), (0, 0, 255)).save(images / 'blue.png')
 
-# Index
-client = get_client()
-count = index_images_directory('data/images', client=client)
-print(f'Indexed {count} images')
+    client = get_client(persist_dir=Path(tmp) / 'chroma')
+    print('Indexed', index_images_directory(images, client=client), 'images')
 
-# Search
-results = search_images(query_text='red', client=client, top_k=2)
-print(f'Top result: {results[0].source} (score={results[0].score:.3f})')
+    for hit in search_images(query_text='a red square', client=client, top_k=2):
+        print(f'{Path(hit.source).name}  score={hit.score:.3f}')
 "
 ```
 
-**Real captured output:**
+**Real captured output** (Windows, Python 3.14, real OpenCLIP `ViT-B-32`; your exact scores may differ slightly):
 ```
 Indexed 2 images
-Top result: data/images/red.png (score=0.847)
+red.png  score=0.275
+blue.png  score=0.235
 ```
 
-Cross-modal search works — text query "red" correctly retrieves the red image first.
+Cross-modal search works: the text query "a red square" ranks the red image first.
+
+**Don't expect scores near 1.0.** CLIP's text-to-image cosine similarities sit around 0.2-0.35 even for a correct match. This is the *modality gap* (ADR-003, ADR-007), and it is why Chapter 12 gives images their own, lower relevance floor (ADR-010) and merges text and image results by rank, never by raw score.
 
 ## 5.7 Run `tests/test_image_pipeline.py`
 
-Extracted from `test_integration.py` (Part 4 of the original file, lines 249–303):
+Moved out of `test_integration.py` (its old Part 4), plus one new test, `test_image_config_uses_shared_clip_settings`, that locks in the §4.2 fix:
 
 ```bash
 pytest tests/test_image_pipeline.py -v
@@ -245,11 +259,12 @@ pytest tests/test_image_pipeline.py -v
 
 **Real captured output:**
 ```
-tests/test_image_pipeline.py::test_images_are_indexed_with_portable_sources PASSED
-tests/test_image_pipeline.py::test_image_search_on_empty_index_returns_nothing PASSED
-tests/test_image_pipeline.py::test_image_search_by_image PASSED
-tests/test_image_pipeline.py::test_image_search_by_text PASSED
-======================== 4 passed in 12.34s =========================
+tests/test_image_pipeline.py::test_image_config_uses_shared_clip_settings PASSED [ 25%]
+tests/test_image_pipeline.py::test_images_are_indexed_with_portable_sources_and_found_by_text PASSED [ 50%]
+tests/test_image_pipeline.py::test_image_search_on_an_empty_index_returns_nothing_without_loading_clip PASSED [ 75%]
+tests/test_image_pipeline.py::test_image_search_by_image PASSED          [100%]
+
+======================== 4 passed, 1 warning in 9.39s =========================
 ```
 
 ## 5.8 Git hygiene for today
@@ -296,7 +311,7 @@ tests/test_image_pipeline.py::test_image_search_by_text PASSED
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `TesseractNotFoundError: tesseract is not installed` | Tesseract binary not installed or not in PATH | Install Tesseract (§2.1), or set `TESSERACT_CMD` in `.env` to the full path |
+| Every image comes back with empty OCR text, and the log warns that Tesseract isn't available | Tesseract binary not installed or not on PATH. `TesseractOCREngine` degrades (logs a warning, returns empty text) rather than raising | Install Tesseract (§2.1), or set `TESSERACT_CMD` in `.env` to the full path |
 | OpenCLIP download is slow or times out | Hugging Face rate-limiting anonymous downloads | Wait it out; only worth a free Hugging Face account if repeated across the team |
 | `IndexError: list index out of range` in `embed_batch()` | Passing an empty image list | Guard with `if not images: return []` — already in `embedding.py` |
 | Images indexed with absolute paths despite the fix | `index.py` not imported, or an old version cached | Confirm `_relative_to_cwd()` is in `index.py` and the file was saved; `python -Bc "..."` to bypass bytecode cache |
@@ -315,4 +330,4 @@ tests/test_image_pipeline.py::test_image_search_by_text PASSED
 
 ---
 
-**Next:** Chapter 9 — Audio Pipeline (Whisper transcription), where Track C builds the audio ingestion path — transcribing spoken content into text chunks with timestamp ranges, embedded by the same MiniLM model as documents, and written into `text_index` alongside PDFs and DOCX files.
+**Next:** Chapter 9 — Audio Pipeline (Whisper transcription), where Track B builds the audio ingestion path — transcribing spoken content into text chunks with timestamp ranges, embedded by the same MiniLM model as documents, and written into `text_index` alongside PDFs and DOCX files.
