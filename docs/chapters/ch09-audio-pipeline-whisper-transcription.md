@@ -194,10 +194,10 @@ with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
 "
 ```
 
-**Real captured output** (Windows, Python 3.14, real faster-whisper `base`; the first run also downloads the model):
+**Real captured output** (Windows, Python 3.13, real faster-whisper `base`; the first run also downloads the model):
 ```
 Indexed 1 chunk(s) from audio
-data/audio/hod_project_announcement.wav, 0s–32s  score=0.357
+data/audio/hod_project_announcement.wav, 0s–33s  score=0.288
     Good morning final year students. This is an important announcement regarding your B.Tex C ...
 ```
 
