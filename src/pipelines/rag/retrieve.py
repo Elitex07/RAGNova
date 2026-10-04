@@ -70,14 +70,18 @@ def retrieve(
 
     - text_index is always searched with `query` and gated on
       MIN_RELEVANCE_SCORE (exactly Chapter 10's behaviour).
-    - With `include_images=True`, image_index is searched with CLIP —
-      by `query_image` if the user uploaded one (image -> image), else by
-      the question text (text -> image) — and gated on
+    - image_index is searched with CLIP whenever `include_images=True`
+      *or* a `query_image` is given (passing an image always means
+      "search images too," even if the caller forgot the flag) — by
+      `query_image` if the user uploaded one (image -> image), else by
+      the question text (text -> image, even if that text is blank —
+      unlike text_index, an image search with nothing typed is still a
+      meaningful "show me relevant images" action) — and gated on
       MIN_IMAGE_RELEVANCE_SCORE.
 
-    With include_images=False this returns exactly what Chapter 10's
-    answer_query() used to compute inline, so the CLI and every existing
-    test behave identically.
+    With include_images=False and query_image=None, this returns exactly
+    what Chapter 10's answer_query() used to compute inline, so the CLI
+    and every existing test behave identically.
 
     `image_search` defaults to search_images(); tests inject a fake so
     they don't need CLIP's weights.
@@ -92,7 +96,19 @@ def retrieve(
         text_hits = filter_by_floor(
             search_text(query, top_k=top_k, client=client), settings.MIN_RELEVANCE_SCORE
         )
-    if not include_images:
+
+    # query_image implies image search even if the caller forgot
+    # include_images=True — a passed-in image should never be silently
+    # dropped. include_images=True with no query_image still means
+    # "search images too, using the question text," even when that text
+    # is blank (test_retrieve_skips_text_search_for_an_empty_question
+    # deliberately locks this in: an explicit include_images=True with no
+    # image still runs the image branch on whatever query text exists,
+    # blank or not — unlike the text branch, which is worth skipping
+    # outright on blank input, "search with nothing typed" is still a
+    # meaningful action for images).
+    search_images_too = include_images or query_image is not None
+    if not search_images_too:
         return text_hits
 
     if image_search is None:
