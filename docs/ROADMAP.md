@@ -140,8 +140,19 @@ With 2 members: merge Track C into A and B (each owns half the UI).
       corpus (6 chunks), first real semantic search, Recall@5=1.00/MRR=1.00 on 3 gold questions
       (see Ch7 §3.3 for why that's promising but not yet strong evidence); two real bugs found
       and fixed during verification — see Ch7's framing note and §2.3/§5.3)
-- [ ] Ch 8 — Image Pipeline
-- [ ] Ch 9 — Audio Pipeline
+- [x] Ch 8 — Image Pipeline (docs + real, tested code written — src/pipelines/images/{models,ocr,embedding,
+      ingest,index,search,cli}.py; Tesseract OCR + OpenCLIP ViT-B/32 into `image_index`, text->image and
+      image->image `search_images()`, portable relative sources, `ImageIngestionConfig` bound to
+      `settings.CLIP_MODEL`, 15-image corpus in data/images/, tests/test_image_pipeline.py (5 tests), teaching
+      doc ch08. The image CLI now indexes into `image_index` and refuses a CLIP model that differs from the
+      settings (PR #8))
+- [x] Ch 9 — Audio Pipeline (docs + real, tested code written — src/pipelines/audio/{ingestion,index,
+      transcribe}.py; faster-whisper `base` transcription with VAD, word-count sliding-window chunks carrying
+      timestamp ranges, written into `text_index` (ADR-005), voice-query `transcribe_query()`, 4 spoken clips
+      in data/audio/, tests/test_audio_pipeline.py (6 tests, 3 of them run the real `AudioIngestor` with only
+      Whisper faked), teaching doc ch09. Known, disclosed limitation: storage only upserts, so re-ingesting a
+      file that now yields fewer chunks leaves its old trailing chunks behind; documents and images share it,
+      so the fix belongs in the storage layer, not here)
 - [x] Ch 10 — RAG Core (docs + real, tested code written — src/core/llm.py, src/pipelines/rag/{prompt,answer}.py,
       scripts/{ask,evaluate_answers}.py, tests/test_rag_core.py, ADR-009; real end-to-end answers with
       citations against the Ch6/7 text_index via real Ollama (llama3.2:3b) — see Ch10 §5 for captured
@@ -152,12 +163,16 @@ With 2 members: merge Track C into A and B (each owns half the UI).
 - [ ] Ch 11 — UI (docs + real, tested code written for the non-drawing half — streaming answers
       (`generate_stream()`, `stream_answer()`), per-citation display rules (`src/ui/citations.py`),
       uploads / voice / image-query plumbing (`src/ui/backend.py`, `transcribe_query()`,
-      `index_document_file()`). The page itself is Task 4's scaffold in PR #4; still open: merge PR #4,
-      then wire its `process_query()` TODO as Ch11 §5.6 shows)
+      `index_document_file()`). The page itself, `src/app.py` (PR #4, merged), is still the scaffold:
+      `process_query()` returns canned keyword-matched answers with fake citations. Still open: wire it to the
+      real backend as Ch11 §5.6 shows)
 - [ ] Ch 12 — Integration & Feedback (docs + real, tested code written — image and audio write paths into
       ChromaDB, `search_images()`, rank-merged `retrieve()` across both collections (ADR-007), per-collection
       relevance floors (ADR-010), `build_index.py` indexing all three folders, `tests/test_integration.py`
       (28 passing, with fakes for the models), feedback log + `summarize_feedback.py` + `docs/feedback-log.md`.
-      Two real seam bugs found (Ch12 §5.3). Still open: outside-tester sessions, measuring the image floor
-      and cross-modal Recall@5 with real CLIP, the ablations, the offline demo — Ch12 §7.3)
+      Two real seam bugs found (Ch12 §5.3). Measured since: cross-modal Recall@5 = 1.00 on 8 questions
+      (`scripts/evaluate_cross_modal.py`, 2026-09-28) and text Recall@5 = 1.00 / MRR = 0.81 on 13 questions
+      (2026-09-29), see data/README.md's Results log. Still open: outside-tester sessions, deciding the image
+      floor (measured negative-control scores overlap the positives, see ADR-010), the ablations, the offline
+      demo — Ch12 §7.3)
 - [ ] Ch 13 — Mid-Term Report
