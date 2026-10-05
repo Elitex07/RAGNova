@@ -47,31 +47,14 @@ def index_image_files(paths: list[str | Path], client=None, pipeline=None) -> in
     return len(chunks)
 
 
-def index_images_directory(
-    directory: str | Path,
-    client=None,
-    pipeline=None,
-    recursive: bool = True,
-) -> int:
-    """Index every supported image under `directory`.
-
-    Parameters
-    ----------
-    directory:
-        Root directory to search.
-    client:
-        ChromaDB client instance.
-    pipeline:
-        ImageIngestionPipeline instance.
-    recursive:
-        Whether to search subdirectories recursively (default True).
-    """
+def index_images_directory(directory: str | Path, client=None, pipeline=None) -> int:
+    """Index every supported image directly under `directory` (flat, not
+    recursive — same reason index_documents_directory() gives)."""
     directory = Path(directory)
     if not directory.is_dir():
         return 0
-    pattern = "**/*" if recursive else "*"
     paths = [
-        p for p in sorted(directory.glob(pattern))
+        p for p in sorted(directory.iterdir())
         if p.is_file() and p.suffix.lower() in SUPPORTED_EXTENSIONS
     ]
     return index_image_files(paths, client=client, pipeline=pipeline)

@@ -9,7 +9,6 @@ import sys
 from pathlib import Path
 
 from src.pipelines.images import ImageIngestionPipeline
-from src.pipelines.images.index import index_image_files, index_images_directory
 from src.pipelines.images.models import ImageIngestionConfig
 
 # The corrupt-image error message below (and any other message containing
@@ -26,7 +25,7 @@ if hasattr(sys.stderr, "reconfigure"):
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Ingest image(s) with Tesseract OCR + OpenCLIP embeddings and index them into image_index."
+        description="Ingest image(s) with Tesseract OCR + OpenCLIP embeddings producing one Chunk per image."
     )
     parser.add_argument(
         "input_path",
@@ -38,7 +37,7 @@ def main() -> None:
         "-o",
         type=str,
         default=None,
-        help="Optional path to write indexing summary JSON (e.g. {\"indexed\": count}) rather than chunk data.",
+        help="Optional path to write output JSON chunks.",
     )
     parser.add_argument(
         "--model",
@@ -83,12 +82,6 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    if args.no_embedding:
-        sys.stderr.write(
-            "Error: Cannot index images into image_index with --no-embedding (embeddings are required for retrieval).\n"
-        )
-        sys.exit(1)
-
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -111,33 +104,33 @@ def main() -> None:
         sys.exit(1)
 
     if target.is_dir():
-        # index_images_directory() calls the pipeline internally and hands
-        # every ImageChunk with a non-None embedding to add_chunks() —
-        # skipping unreadable files with a logged warning, same policy as
-        # before.
-        count = index_images_directory(target, pipeline=pipeline)
+        # ingest_directory()/ingest_batch() already skip an individual
+        # unreadable file with a logged warning rather than raising — a
+        # single corrupt image in a real directory scan doesn't need a
+        # try/except here.
+        chunks = pipeline.ingest_directory(target)
     else:
-        # A single explicitly-named file — wrap in a list for index_image_files().
-        # Validate that the file can be loaded so corrupt/non-image files are
-        # caught and reported cleanly through the error handler instead of
-        # silently swallowed by ingest_batch's skip policy.
+        # A single explicitly-named file, unlike a directory scan, is
+        # exactly the case verified directly (Chapter 7 /verify pass): a
+        # text file renamed .png raised a raw PIL.UnidentifiedImageError
+        # traceback here, unlike the clean "Error: ..." message the
+        # missing-path check above already gives. Same clean treatment now.
         try:
-            pipeline._load_image(target)
-            count = index_image_files([target], pipeline=pipeline)
+            chunks = [pipeline.ingest_image(target)]
         except ValueError as exc:
             sys.stderr.write(f"Error: {exc}\n")
             sys.exit(1)
 
-    summary = {"indexed": count}
+    chunk_dicts = [chunk.to_dict() for chunk in chunks]
 
     if args.output:
         out_path = Path(args.output)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         with open(out_path, "w", encoding="utf-8") as f:
-            json.dump(summary, f, indent=2)
-        print(f"Indexed {count} image(s) into image_index -> summary saved to {out_path}")
+            json.dump(chunk_dicts, f, indent=2, ensure_ascii=False)
+        print(f"Ingested {len(chunks)} image(s) -> saved to {out_path}")
     else:
-        print(f"Indexed {count} image(s) into image_index.")
+        print(json.dumps(chunk_dicts, indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":
