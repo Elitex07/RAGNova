@@ -2,7 +2,8 @@
 Run the full gold-set (every T and N row of data/gold_set.json) through the real
 RAG core, and print a side-by-side comparison for a human to rate.
 
-Run with:  python scripts/evaluate_answers.py
+Run with:  python scripts/evaluate_answers.py            (text only, the Chapter 10 behaviour)
+           python scripts/evaluate_answers.py --images   (also search images, ADR-010/011)
 (after scripts/build_index.py, with `ollama serve` running)
 
 docs/ROADMAP.md's own stated Ch10 evaluation bar is "10 test questions,
@@ -17,6 +18,7 @@ scripts/evaluate_retrieval.py: the script measures/formats, a human judges.
 
 from __future__ import annotations
 
+import argparse
 import sys
 from datetime import date
 from pathlib import Path
@@ -44,10 +46,10 @@ GOLD_QUESTIONS = [
 ]
 
 
-def run() -> list[dict]:
+def run(include_images: bool = False) -> list[dict]:
     rows = []
     for item in GOLD_QUESTIONS:
-        result = answer_query(item["question"])
+        result = answer_query(item["question"], include_images=include_images)
         rows.append({**item, "result": result})
     return rows
 
@@ -73,8 +75,13 @@ def print_report(rows: list[dict]) -> None:
 
 
 def main() -> None:
-    print(f"Running {len(GOLD_QUESTIONS)} gold questions through answer_query()...")
-    rows = run()
+    parser = argparse.ArgumentParser(description="Run the gold questions through the real RAG core.")
+    parser.add_argument("--images", action="store_true",
+                        help="also search image_index (include_images=True); default is text only")
+    args = parser.parse_args()
+    mode = "text + images (include_images=True)" if args.images else "text only"
+    print(f"Running {len(GOLD_QUESTIONS)} gold questions through answer_query(), {mode}...")
+    rows = run(include_images=args.images)
     print_report(rows)
 
     print(f"\n{'=' * 70}")

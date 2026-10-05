@@ -159,7 +159,8 @@ With 2 members: merge Track C into A and B (each owns half the UI).
       output. Deliberately text-only for now: image_index/audio have no write path into ChromaDB yet
       (Ch8/9), so ADR-007's cross-modal merge has nothing to merge with — the retrieval interface is
       shaped so wiring in a second collection later is additive, not a redesign. Answer-quality check run
-      against 7 gold questions (T1-T5, N1-N2), self-rated 4.71/5 average — see data/README.md's Results log)
+      against 7 gold questions (T1-T5, N1-N2), self-rated 4.71/5 average, then re-run on the grown corpus
+      with 29 questions (self-rated 4.21/5; transcripts in data/eval/) — see data/README.md's Results log)
 - [ ] Ch 11 — UI (docs + real, tested code written for the non-drawing half — streaming answers
       (`generate_stream()`, `stream_answer()`), per-citation display rules (`src/ui/citations.py`),
       uploads / voice / image-query plumbing (`src/ui/backend.py`, `transcribe_query()`,
