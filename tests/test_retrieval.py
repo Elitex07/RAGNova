@@ -15,6 +15,7 @@ would be a genuinely bad test suite.
 
 import math
 import sys
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -165,9 +166,17 @@ def indexed_client(tmp_path_factory):
     return client
 
 
-def test_index_documents_directory_indexes_every_chunk_from_all_three_files(indexed_client):
+def test_index_documents_directory_indexes_every_chunk_from_all_three_starter_files(indexed_client):
+    # The corpus grew past the three Chapter 6 starter files (the downloaded
+    # study materials, data/SOURCES.md), so the collection's total is no
+    # longer 6 — but each starter file must still contribute exactly the
+    # chunks it always did, and the downloaded files must be indexed too.
     collection = get_text_collection(indexed_client)
-    assert collection.count() == 6  # notice.pdf: 3, library_hours.pdf: 1, it_onboarding.docx: 2
+    sources = Counter(m["source"] for m in collection.get(include=["metadatas"])["metadatas"])
+    assert sources["data/documents/notice.pdf"] == 3
+    assert sources["data/documents/library_hours.pdf"] == 1
+    assert sources["data/documents/it_onboarding.docx"] == 2
+    assert collection.count() > 6, "the downloaded corpus files were not indexed"
 
 
 def test_search_text_finds_the_right_chunk_for_every_gold_question(indexed_client):
