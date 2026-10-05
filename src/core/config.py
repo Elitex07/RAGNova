@@ -103,8 +103,10 @@ class Settings:
     # Two independent models agreeing is far stronger evidence than either
     # alone. Measured on 8 positive and 6 negative questions: this rule kept
     # 7 of 8 correct images and refused all 6 negatives, where CLIP >= 0.2
-    # alone refused 1 of 6. The margins are THIN (a correct image at 0.301
-    # against a negative at 0.292) and the sample is small, so treat both
+    # alone refused 1 of 6. Re-measured on 14 positives and 10 negatives
+    # without changing either number: 11 of 14 kept, 9 of 10 refused (the floor
+    # alone: 13 of 14, 3 of 10). The margins are THIN (a correct image at 0.301
+    # against a negative at 0.305) and the sample is still small, so treat both
     # numbers as provisional, like every threshold in this file.
     # The cost, stated plainly: a photo with no readable text is only kept
     # when CLIP alone reaches IMAGE_CONFIDENT_SCORE.

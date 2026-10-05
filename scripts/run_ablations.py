@@ -47,7 +47,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
 from src.core.config import settings
-from src.core.gold import LEGACY_NEGATIVES, load_gold_set
+from src.core.gold import LEGACY_NEGATIVES, cross_modal_rows, load_gold_set
 from src.core.llm import generation_options
 from src.core.vector_store import get_client, get_text_collection
 from src.pipelines.documents import ingest as ingest_module
@@ -196,7 +196,8 @@ def _score_merge(ranked_lists, k=None):
 
 
 def ablate_merge() -> None:
-    print("\n=== ABLATION 3: cross-modal merge policy (the 16 cross-modal gold rows, real index) ===")
+    n_rows = len(cross_modal_rows(load_gold_set()))
+    print(f"\n=== ABLATION 3: cross-modal merge policy (the {n_rows} cross-modal gold rows, real index) ===")
     spec = importlib.util.spec_from_file_location("evaluate_cross_modal", PROJECT_ROOT / "scripts" / "evaluate_cross_modal.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

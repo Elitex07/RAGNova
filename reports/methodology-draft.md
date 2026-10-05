@@ -81,7 +81,7 @@ The prompt instructs the model to answer using only the supplied context, to ann
 
 **Corpus.** 52 files spanning PDF, DOCX, PNG/JPG and WAV/MP3 *[data: 19 documents (13 PDF, 6 DOCX), 25 images, 8 audio clips; 22 files are synthetic campus-themed material generated for Chapter 6 and 30 were downloaded under open licences, see data/SOURCES.md]*. Sampling is **purposive rather than random**: the corpus is constructed to include cross-modal pairs — an image and a document addressing the same subject, and an audio recording discussing a subject also present in a document — so that cross-modal retrieval can be exercised rather than assumed.
 
-**Gold-standard question set.** 25 text queries, 16 cross-modal queries and 4 negative controls were authored **before implementation began**, each annotated with the segment expected to be retrieved. Authoring the evaluation set in advance prevents the system from being tuned, consciously or otherwise, to the questions used to evaluate it.
+**Gold-standard question set.** 25 text queries, 16 cross-modal queries and 4 negative controls were authored **before implementation began**, each annotated with the segment expected to be retrieved; six more cross-modal queries and four more negative controls (I9-I14, N5-N8) were added later, and each was committed to the repository **before** it was measured. Authoring the evaluation set in advance prevents the system from being tuned, consciously or otherwise, to the questions used to evaluate it.
 
 > **Data note (2026-10-05): the sentence above overstates one thing; check it before it goes into the .docx.** Only the first five text questions (T1-T5) predate implementation. T6-T13 were added on 2026-09-29, and T14-T25, I5-I8, M3-M4, A3-A4 and N3-N4 on 2026-10-05, after the pipelines existed. What is true, and verifiable from the repository history, is that **each row was written before it was measured**, so none was adjusted to flatter a result. The set is one file, `data/gold_set.json`.
 
@@ -148,7 +148,7 @@ After indexing completes, all network interfaces are disabled. The system must t
 | **Internal** | Observed retrieval quality may reflect corpus properties rather than model capability | Ablations (§8.4) with the corpus held fixed across comparisons |
 | **External** | Results obtained on 52 English files on one hardware configuration may not generalise to larger, multilingual or noisier corpora | Scope limits stated explicitly; no extrapolation claimed |
 | **Construct** | Recall@5 measures retrieval, not answer usefulness | Both retrieval metrics and human answer ratings reported |
-| **Conclusion** | With 25 text questions, a single item shifts Recall@5 by 0.04 (1/25), and with 16 cross-modal questions by 0.0625; small differences are not meaningful | Sample size reported beside every figure; no claims made on differences within one item's width |
+| **Conclusion** | With 25 text questions, a single item shifts Recall@5 by 0.04 (1/25), and with 22 cross-modal questions by 0.045; small differences are not meaningful | Sample size reported beside every figure; no claims made on differences within one item's width |
 | **Bias** | Gold set authored by the system's designers | External participants author additional questions; those results reported separately (§7) |
 
 ---
@@ -184,7 +184,7 @@ Licences used: CC BY 4.0 / 2.0, CC BY-SA 2.0 / 3.0 / 4.0, CC0, public domain. No
 
 ### B. Gold set (`data/gold_set.json`)
 
-25 text questions (T1-T13 on the synthetic corpus, T14-T25 on the downloaded one), 16 cross-modal (8 text-to-image, 4 image-to-document, 4 audio-topic), 4 negative controls. Wording overlap between a question and its answer chunk: median 50%, range 27-88%, never zero (`scripts/check_gold_set.py`); the earlier claim of "no shared keywords" was corrected. Dense retrieval against a BM25 keyword baseline **was** run (see C2 below).
+25 text questions (T1-T13 on the synthetic corpus, T14-T25 on the downloaded one), 22 cross-modal (14 text-to-image, 4 image-to-document, 4 audio-topic), 8 negative controls (I9-I14 and N5-N8 were committed before they were measured). Wording overlap between a question and its answer chunk: median 50%, range 27-88%, never zero (`scripts/check_gold_set.py`); the earlier claim of "no shared keywords" was corrected. Dense retrieval against a BM25 keyword baseline **was** run (see C2 below).
 
 ### C. Retrieval (methodology section 8.1; `scripts/evaluate_retrieval.py`, `scripts/evaluate_cross_modal.py`)
 
@@ -192,8 +192,8 @@ Licences used: CC BY 4.0 / 2.0, CC BY-SA 2.0 / 3.0 / 4.0, CC0, public domain. No
 |---|---|---|---|
 | Recall@5 (text) | 1.00 | 25 | >= 0.80 |
 | MRR (text) | 0.81 (reproducible; two earlier builds with different audio transcripts gave 0.75) | 25 | >= 0.65 |
-| Cross-modal Recall@5, text-to-image only | 0.75 (6/8) | 8 | >= 0.70 |
-| Cross-modal Recall@5, all 16 (text-to-image, image-to-document, audio-topic) | 0.88 (14/16) | 16 | |
+| Cross-modal Recall@5, text-to-image only | **0.71 (10/14)**; 0.75 (6/8) on the first 8 rows | 14 | >= 0.70 (met by one question) |
+| Cross-modal Recall@5, all 22 (text-to-image, image-to-document, audio-topic) | **0.82 (18/22)**; 0.88 (14/16) before I9-I14 were added | 22 | |
 
 Context: the same 13 starter questions scored MRR 0.81 before the corpus grew and 0.77 after (on the first build); Recall@5 stayed 1.00. **MRR depended on the transcripts, and now does not:** the 8 audio chunks sit in the same index as the documents, and different Whisper transcripts moved 3 of the 25 questions between rank 1 and rank 2 (0.75 against 0.81). Transcripts are now cached by the audio's sha256 and committed (`data/transcripts/`), so any machine builds the same index; a build in each of the two environments gave byte-identical audio chunks. Before the image gate (ADR-011) cross-modal was 15/16; the gate costs one text-free photo and refuses all 6 out-of-corpus questions instead of 1. With 25 questions one item moves Recall@5 by 0.04.
 
@@ -229,7 +229,7 @@ Dense wins where the question's wording differs from the document's, and keyword
 | floor 0.35 and that prompt | 23 / 25 | 6 / 6 |
 | TOP_K 3 | 22 / 25 | 6 / 6 |
 
-No single text relevance floor separates answers from noise (weakest correct chunk 0.366, strongest noise chunk 0.383). Image gate: CLIP >= 0.2 alone refused 1 of 6 out-of-corpus questions; with OCR corroboration it refused 6 of 6 and kept 7 of 8 correct images. ### E2. Ablations (methodology section 8.4; `scripts/run_ablations.py`, `data/eval/ablations_2026-10-05.txt`)
+No single text relevance floor separates answers from noise (weakest correct chunk 0.366, strongest noise chunk 0.383). Image gate: CLIP >= 0.2 alone refused 1 of 6 out-of-corpus questions; with OCR corroboration it refused 6 of 6 and kept 7 of 8 correct images. **Re-measured on 14 positives and 10 negatives (thresholds unchanged):** CLIP >= 0.2 alone keeps 13 of 14 correct images and refuses 3 of 10; the shipped corroboration rule keeps 11 of 14 and refuses 9 of 10. The three lost are two text-free photos (the gate's named cost) and one image CLIP never ranks in its top 5; the one leak (a lab-door-sign photo for a Turing Award question) is harmless end to end, the model refused it 3 of 3 times. ### E2. Ablations (methodology section 8.4; `scripts/run_ablations.py`, `data/eval/ablations_2026-10-05.txt`)
 
 | Segment size / overlap | Chunks | Recall@5 | MRR | Answered of 25 (end to end) |
 |---|---|---|---|---|
@@ -243,12 +243,12 @@ No single text relevance floor separates answers from noise (weakest correct chu
 | **5 (shipped)** | **Recall@5 1.00** | **23** |
 | 10 | Recall@10 1.00 | 25 at the shipped window (inflated: 2 prompts were silently truncated), 23 at a larger one |
 
-| Cross-modal merge | All 16 | Text-to-image |
-|---|---|---|
-| **Rank-based RRF, k = 60 (shipped)** | **14 / 16** | **6 / 8** |
-| Raw-score merge | 11 / 16 | 3 / 8 |
+| Cross-modal merge | All 16 (first run) | Text-to-image | All 22 (re-run) | Text-to-image |
+|---|---|---|---|---|
+| **Rank-based RRF, k = 60 (shipped)** | **14 / 16** | **6 / 8** | **18 / 22** | **10 / 14** |
+| Raw-score merge | 11 / 16 | 3 / 8 | 14 / 22 | 6 / 14 |
 
-Findings: the shipped chunk size and top-K are at or near the best on this corpus (so they were chosen, not guessed, and the ablation says so); 600-word chunks and K = 10 push prompts past the model's 4096-token window; rank-based merging is worth 3 of 8 text-to-image questions against score-based merging (the modality gap, measured). One run of a stochastic model per variant, "answered" means not refused, n = 25. No shipped default changed.
+Findings: the shipped chunk size and top-K are at or near the best on this corpus (so they were chosen, not guessed, and the ablation says so); 600-word chunks and K = 10 push prompts past the model's 4096-token window; rank-based merging is worth 3 of 8 text-to-image questions against score-based merging (4 of 14 on the later, larger set; the modality gap, measured), and the four cross-modal rows that miss under rank merging (I3, I8, I10, I14) miss under score merging too, so they are limits of CLIP's ranking and of the image gate, not of the merge. One run of a stochastic model per variant, "answered" means not refused, n = 25. No shipped default changed.
 
 ### F. System performance (methodology section 8.3; `data/eval/performance_2026-10-05.txt`)
 

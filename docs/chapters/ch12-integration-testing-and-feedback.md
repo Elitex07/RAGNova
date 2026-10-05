@@ -92,6 +92,8 @@ The second signal is already in the index. Every image's OCR text is stored with
 
 What the rule costs, said plainly: the one correct image lost, I8, is a photo of a Wi-Fi sign with **no readable text** (CLIP 0.216), so there is nothing to corroborate it with. Anything answerable only by what a picture *looks like* is where this rule is weakest. And the margins are thin: I2's correct image passes at agreement 0.301 against a threshold of 0.30, and the sample is 14 questions. Both new numbers (`MIN_IMAGE_TEXT_AGREEMENT`, `IMAGE_CONFIDENT_SCORE`) are provisional.
 
+**Re-measured later the same day on a larger sample** (14 positives, 10 negatives; the new rows were written and committed before they were measured): the rule keeps 11 of 14 correct images and refuses 9 of 10 out-of-corpus questions, against 13/14 and 3/10 for the floor alone. The thresholds were not changed. Two of the three lost images are text-free photos (the named cost), the third is one CLIP never ranks in its top 5, and a lower threshold for text-free photos cannot work because the nearest *wrong* image for the hostel-menu question (a photograph of programmers' notes) scores CLIP 0.272, higher than the wanted I14 photo's 0.267. See ADR-011's second measurement update.
+
 Tests that pin it (`tests/test_integration.py`): a CLIP-confident image is kept without ever consulting the agreement; a weak image is kept only when its text agrees; a weak photo with no text is dropped; both boundaries are inclusive; and an end-to-end case where only uncorroborated images match, in which `answer_query()` refuses **without calling the model**. Mutation-checked: disabling the agreement test fails three of them, making the CLIP boundary exclusive fails one.
 
 ## 3.3 The same question for text, and why the answer there is "change nothing"
@@ -218,9 +220,9 @@ tests/test_integration.py::test_audio_chunks_that_break_the_contract_are_refused
 
 ## 7.3 Still open after today (named, not hidden)
 
-- ~~Measure `MIN_IMAGE_RELEVANCE_SCORE`~~ **Done 2026-10-05** (§3.2, ADR-011): the ranges overlap, so a corroboration gate was added. Its two numbers are provisional and rest on 14 questions.
-- ~~Cross-modal Recall@5~~ **Done**: 14 / 16 = 0.88 on the grown corpus (`data/README.md`'s results log).
-- ~~The ablations~~ **Done 2026-10-05** (chunk size 150/300/600, top-K 3/5/10, rank vs score merge; `scripts/run_ablations.py`, ADR-006 and ADR-007 amended): the shipped values hold, rank merge is worth 3 of 8 text-to-image questions, and 600-word chunks or K = 10 overflow the 4096-token window.
+- ~~Measure `MIN_IMAGE_RELEVANCE_SCORE`~~ **Done 2026-10-05** (§3.2, ADR-011): the ranges overlap, so a corroboration gate was added. Its two numbers are provisional; re-measured on 24 questions, they held (11/14 kept, 9/10 refused) and were not changed.
+- ~~Cross-modal Recall@5~~ **Done**: 14 / 16 = 0.88 on the grown corpus, then 18 / 22 = 0.82 (text-to-image 10 / 14 = 0.71) after six more text-to-image rows were added (`data/README.md`'s results log). The four misses (I3, I8, I10, I14) are **recorded, not tuned**: I3 is CLIP's own ranking, I8 and I14 are the gate's named cost on text-free photos, I10 is an image CLIP never ranks in its top 5; the score-merge alternative misses the same four.
+- ~~The ablations~~ **Done 2026-10-05** (chunk size 150/300/600, top-K 3/5/10, rank vs score merge; `scripts/run_ablations.py`, ADR-006 and ADR-007 amended): the shipped values hold, rank merge is worth 3 of 8 text-to-image questions (4 of 14 once the gold set grew), and 600-word chunks or K = 10 overflow the 4096-token window.
 - **The offline demonstration** from Chapter 1 §1.9.3, **half done 2026-10-05**: `scripts/verify_offline.py` runs the methodology 8.5 checklist (ingest a new file, text query, image query, spoken query, citations) behind a guard that blocks every non-loopback connection: all steps pass, but loading the embedding model made 31 Hugging Face Hub attempts and stalled the first question ~49 s until `RAGNOVA_OFFLINE=1` (new, `src/__init__.py`, `.env.example`) took that to 0 attempts and 0.6 s. **Still open:** the real run (network adapter off, through the Streamlit page), which needs the wired UI.
 - **Wire PR #4's scaffold** to `stream_answer()` and the feedback form (Chapter 11 §5.6).
 

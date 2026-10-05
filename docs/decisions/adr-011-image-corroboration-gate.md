@@ -60,3 +60,21 @@ End to end through the real model (`llama3.2:3b`, 25 positives + 6 negatives, `i
 ## Revisit if
 
 The gold set or corpus grows enough to re-measure the table above with more than a handful of positives and negatives; or a reranker is adopted, which would make this gate redundant.
+
+## Measurement update (2026-10-05, later): the sample doubled, the thresholds hold, and the misses are accounted for
+
+This ADR's weakest point was its sample: 8 positives and 6 negatives, with the correct image for I2 passing at 0.301 against a 0.30 threshold. Six more text-to-image rows (I9-I14) and four more out-of-corpus questions (N5-N8) were written and committed **before** being measured (commit `102f350`), then run (`scripts/measure_relevance.py`, `data/eval/relevance_measurement_2026-10-05.txt`). Now 14 positives and 10 negatives (the 8 in the gold set, N1-N8, plus the two older controls `LEGACY_NEGATIVES` that the measurement scripts still include).
+
+| Rule | Correct image kept | Out-of-corpus refused |
+|---|---|---|
+| CLIP >= 0.20 alone (ADR-010) | 13 / 14 | 3 / 10 |
+| **Shipped: CLIP >= 0.2 and (agree >= 0.30 or CLIP >= 0.30)** | **11 / 14** | **9 / 10** |
+| agree >= 0.35 or CLIP >= 0.30 | 9 / 14 | 10 / 10 |
+| CLIP >= 0.30 alone | 5 / 14 | 10 / 10 |
+
+**The thresholds are unchanged, and the larger sample did not contradict them**: the shipped rule is still the best trade-off on offer (the alternative that refuses 10 / 10 costs 2 more correct images), and the new positives with text agree comfortably (I9 0.437, I11 0.479, I12 0.563). What the new rows add:
+
+- **The three drops are accounted for.** I8 and I14 are text-free photos (CLIP 0.216 and 0.267, no OCR to corroborate): the cost this ADR named, now 2 of 14. **I10 is not the gate's doing at all**: CLIP does not rank the 403 screenshot in its top 5, so the gate never sees it.
+- **A "text-free photos pass at a lower CLIP score" exception would not work.** I14's photo has no OCR text, so the gate has only CLIP to go on, and CLIP scores it 0.267. The nearest image to the hostel-menu question, a photograph of programmers' notes whose OCR text does not match the question (agreement 0.094), scores **0.272**, higher. Any CLIP-only exception that admits I14 would admit that photo too.
+- **One negative leaks**, "Who won the Turing Award in 2018?": the lab-door-sign photo passes at agreement **0.305**, its OCR mentioning an AI laboratory. That sits beside I2's correct image at 0.301: no value of the threshold separates those two, so it was left alone rather than tuned to one question. It did no harm: three end-to-end runs all refused correctly.
+- **Honest bound:** on 24 questions the gate keeps 79% of correct images and refuses 90% of out-of-corpus questions, against 93% and 30% for the floor alone. The margins are still thin; they are now thin on a sample nearly twice the size. Cross-modal Recall@5 (`scripts/evaluate_cross_modal.py`, `data/eval/cross_modal_2026-10-05.txt`): text-to-image **10 / 14 (0.71)**, all 22 rows **18 / 22 (0.82)**.
