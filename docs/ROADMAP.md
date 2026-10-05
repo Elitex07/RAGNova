@@ -182,6 +182,7 @@ With 2 members: merge Track C into A and B (each owns half the UI).
       transcription; chromadb 0.5.23's HNSW search missed the best chunk for ~1 in 3 questions, ADR-012;
       telemetry); performance measured (data/eval/performance_2026-10-05.txt). Real measured data is dumped
       into reports/methodology-draft.md's appendix. Ablations done (chunk size, top-K, merge policy: shipped values hold,
-      ADR-006/007 amended). Still open: outside-tester sessions, the offline demo, wiring the UI, a Python 3.11
-      check, CPU-only measurements — Ch12 §7.3)
+      ADR-006/007 amended). Offline verification done without the UI (RAGNOVA_OFFLINE switch;
+      scripts/verify_offline.py). Still open: outside-tester sessions, the real network-off demo through the UI,
+      wiring the UI, a Python 3.11 check, CPU-only measurements — Ch12 §7.3)
 - [ ] Ch 13 — Mid-Term Report

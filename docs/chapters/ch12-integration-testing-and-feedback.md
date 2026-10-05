@@ -221,7 +221,7 @@ tests/test_integration.py::test_audio_chunks_that_break_the_contract_are_refused
 - ~~Measure `MIN_IMAGE_RELEVANCE_SCORE`~~ **Done 2026-10-05** (§3.2, ADR-011): the ranges overlap, so a corroboration gate was added. Its two numbers are provisional and rest on 14 questions.
 - ~~Cross-modal Recall@5~~ **Done**: 14 / 16 = 0.88 on the grown corpus (`data/README.md`'s results log).
 - ~~The ablations~~ **Done 2026-10-05** (chunk size 150/300/600, top-K 3/5/10, rank vs score merge; `scripts/run_ablations.py`, ADR-006 and ADR-007 amended): the shipped values hold, rank merge is worth 3 of 8 text-to-image questions, and 600-word chunks or K = 10 overflow the 4096-token window.
-- **The offline demonstration** from Chapter 1 §1.9.3: run the full app with the network disabled and record it.
+- **The offline demonstration** from Chapter 1 §1.9.3, **half done 2026-10-05**: `scripts/verify_offline.py` runs the methodology 8.5 checklist (ingest a new file, text query, image query, spoken query, citations) behind a guard that blocks every non-loopback connection: all steps pass, but loading the embedding model made 31 Hugging Face Hub attempts and stalled the first question ~49 s until `RAGNOVA_OFFLINE=1` (new, `src/__init__.py`, `.env.example`) took that to 0 attempts and 0.6 s. **Still open:** the real run (network adapter off, through the Streamlit page), which needs the wired UI.
 - **Wire PR #4's scaffold** to `stream_answer()` and the feedback form (Chapter 11 §5.6).
 
 ---

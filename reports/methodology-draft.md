@@ -272,5 +272,5 @@ Caveats that belong with these numbers: the end-to-end figure is a GPU figure; t
 - Independent human rating, any external rater, inter-rater agreement (section 8.2).
 - External testers and the feedback loop (they need the wired UI, which is still a scaffold).
 - The ablations of section 8.4 (segment size, TOP_K = 10, merge policy).
-- The offline verification of section 8.5 (network disabled). Note for whoever runs it: loading the embedding models still contacts the Hugging Face Hub (an "unauthenticated requests" warning appears), so `HF_HUB_OFFLINE=1` is needed for a true offline run.
+- The offline verification of section 8.5 *through the UI with the network adapter off*. **Done without the UI** (`scripts/verify_offline.py`, `data/eval/offline_2026-10-05.txt`): ingest a new file, text query, image query, spoken query and citations all pass with every non-loopback connection blocked. It found that, with no offline setting, loading the embedding model makes 31 Hugging Face Hub attempts and stalls the first question about 49 s; `RAGNOVA_OFFLINE=1` removes both (0 attempts, 0.6 s).
 - CPU-only latency, peak memory, and a Python 3.11 check.
