@@ -88,8 +88,9 @@ def test_readme_tables_carry_the_same_question_text_and_files_as_the_gold_set(go
         cells = rows[r["id"]]
         if cells[1] != r["query"]:
             problems.append(f"{r['id']}: query text differs")
-        if [_path(cells[2])] != r["expected_sources"]:
-            problems.append(f"{r['id']}: expected image differs")
+        # a cell may name several acceptable images ("`a.png` (or `b.png`)"): compare them all
+        if sorted("data/" + path for path in re.findall(r"`([^`]+)`", cells[2])) != sorted(r["expected_sources"]):
+            problems.append(f"{r['id']}: expected image(s) differ")
     for r in gold["image_to_doc"]:
         cells = rows[r["id"]]
         if _path(cells[1]) != r["query_image"]:

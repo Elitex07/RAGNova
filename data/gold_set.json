@@ -35,7 +35,13 @@
     {"id": "I5", "query": "Which diagram shows the encoder and decoder stacks with multi-head attention and positional encoding?", "expected_sources": ["data/images/commons_diagram_transformer_architecture.png"]},
     {"id": "I6", "query": "Find the flowchart that explains repeatedly halving a sorted array to look up a key", "expected_sources": ["data/images/commons_diagram_binary_search_flowchart.png"]},
     {"id": "I7", "query": "Which screenshot shows a statistical programming environment with a spreadsheet-style data viewer?", "expected_sources": ["data/images/commons_screenshot_rstudio_ide.png"]},
-    {"id": "I8", "query": "Show me a photo of a free Wi-Fi hotspot sign outdoors", "expected_sources": ["data/images/commons_photo_wifi_hotspot_sign.jpg"]}
+    {"id": "I8", "query": "Show me a photo of a free Wi-Fi hotspot sign outdoors", "expected_sources": ["data/images/commons_photo_wifi_hotspot_sign.jpg"]},
+    {"id": "I9", "query": "Which picture shows how much a student pays per day for returning a library book late?", "expected_sources": ["data/images/notice_library_fines.png", "data/images/photo_library_desk_sign.png"]},
+    {"id": "I10", "query": "Find the screenshot of a page telling me I am not allowed to open something", "expected_sources": ["data/images/screenshot_error_403.png"]},
+    {"id": "I11", "query": "Show me the secure remote-access client window that is connected to the library network", "expected_sources": ["data/images/screenshot_vpn_client.png"]},
+    {"id": "I12", "query": "Which picture is the schedule that splits project marks between the demo, the report and the viva?", "expected_sources": ["data/images/notice_midterm_schedule.png"]},
+    {"id": "I13", "query": "Find the screenshot of a Python script open in an editor next to a plot window", "expected_sources": ["data/images/commons_screenshot_python_matplotlib_code.jpg", "data/images/commons_screenshot_matplotlib_figures_code.png"]},
+    {"id": "I14", "query": "Show me a photograph of the building where an early university computer was kept", "expected_sources": ["data/images/commons_photo_former_computer_laboratory_tower.jpg", "data/images/commons_photo_digital_computer_laboratory.jpg"]}
   ],
   "image_to_doc": [
     {"id": "M1", "query_image": "data/images/screenshot_synopsis_portal.png", "expected_sources": ["data/documents/notice.pdf"]},
@@ -53,6 +59,10 @@
     {"id": "N1", "question": "What is the hostel mess menu for Wednesday lunch?"},
     {"id": "N2", "question": "How do I apply for a refund on tuition fees?"},
     {"id": "N3", "question": "Which sorting algorithm does Python's built-in sort use?"},
-    {"id": "N4", "question": "What is the boiling point of ethanol?"}
+    {"id": "N4", "question": "What is the boiling point of ethanol?"},
+    {"id": "N5", "question": "Show me a photo of a cat sitting on a sofa"},
+    {"id": "N6", "question": "What does the Eiffel Tower look like at night?"},
+    {"id": "N7", "question": "What is the fee for the hostel laundry service?"},
+    {"id": "N8", "question": "Who won the Turing Award in 2018?"}
   ]
 }
