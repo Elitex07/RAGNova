@@ -20,6 +20,7 @@ without monkeypatching. Explicit is worth the one extra argument.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import chromadb
@@ -27,6 +28,8 @@ from chromadb.config import Settings as ChromaSettings
 
 from src.core.config import settings
 from src.core.schemas import Chunk, IMAGE_COLLECTION, TEXT_COLLECTION
+
+logger = logging.getLogger(__name__)
 
 # Both collections are created with cosine distance explicitly, rather than
 # accepting Chroma's default (squared Euclidean, "l2"). For UNIT-LENGTH
@@ -110,6 +113,11 @@ def add_chunks(collection, chunks: list[Chunk], embeddings: list[list[float]]) -
     serving the pre-fix text forever — exactly the kind of "looks like it
     worked" failure this project's whole testing philosophy exists to
     catch before it becomes a Day-12 surprise.
+
+    Upsert alone cannot REMOVE a chunk, though: a file that now yields fewer
+    chunks would keep its old trailing ones. The indexing functions therefore
+    call replace_source_chunks() (below), which uses this and then deletes the
+    stale ids.
     """
     if len(chunks) != len(embeddings):
         raise ValueError(
@@ -127,3 +135,59 @@ def add_chunks(collection, chunks: list[Chunk], embeddings: list[list[float]]) -
         metadatas.append(record["metadata"])
 
     collection.upsert(ids=ids, documents=documents, metadatas=metadatas, embeddings=embeddings)
+
+
+def replace_source_chunks(
+    collection, source: str, chunks: list[Chunk], embeddings: list[list[float]]
+) -> int:
+    """Make the collection hold exactly `chunks` for file `source`: write them
+    (add_chunks' upsert), then delete whichever chunks of that file the index
+    still holds under ids that are not in the new set. Returns how many stale
+    chunks were removed.
+
+    Why add_chunks() alone was not enough: upsert replaces a chunk with the
+    same id, but a re-ingest that now produces FEWER chunks (a shortened
+    document, a re-transcription with fewer segments) leaves the old trailing
+    chunks in the index forever, still searchable and citable, text the file no
+    longer contains. This was a disclosed limitation until 2026-10-05.
+
+    Order matters: the new chunks are written BEFORE the stale ones are
+    removed, so there is never a moment when the file has no chunks at all, and
+    a failure while embedding or writing (which raises before anything is
+    deleted) cannot lose the old content. With an empty `chunks` list (the file
+    now yields nothing) every old chunk of `source` is removed.
+    """
+    existing = set(collection.get(where={"source": source}, include=[])["ids"])
+    add_chunks(collection, chunks, embeddings)
+    stale = sorted(existing - {chunk.chunk_id for chunk in chunks})
+    if stale:
+        collection.delete(ids=stale)
+    return len(stale)
+
+
+def prune_missing_sources(collection, root: str | Path) -> dict[str, int]:
+    """Delete the chunks of every source file that no longer exists on disk.
+    Returns {source: chunks removed}. Relative sources (the portable form every
+    pipeline stores) are resolved against `root`, the project root.
+
+    Safety valve: if EVERY source appears to be missing, nothing is deleted. That
+    pattern is almost never "all my files were deleted" and almost always "this
+    was run from the wrong folder", and wiping the whole index on a path mistake
+    is the one outcome worth refusing to risk; it logs a warning instead.
+    """
+    root = Path(root)
+    records = collection.get(include=["metadatas"])
+    sources = {m["source"] for m in records["metadatas"]}
+    missing = [src for src in sorted(sources)
+               if not (Path(src) if Path(src).is_absolute() else root / src).exists()]
+    if sources and len(missing) == len(sources):
+        logger.warning("prune_missing_sources: all %d sources look missing from %s; "
+                       "refusing to delete anything (wrong working directory?)", len(sources), root)
+        return {}
+    removed: dict[str, int] = {}
+    for src in missing:
+        ids = collection.get(where={"source": src}, include=[])["ids"]
+        collection.delete(ids=ids)
+        removed[src] = len(ids)
+    return removed
+

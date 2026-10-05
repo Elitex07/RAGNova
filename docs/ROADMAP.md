@@ -150,9 +150,9 @@ With 2 members: merge Track C into A and B (each owns half the UI).
       transcribe}.py; faster-whisper `base` transcription with VAD, word-count sliding-window chunks carrying
       timestamp ranges, written into `text_index` (ADR-005), voice-query `transcribe_query()`, 4 spoken clips
       in data/audio/, tests/test_audio_pipeline.py (16 tests, 13 of them run the real `AudioIngestor` with only
-      Whisper faked; transcripts are cached by the audio's sha256 so every machine indexes the same text), teaching doc ch09. Known, disclosed limitation: storage only upserts, so re-ingesting a
-      file that now yields fewer chunks leaves its old trailing chunks behind; documents and images share it,
-      so the fix belongs in the storage layer, not here)
+      Whisper faked; transcripts are cached by the audio's sha256 so every machine indexes the same text), teaching doc ch09. The former limitation (storage only upserted, so a file that now yielded fewer chunks
+      left its old trailing chunks behind) was closed on 2026-10-05 in the storage layer for all three modalities:
+      `replace_source_chunks()` + `prune_missing_sources()` in src/core/vector_store.py)
 - [x] Ch 10 — RAG Core (docs + real, tested code written — src/core/llm.py, src/pipelines/rag/{prompt,answer}.py,
       scripts/{ask,evaluate_answers}.py, tests/test_rag_core.py, ADR-009; real end-to-end answers with
       citations against the Ch6/7 text_index via real Ollama (llama3.2:3b) — see Ch10 §5 for captured

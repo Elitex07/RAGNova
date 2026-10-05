@@ -12,7 +12,12 @@ so re-running this after editing a source file correctly refreshes that
 file's chunks in place rather than either erroring or silently keeping
 stale content. A NEW file just adds new chunks. Deleting chroma_db/ first
 is only needed for a genuinely from-scratch rebuild (e.g. after changing
-CHUNK_SIZE_WORDS, which changes every chunk_id's page-relative numbering).
+CHUNK_SIZE_WORDS, which changes every chunk_id's page-relative numbering, or
+the HNSW settings, which apply only when a collection is created).
+
+Re-running keeps the index in step with the files: a file that now yields
+fewer chunks has its stale ones removed, and chunks of deleted files are
+pruned (vector_store.replace_source_chunks / prune_missing_sources).
 """
 
 from __future__ import annotations
@@ -23,6 +28,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.core.config import settings
+from src.core.vector_store import get_client, get_image_collection, get_text_collection, prune_missing_sources
 from src.pipelines.audio.index import index_audio_directory
 from src.pipelines.documents.index import index_documents_directory
 from src.pipelines.images.index import index_images_directory
@@ -63,6 +69,14 @@ def main() -> None:
     print(f"Indexed {count} audio transcript chunks into text_index.")
     count = index_images_directory(IMAGES_DIR)
     print(f"Indexed {count} images into image_index.")
+
+    # Chunks of files that have been deleted since the last build would otherwise
+    # stay searchable and citable (the index only ever added or replaced).
+    client = get_client()
+    for name, collection in (("text_index", get_text_collection(client)), ("image_index", get_image_collection(client))):
+        removed = prune_missing_sources(collection, DATA_DIR.parent)
+        for source, n in removed.items():
+            print(f"Pruned {n} chunk(s) of {source} from {name}: the file no longer exists.")
 
     print("\nNext: python scripts/evaluate_retrieval.py, or streamlit run src/app.py")
 
