@@ -23,6 +23,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.core.embeddings import embed_text, embed_texts
+from src.core.gold import load_gold_set
 from src.core.schemas import Chunk, validate_chunk
 from src.core.vector_store import add_chunks, get_client, get_text_collection
 from src.pipelines.documents.index import index_documents_directory
@@ -30,18 +31,9 @@ from src.pipelines.documents.search import search_text
 
 DOCS_DIR = Path(__file__).resolve().parent.parent / "data" / "documents"
 
-# Mirrors scripts/evaluate_retrieval.py's GOLD_QUESTIONS — see that file's
-# own docstring for why this is a manual copy, not a shared import (kept
-# here too, deliberately, so a test failure doesn't depend on the eval
-# script's own correctness).
-GOLD_QUESTIONS = [
-    ("If I don't get my system actually running by evaluation day, how many marks am I giving up?",
-     "data/documents/notice.pdf", 2),
-    ("As an undergrad, how many items can I check out from the library at once, and for how long?",
-     "data/documents/library_hours.pdf", 1),
-    ("What happens the first time someone gets caught sharing their login with a friend?",
-     "data/documents/it_onboarding.docx", 2),
-]
+# The text gold questions come from data/gold_set.json, the same file the
+# evaluation scripts read (src/core/gold.py) — no hand-copied list to drift.
+GOLD_QUESTIONS = load_gold_set()["text"]
 
 
 # ---------------------------------------------------------------------------
@@ -180,10 +172,13 @@ def test_index_documents_directory_indexes_every_chunk_from_all_three_starter_fi
 
 
 def test_search_text_finds_the_right_chunk_for_every_gold_question(indexed_client):
-    for question, expected_source, expected_page in GOLD_QUESTIONS:
-        results = search_text(question, top_k=5, client=indexed_client)
-        hit = any(c.source == expected_source and c.page == expected_page for c in results)
-        assert hit, f"'{question}' did not retrieve {expected_source} page {expected_page} in top 5"
+    # Every T row must land in the top 5 against the WHOLE grown corpus, so
+    # this also guards against new documents crowding out an old answer.
+    for row in GOLD_QUESTIONS:
+        results = search_text(row["question"], top_k=5, client=indexed_client)
+        hit = any(c.source == row["expected_source"] and c.page in row["expected_pages"] for c in results)
+        assert hit, (f"{row['id']} '{row['question']}' did not retrieve "
+                     f"{row['expected_source']} page {row['expected_pages']} in top 5")
 
 
 def test_search_results_are_sorted_by_descending_score(indexed_client):

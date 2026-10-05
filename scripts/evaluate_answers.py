@@ -1,5 +1,5 @@
 """
-Run the full gold-set (T1-T5, N1-N2 from data/README.md) through the real
+Run the full gold-set (every T and N row of data/gold_set.json) through the real
 RAG core, and print a side-by-side comparison for a human to rate.
 
 Run with:  python scripts/evaluate_answers.py
@@ -26,29 +26,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
+from src.core.gold import load_gold_set
 from src.pipelines.rag import answer_query
 from src.pipelines.rag.prompt import format_provenance
 
-# Mirrors data/README.md's gold-set tables. expected_source=None marks a
-# negative control (N1/N2) — there is no "right" citation, only a correct
-# refusal. Kept as a manual copy, not a parse of that file, for the exact
-# reason scripts/evaluate_retrieval.py's own docstring gives: update both
-# by hand if you edit a gold-set row.
+# The questions come from data/gold_set.json (src/core/gold.py), shared with
+# every evaluation script. A negative control has no expected source: the
+# right outcome is a refusal.
+_GOLD = load_gold_set()
 GOLD_QUESTIONS = [
-    {"id": "T1", "question": "If I don't get my system actually running by evaluation day, how many marks am I giving up?",
-     "expected_source": "data/documents/notice.pdf", "expected_page": 2},
-    {"id": "T2", "question": "As an undergrad, how many items can I check out from the library at once, and for how long?",
-     "expected_source": "data/documents/library_hours.pdf", "expected_page": 1},
-    {"id": "T3", "question": "What happens the first time someone gets caught sharing their login with a friend?",
-     "expected_source": "data/documents/it_onboarding.docx", "expected_page": 2},
-    {"id": "T4", "question": "How many earlier projects are we expected to briefly cover for context before explaining what makes ours different?",
-     "expected_source": "data/documents/notice.pdf", "expected_page": 1},
-    {"id": "T5", "question": "If I return a book really late, what's the most I could end up owing for it?",
-     "expected_source": "data/documents/library_hours.pdf", "expected_page": 1},
-    {"id": "N1", "question": "How much is the tuition fee for one semester?",
-     "expected_source": None, "expected_page": None},
-    {"id": "N2", "question": "What is the capital of France?",
-     "expected_source": None, "expected_page": None},
+    {"id": r["id"], "question": r["question"], "expected_source": r["expected_source"],
+     "expected_page": "/".join(str(n) for n in r["expected_pages"])}
+    for r in _GOLD["text"]
+] + [
+    {"id": r["id"], "question": r["question"], "expected_source": None, "expected_page": None}
+    for r in _GOLD["negatives"]
 ]
 
 
@@ -89,7 +81,7 @@ def main() -> None:
     print("Rate each answer 1-5 by hand (docs/ROADMAP.md's Ch10 bar), then "
           "add a row to data/README.md's Results log, e.g.:")
     print(f"| {date.today().isoformat()} | Ch10 | - | - | - | Answer-quality check, "
-          f"{len(GOLD_QUESTIONS)} questions (T1-T5 + N1-N2), human-rated 1-5: "
+          f"{len(GOLD_QUESTIONS)} questions (T + N rows), human-rated 1-5: "
           f"<fill in average and notes> |")
 
 
