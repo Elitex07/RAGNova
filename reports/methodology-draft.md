@@ -59,13 +59,13 @@ Two vector collections are maintained in ChromaDB:
 
 **Justification for separation.** The two models produce vectors of different dimensionality in unrelated spaces, so a single collection is not merely inadvisable but ill-defined. Furthermore, CLIP's text encoder truncates at 77 tokens, making it unsuitable for document-length passages. See ADR-003.
 
-**Approximate nearest-neighbour search.** ChromaDB indexes vectors using hierarchical navigable small-world graphs [7], giving approximately logarithmic search complexity. At the scale of this project (⟨FILL: approximate segment count⟩) exact search would also be tractable; the approximate index is adopted for architectural correctness and scalability rather than present necessity. **This is stated explicitly rather than implied**, since claiming a performance benefit not observed at our scale would be unsupported.
+**Approximate nearest-neighbour search.** ChromaDB indexes vectors using hierarchical navigable small-world graphs [7], giving approximately logarithmic search complexity. At the scale of this project (about 650 vectors: 631 text segments, of which 623 come from documents and 8 from audio transcripts, plus 25 image embeddings *[data: data/README.md, 2026-10-05]*) exact search would also be tractable; the approximate index is adopted for architectural correctness and scalability rather than present necessity. **This is stated explicitly rather than implied**, since claiming a performance benefit not observed at our scale would be unsupported.
 
 ## 5. Retrieval Methodology
 
 A textual query is embedded by both models and used to search both collections. An uploaded image is embedded by the CLIP vision encoder to retrieve similar images, while OCR text extracted from it queries the text collection. A spoken query is transcribed by the same Whisper model and thereafter treated as text.
 
-**Cross-modal result merging.** Text-image similarities produced by CLIP are systematically lower in magnitude than text-text similarities, a documented property of contrastively-trained multimodal encoders known as the modality gap [13]. Merging result lists by raw similarity score would therefore rank images below text results irrespective of relevance. Results are consequently merged by **rank** rather than score, following rank-fusion practice [9]. See ADR-007. ⟨FILL: state your merge policy precisely — e.g. interleaving, or RRF with parameter k.⟩
+**Cross-modal result merging.** Text-image similarities produced by CLIP are systematically lower in magnitude than text-text similarities, a documented property of contrastively-trained multimodal encoders known as the modality gap [13]. Merging result lists by raw similarity score would therefore rank images below text results irrespective of relevance. Results are consequently merged by **rank** rather than score, following rank-fusion practice [9]. See ADR-007. *[Data: the policy is reciprocal rank fusion with k = 60 (ADR-007), applied after each collection is gated on its own relevance floor, 0.3 for text (ADR-009) and 0.2 for images (ADR-010), and, for text-to-image results, after an OCR-corroboration gate (ADR-011).]*
 
 **Top-K selection.** The K highest-ranked segments are passed to generation, with K = 5 by default. K is validated by ablation at 3, 5 and 10 (§8.4). Larger K supplies more context but degrades attention to mid-prompt content [23] and increases latency.
 
@@ -73,15 +73,17 @@ A textual query is embedded by both models and used to search both collections. 
 
 Retrieved segments are assembled into a numbered context block and supplied to a 4-bit quantized Llama 3.2 model served locally by Ollama. Quantization reduces memory from approximately 6 GB to approximately 2 GB with limited quality loss [29], [30], which is what permits execution on the target hardware.
 
-The prompt instructs the model to answer using only the supplied context, to annotate each claim with the bracketed index of its supporting segment, and to state explicitly when the context does not contain the answer. Sampling temperature is set low (⟨FILL: value⟩) to favour faithfulness over variety.
+The prompt instructs the model to answer using only the supplied context, to annotate each claim with the bracketed index of its supporting segment, and to state explicitly when the context does not contain the answer. Sampling temperature is set low (0.1 *[data: `LLM_TEMPERATURE`, src/core/config.py]*) to favour faithfulness over variety.
 
 **Citation validation.** Emitted citation markers are checked against the set of supplied segments; markers not corresponding to a supplied segment are removed before display. Each citation is rendered alongside the retrieved text so that a user can verify support directly. This reduces but does not eliminate unsupported generation [22]; the limitation is stated rather than concealed.
 
 ## 7. Data Methodology
 
-**Corpus.** ⟨FILL: N⟩ files spanning PDF, DOCX, PNG/JPG and WAV/MP3. Sampling is **purposive rather than random**: the corpus is constructed to include cross-modal pairs — an image and a document addressing the same subject, and an audio recording discussing a subject also present in a document — so that cross-modal retrieval can be exercised rather than assumed.
+**Corpus.** 52 files spanning PDF, DOCX, PNG/JPG and WAV/MP3 *[data: 19 documents (13 PDF, 6 DOCX), 25 images, 8 audio clips; 22 files are synthetic campus-themed material generated for Chapter 6 and 30 were downloaded under open licences, see data/SOURCES.md]*. Sampling is **purposive rather than random**: the corpus is constructed to include cross-modal pairs — an image and a document addressing the same subject, and an audio recording discussing a subject also present in a document — so that cross-modal retrieval can be exercised rather than assumed.
 
-**Gold-standard question set.** ⟨FILL: N⟩ text queries, ⟨FILL: N⟩ cross-modal queries and ⟨FILL: N⟩ negative controls were authored **before implementation began**, each annotated with the segment expected to be retrieved. Authoring the evaluation set in advance prevents the system from being tuned, consciously or otherwise, to the questions used to evaluate it.
+**Gold-standard question set.** 25 text queries, 16 cross-modal queries and 4 negative controls were authored **before implementation began**, each annotated with the segment expected to be retrieved. Authoring the evaluation set in advance prevents the system from being tuned, consciously or otherwise, to the questions used to evaluate it.
+
+> **Data note (2026-10-05): the sentence above overstates one thing; check it before it goes into the .docx.** Only the first five text questions (T1-T5) predate implementation. T6-T13 were added on 2026-09-29, and T14-T25, I5-I8, M3-M4, A3-A4 and N3-N4 on 2026-10-05, after the pipelines existed. What is true, and verifiable from the repository history, is that **each row was written before it was measured**, so none was adjusted to flatter a result. The set is one file, `data/gold_set.json`.
 
 **Disclosed limitation.** The gold set was authored by the same team that designed the system, which risks question phrasing that unconsciously favours the chosen architecture. Mitigation: external participants author additional questions during the evaluation phase, and results on the external subset are **reported separately** from results on the internal set. ⟨FILL: confirm this happens in Chapter 12.⟩
 
@@ -118,7 +120,7 @@ Target: mean faithfulness ≥ 4/5.
 
 ### 8.3 System performance
 
-Measured on ⟨FILL: exact reference machine — CPU model, RAM, OS⟩. Reported: indexing throughput per modality, retrieval latency, end-to-end latency, and peak memory. **Median and worst case** are reported rather than best case.
+Measured on an Intel Core i5-14600K desktop with 15.7 GiB RAM, Windows 11 Home (build 10.0.26300) and Python 3.13.14; the language model ran on an NVIDIA GeForce RTX 5060 Ti GPU, while embedding, OCR and transcription ran on the CPU *[data: data/eval/performance_2026-10-05.txt; **CPU-only inference, the project's stated target, has not been measured**]*. Reported: indexing throughput per modality, retrieval latency, end-to-end latency, and peak memory. **Median and worst case** are reported rather than best case.
 
 | Measure | Target |
 |---|---|
@@ -144,9 +146,9 @@ After indexing completes, all network interfaces are disabled. The system must t
 | Type | Threat | Mitigation |
 |---|---|---|
 | **Internal** | Observed retrieval quality may reflect corpus properties rather than model capability | Ablations (§8.4) with the corpus held fixed across comparisons |
-| **External** | Results obtained on ⟨FILL: N⟩ English files on one hardware configuration may not generalise to larger, multilingual or noisier corpora | Scope limits stated explicitly; no extrapolation claimed |
+| **External** | Results obtained on 52 English files on one hardware configuration may not generalise to larger, multilingual or noisier corpora | Scope limits stated explicitly; no extrapolation claimed |
 | **Construct** | Recall@5 measures retrieval, not answer usefulness | Both retrieval metrics and human answer ratings reported |
-| **Conclusion** | With ⟨FILL: N⟩ questions, a single item shifts Recall@5 by ⟨FILL: 1/N⟩; small differences are not meaningful | Sample size reported beside every figure; no claims made on differences within one item's width |
+| **Conclusion** | With 25 text questions, a single item shifts Recall@5 by 0.04 (1/25), and with 16 cross-modal questions by 0.0625; small differences are not meaningful | Sample size reported beside every figure; no claims made on differences within one item's width |
 | **Bias** | Gold set authored by the system's designers | External participants author additional questions; those results reported separately (§7) |
 
 ---
@@ -163,3 +165,80 @@ After indexing completes, all network interfaces are disabled. The system must t
 - [ ] Threats-to-validity section present and honest
 - [ ] Citation numbers renumbered in order of first appearance
 - [ ] Every citation verified against the actual source
+
+---
+
+## Appendix — Measured data, dumped 2026-10-05 (not yet written up)
+
+Raw material for the real report. Every figure below is a measured result with its source; nothing here is an estimate. The caveats are part of the data, so keep them when the numbers are used. Figures are from the grown corpus unless stated.
+
+### A. Corpus (`data/README.md`, `data/SOURCES.md`)
+
+| Set | Documents | Images | Audio |
+|---|---|---|---|
+| Synthetic starter set (Chapter 6, generated) | 3 (2 PDF, 1 DOCX) | 15 | 4 text-to-speech clips |
+| Downloaded study materials (open licences, each licence verified at its source) | 16 (11 PDF, 5 DOCX) | 10 | 4 clips cut from CC BY-SA Spoken Wikipedia readings |
+| **Total** | **19 (13 PDF, 6 DOCX): 623 chunks** | **25** | **8: 8 transcript chunks** |
+
+Licences used: CC BY 4.0 / 2.0, CC BY-SA 2.0 / 3.0 / 4.0, CC0, public domain. NonCommercial material was excluded (for example OpenStax's Python book, CC BY-NC-SA).
+
+### B. Gold set (`data/gold_set.json`)
+
+25 text questions (T1-T13 on the synthetic corpus, T14-T25 on the downloaded one), 16 cross-modal (8 text-to-image, 4 image-to-document, 4 audio-topic), 4 negative controls. Wording overlap between a question and its answer chunk: median 50%, range 27-88%, never zero (`scripts/check_gold_set.py`); the earlier claim of "no shared keywords" was corrected. Whether dense retrieval beats keyword search (a BM25 baseline) has **not** been run.
+
+### C. Retrieval (methodology section 8.1; `scripts/evaluate_retrieval.py`, `scripts/evaluate_cross_modal.py`)
+
+| Metric | Result | n | Target |
+|---|---|---|---|
+| Recall@5 (text) | 1.00 | 25 | >= 0.80 |
+| MRR (text) | 0.75 | 25 | >= 0.65 |
+| Cross-modal Recall@5, text-to-image only | 0.75 (6/8) | 8 | >= 0.70 |
+| Cross-modal Recall@5, all 16 (text-to-image, image-to-document, audio-topic) | 0.88 (14/16) | 16 | |
+
+Context: the same 13 starter questions scored MRR 0.81 before the corpus grew and 0.77 after; Recall@5 stayed 1.00. Before the image gate (ADR-011) cross-modal was 15/16; the gate costs one text-free photo and refuses all 6 out-of-corpus questions instead of 1. With 25 questions one item moves Recall@5 by 0.04.
+
+### D. Answer quality (methodology section 8.2; `data/eval/answers_2026-10-05_*.txt`)
+
+- **Rated by Claude (an AI assistant), not by an independent human, and not on the four-dimension rubric of section 8.2.** One 1-5 score per answer combining correctness and citation. Average 4.21 / 5 over 29 questions (25 text, 4 negatives): 18 rated 5, 4 rated 4, 3 rated 3, 3 rated 2, 1 rated 1. Positives 4.08, negatives 5.00. Target of section 8.2 (mean faithfulness >= 4/5) is therefore not yet evidenced by human raters.
+- Citation correctness (a section 8.2 dimension), checked mechanically by looking for the fact in each cited chunk: 14 of 19 checked citations supported, 5 not (T7, T8, T13, T16, and one of T19's two). The Sources list shown to the user is always correct because it is built from chunk metadata, not model text.
+- Every out-of-corpus question was refused (4/4 negatives; 3 with no model call).
+- With images included (`--images`): 16 correct, 2 muddled, 7 with no usable answer, against 18 / 3 / 4 text-only.
+- Single runs of a stochastic 3B model at temperature 0.1: a one-question difference is within noise.
+
+### E. Relevance gating and partial ablations (ADR-009, ADR-011; `scripts/measure_relevance.py`)
+
+| Variant, end to end, 25 positives and 6 negatives | Positives answered | Negatives refused |
+|---|---|---|
+| floor 0.30, TOP_K 5 (current) | 23 / 25 | 6 / 6 |
+| floor 0.35 | 22 / 25 | 6 / 6 |
+| prompt that tells the model to ignore unrelated passages | 22 / 25 | 6 / 6 |
+| floor 0.35 and that prompt | 23 / 25 | 6 / 6 |
+| TOP_K 3 | 22 / 25 | 6 / 6 |
+
+No single text relevance floor separates answers from noise (weakest correct chunk 0.366, strongest noise chunk 0.383). Image gate: CLIP >= 0.2 alone refused 1 of 6 out-of-corpus questions; with OCR corroboration it refused 6 of 6 and kept 7 of 8 correct images. **Not run:** the segment-size ablation (150 / 300 / 600), TOP_K = 10, and the rank-versus-score merge comparison.
+
+### F. System performance (methodology section 8.3; `data/eval/performance_2026-10-05.txt`)
+
+| Measure | Result (median / worst) | Target |
+|---|---|---|
+| Text retrieval latency, warm, n = 25 | 38 ms / 40 ms (19 ms median in an earlier run; one machine, so expect a factor of two) | < 1 s |
+| Retrieval with images (CLIP + gate + merge), n = 8 | 232 ms / 254 ms | < 1 s |
+| End-to-end answer, warm, n = 13 | 2.9 s / 3.4 s, **language model on a GPU** | < 15 s |
+| PDF indexing | 15.9 pages/s | >= 1 page/s |
+| Image indexing (CLIP + OCR) | 2.7 images/s | |
+| Audio transcription (Whisper `base`, CPU) | 9.5x real time | |
+| Whisper word error rate, 4 synthetic clips | mean 9.3%, worst 20.8% | < 15% |
+
+Caveats that belong with these numbers: the end-to-end figure is a GPU figure; the word error rate is on clean synthetic speech (which flatters it) with no number normalisation (which penalises it, "forty percent" heard as "40%"); peak memory was not measured; indexing figures include first-use model loading.
+
+### G. Environment and reproducibility
+
+`requirements.txt` installed exactly as pinned in a fresh Python 3.13.14 environment (Windows 11): installs, `pip check` clean, 114 tests pass plus 1 expected failure, in both that environment and the newer-library one. Real-component verification found three defects the fake-model test suite could not see: an unpinned `av` breaking real transcription, `chromadb 0.5.23`'s approximate search missing the best chunk for about 1 in 3 questions at default settings (fixed, ADR-012), and ChromaDB telemetry (disabled). **Python 3.11, the documented target, was not tested.** `chroma-hnswlib` has no Python 3.13 wheel and compiled from source.
+
+### H. Not done yet (so the report does not claim it)
+
+- Independent human rating, any external rater, inter-rater agreement (section 8.2).
+- External testers and the feedback loop (they need the wired UI, which is still a scaffold).
+- The ablations of section 8.4 (segment size, TOP_K = 10, merge policy).
+- The offline verification of section 8.5 (network disabled). Note for whoever runs it: loading the embedding models still contacts the Hugging Face Hub (an "unauthenticated requests" warning appears), so `HF_HUB_OFFLINE=1` is needed for a true offline run.
+- CPU-only latency, peak memory, and a Python 3.11 check.

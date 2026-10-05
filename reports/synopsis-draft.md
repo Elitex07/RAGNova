@@ -124,7 +124,7 @@ The system operates in two phases: an offline **indexing** phase executed once p
 | Interface | Streamlit | Multimodal input handling in pure Python |
 | Language | Python 3.11 | Ecosystem support for all of the above |
 
-All components are open-source and execute locally; no component requires network access after initial installation. ⟨FILL: state your reference hardware, e.g. "Development and evaluation are performed on a laptop with 16 GB RAM and no discrete GPU."⟩
+All components are open-source and execute locally; no component requires network access after initial installation. *[Data, 2026-10-05: development and evaluation were performed on a desktop with an Intel Core i5-14600K, 16 GB RAM and Windows 11; the language model ran on an NVIDIA RTX 5060 Ti GPU, and embedding, OCR and transcription ran on the CPU. CPU-only operation, the stated target, has not been measured; reword this sentence accordingly if the report keeps the claim of commodity hardware.]*
 
 ---
 

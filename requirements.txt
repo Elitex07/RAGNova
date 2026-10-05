@@ -38,6 +38,12 @@
 # --- Core: chunk validation, retrieval, generation --------------------------
 sentence-transformers==3.3.1      # text embeddings (all-MiniLM-L6-v2)
 chromadb==0.5.23                  # vector database (ADR-004)
+posthog==5.4.0                   # chromadb's telemetry client; chromadb 0.5.23 does not pin it, and posthog 6+
+                                   # changed capture()'s signature, so unpinned every ChromaDB call logs
+                                   # "Failed to send telemetry event ... capture() takes 1 positional
+                                   # argument but 3 were given". Nothing is sent either way (see
+                                   # src/core/vector_store.py: telemetry is switched off); this just
+                                   # stops the error spam. Found 2026-10-05.
 ollama==0.4.4                     # Python client for the local LLM API (ADR-002)
 
 # --- Vision pipeline (Track B, Chapter 8) -----------------------------------
