@@ -47,14 +47,36 @@ def index_image_files(paths: list[str | Path], client=None, pipeline=None) -> in
     return len(chunks)
 
 
-def index_images_directory(directory: str | Path, client=None, pipeline=None) -> int:
-    """Index every supported image directly under `directory` (flat, not
-    recursive — same reason index_documents_directory() gives)."""
+def index_images_directory(
+    directory: str | Path,
+    client=None,
+    pipeline=None,
+    recursive: bool = False,
+) -> int:
+    """Index every supported image under `directory`.
+
+    Parameters
+    ----------
+    directory:
+        Root directory to search.
+    client:
+        ChromaDB client instance.
+    pipeline:
+        ImageIngestionPipeline instance.
+    recursive:
+        Whether to search subdirectories too. Defaults to False (flat):
+        scripts/build_index.py and the UI index data/images/ this way, and
+        index_documents_directory() / index_audio_directory() are flat for
+        the same reason — one folder per modality, nothing nested is
+        indexed by accident. The image CLI opts in with recursive=True,
+        which is the behaviour its old ingest_directory() call had.
+    """
     directory = Path(directory)
     if not directory.is_dir():
         return 0
+    pattern = "**/*" if recursive else "*"
     paths = [
-        p for p in sorted(directory.iterdir())
+        p for p in sorted(directory.glob(pattern))
         if p.is_file() and p.suffix.lower() in SUPPORTED_EXTENSIONS
     ]
     return index_image_files(paths, client=client, pipeline=pipeline)
