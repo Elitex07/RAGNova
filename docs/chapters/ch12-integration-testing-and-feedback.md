@@ -220,7 +220,7 @@ tests/test_integration.py::test_audio_chunks_that_break_the_contract_are_refused
 
 - ~~Measure `MIN_IMAGE_RELEVANCE_SCORE`~~ **Done 2026-10-05** (§3.2, ADR-011): the ranges overlap, so a corroboration gate was added. Its two numbers are provisional and rest on 14 questions.
 - ~~Cross-modal Recall@5~~ **Done**: 14 / 16 = 0.88 on the grown corpus (`data/README.md`'s results log).
-- **The ablations** Chapter 3 committed to (chunk size 150/300/600, rank vs. score merge): the code now supports both collections, so the merge ablation is runnable once real image scores exist.
+- ~~The ablations~~ **Done 2026-10-05** (chunk size 150/300/600, top-K 3/5/10, rank vs score merge; `scripts/run_ablations.py`, ADR-006 and ADR-007 amended): the shipped values hold, rank merge is worth 3 of 8 text-to-image questions, and 600-word chunks or K = 10 overflow the 4096-token window.
 - **The offline demonstration** from Chapter 1 §1.9.3: run the full app with the network disabled and record it.
 - **Wire PR #4's scaffold** to `stream_answer()` and the feedback form (Chapter 11 §5.6).
 

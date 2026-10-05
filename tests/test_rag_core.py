@@ -176,3 +176,38 @@ def test_answer_query_refuses_when_index_has_no_relevant_chunks(empty_client):
     result = answer_query("What is the capital of France?", client=empty_client)
     assert result.answer == NOT_ENOUGH_INFO
     assert result.citations == []
+
+
+# ---------------------------------------------------------------------------
+# check_prompt_fits(): a prompt that overflows the context window is truncated
+# silently by Ollama, so the project says so.
+# ---------------------------------------------------------------------------
+
+def _prompt_of(words: int) -> str:
+    return " ".join(["word"] * words)
+
+
+def test_check_prompt_fits_is_quiet_for_a_normal_five_chunk_prompt(caplog):
+    from src.pipelines.rag.answer import check_prompt_fits
+
+    with caplog.at_level("WARNING"):
+        assert check_prompt_fits(_prompt_of(1700)) is True       # ~2200 tokens of a 4096 window
+    assert not caplog.records
+
+
+def test_check_prompt_fits_warns_when_the_prompt_nears_the_context_window(caplog):
+    from src.pipelines.rag.answer import check_prompt_fits
+
+    with caplog.at_level("WARNING"):
+        assert check_prompt_fits(_prompt_of(3200)) is False      # ~4160 tokens: the K=10 / 600-word case
+    assert "silently truncate" in caplog.text
+
+
+def test_check_prompt_fits_threshold_is_ninety_percent_of_the_window(caplog):
+    from src.pipelines.rag.answer import check_prompt_fits
+
+    limit = settings.LLM_NUM_CTX
+    just_under = int(0.9 * limit / 1.3) - 2
+    just_over = int(0.9 * limit / 1.3) + 2
+    assert check_prompt_fits(_prompt_of(just_under)) is True
+    assert check_prompt_fits(_prompt_of(just_over)) is False

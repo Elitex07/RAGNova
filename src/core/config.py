@@ -56,6 +56,9 @@ class Settings:
     # instructions, provenance headers, the question, and the answer budget
     # (LLM_MAX_TOKENS) are counted. 4096 leaves real headroom; a starting
     # point, not a measured value — revisit if TOP_K or CHUNK_SIZE_WORDS grow.
+    # Measured 2026-10-05: 600-word chunks, or TOP_K=10, give prompts of ~4100
+    # tokens, which overflow this window (2 of 25 prompts); answer.py now warns
+    # when a prompt comes within 90% of it.
     LLM_NUM_CTX: int = _get_int("LLM_NUM_CTX", 4096)
 
     # Cosine-similarity floor a retrieved chunk must clear before it's

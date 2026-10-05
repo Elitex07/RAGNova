@@ -228,7 +228,26 @@ Dense wins where the question's wording differs from the document's, and keyword
 | floor 0.35 and that prompt | 23 / 25 | 6 / 6 |
 | TOP_K 3 | 22 / 25 | 6 / 6 |
 
-No single text relevance floor separates answers from noise (weakest correct chunk 0.366, strongest noise chunk 0.383). Image gate: CLIP >= 0.2 alone refused 1 of 6 out-of-corpus questions; with OCR corroboration it refused 6 of 6 and kept 7 of 8 correct images. **Not run:** the segment-size ablation (150 / 300 / 600), TOP_K = 10, and the rank-versus-score merge comparison.
+No single text relevance floor separates answers from noise (weakest correct chunk 0.366, strongest noise chunk 0.383). Image gate: CLIP >= 0.2 alone refused 1 of 6 out-of-corpus questions; with OCR corroboration it refused 6 of 6 and kept 7 of 8 correct images. ### E2. Ablations (methodology section 8.4; `scripts/run_ablations.py`, `data/eval/ablations_2026-10-05.txt`)
+
+| Segment size / overlap | Chunks | Recall@5 | MRR | Answered of 25 (end to end) |
+|---|---|---|---|---|
+| 150 / 25 | 1199 | 0.92 | 0.69 | 18 |
+| **300 / 50 (shipped)** | **631** | **1.00** | **0.81** | **22** |
+| 600 / 100 | 335 | 0.96 | 0.83 | 23 (22 at a larger window) |
+
+| Top-K | Retrieval | Answered of 25 (end to end) |
+|---|---|---|
+| 3 | Recall@3 0.96 | 23 |
+| **5 (shipped)** | **Recall@5 1.00** | **23** |
+| 10 | Recall@10 1.00 | 25 at the shipped window (inflated: 2 prompts were silently truncated), 23 at a larger one |
+
+| Cross-modal merge | All 16 | Text-to-image |
+|---|---|---|
+| **Rank-based RRF, k = 60 (shipped)** | **14 / 16** | **6 / 8** |
+| Raw-score merge | 11 / 16 | 3 / 8 |
+
+Findings: the shipped chunk size and top-K are at or near the best on this corpus (so they were chosen, not guessed, and the ablation says so); 600-word chunks and K = 10 push prompts past the model's 4096-token window; rank-based merging is worth 3 of 8 text-to-image questions against score-based merging (the modality gap, measured). One run of a stochastic model per variant, "answered" means not refused, n = 25. No shipped default changed.
 
 ### F. System performance (methodology section 8.3; `data/eval/performance_2026-10-05.txt`)
 
