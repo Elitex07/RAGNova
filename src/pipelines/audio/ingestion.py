@@ -33,6 +33,7 @@ except ImportError as exc:
     ) from exc
 
 from src.pipelines.audio import transcript_cache
+from src.pipelines.audio.formats import SUPPORTED_EXTENSIONS as _AUDIO_FORMATS
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -56,11 +57,8 @@ DEFAULT_DEVICE: str = getattr(settings, "WHISPER_DEVICE", "cpu")
 DEFAULT_COMPUTE_TYPE: str = getattr(settings, "WHISPER_COMPUTE_TYPE", "int8")
 MAX_FILE_SIZE_BYTES: int = 2 * 1024 * 1024 * 1024
 
-SUPPORTED_EXTENSIONS: frozenset[str] = frozenset({
-    ".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac",
-    ".opus", ".mpeg", ".mp4", ".webm", ".wma", ".mka",
-    ".3gp", ".amr",
-})
+# The list lives in formats.py (no heavy imports) so the UI can use it too.
+SUPPORTED_EXTENSIONS: frozenset[str] = _AUDIO_FORMATS
 
 DEFAULT_VAD_PARAMETERS: Dict[str, Any] = getattr(
     settings, 

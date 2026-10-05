@@ -15,12 +15,8 @@ from pathlib import Path
 
 from src.core.embeddings import embed_texts
 from src.core.vector_store import get_client, get_text_collection, replace_source_chunks
+from src.pipelines.documents.ingest import SUPPORTED_EXTENSIONS as _SUPPORTED_EXTENSIONS
 from src.pipelines.documents.ingest import ingest_document
-
-# Kept in sync with ingest.py's own _PARSERS — duplicating just the set of
-# supported extensions here (not the parser functions themselves) avoids
-# this module needing to know anything about *how* a file is parsed.
-_SUPPORTED_EXTENSIONS = {".pdf", ".docx"}
 
 
 def index_documents_directory(directory: str | Path, client=None) -> int:
