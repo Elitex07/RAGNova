@@ -37,11 +37,25 @@ def _get_int(name: str, default: int) -> int:
     return int(os.environ.get(name, default))
 
 
+def _get_optional_int(name: str) -> int | None:
+    """An integer setting that is simply absent unless someone sets it."""
+    raw = os.environ.get(name, "").strip()
+    return int(raw) if raw else None
+
+
 @dataclass(frozen=True)
 class Settings:
     OLLAMA_MODEL: str = os.environ.get("OLLAMA_MODEL", "llama3.2:3b")
     OLLAMA_HOST: str = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
     LLM_TEMPERATURE: float = _get_float("LLM_TEMPERATURE", 0.1)
+
+    # How many of the model's layers Ollama puts on the GPU. Unset (the default)
+    # lets Ollama decide, which on a machine with a GPU means using it. Set 0 to
+    # force CPU-only inference. The project's stated target is a laptop with no
+    # discrete GPU, and until 2026-10-05 every LLM figure was measured on a GPU
+    # machine (llama3.2:3b at "100% GPU" in `ollama ps`), so this exists to measure
+    # the target honestly: OLLAMA_NUM_GPU=0 python scripts/benchmark_performance.py
+    OLLAMA_NUM_GPU: int | None = _get_optional_int("OLLAMA_NUM_GPU")
 
     # Bounds Ollama's num_predict — how many tokens generation is allowed to
     # emit before it's cut off. Not a measured value; a safety cap so a

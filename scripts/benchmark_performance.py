@@ -22,12 +22,16 @@ READ THIS BEFORE QUOTING ANY NUMBER. What the numbers do and do not mean:
     scorer does no number normalisation, so "forty percent" heard as "40%"
     counts as an error: that overstates it. The two effects pull opposite
     ways; neither is corrected for.
+  - Audio throughput and word error rate are measured with the transcript cache
+    (ADR-013) bypassed, so Whisper actually runs; they describe Whisper in
+    THIS environment, not the cached transcripts the index normally uses.
   - Peak memory is not measured.
 """
 
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import importlib.util
 import platform
 import statistics
@@ -134,10 +138,18 @@ def indexing_throughput() -> dict[str, str]:
         for w in wavs:
             with wave.open(str(w), "rb") as f:
                 seconds += f.getnframes() / f.getframerate()
-        t0 = time.perf_counter()
-        for w in wavs:
-            index_audio_file(w, client=client)
-        dt = time.perf_counter() - t0
+        # The transcript cache (ADR-013) would turn this into a timing of file reads
+        # (it once printed "996x real time"); bypass it so Whisper really runs.
+        from src.pipelines.audio import ingestion
+        saved_settings = ingestion.settings
+        ingestion.settings = dataclasses.replace(saved_settings, WHISPER_TRANSCRIPT_CACHE_DIR="")
+        try:
+            t0 = time.perf_counter()
+            for w in wavs:
+                index_audio_file(w, client=client)
+            dt = time.perf_counter() - t0
+        finally:
+            ingestion.settings = saved_settings
         print(f"  audio: {len(wavs)} clips, {seconds:.0f} s of speech in {dt:.1f} s  ->  {seconds / dt:.1f}x real time (Whisper `base`, CPU)")
         got = get_text_collection(client).get(include=["documents", "metadatas"], where={"modality": "audio"})
         for doc, md in zip(got["documents"], got["metadatas"]):

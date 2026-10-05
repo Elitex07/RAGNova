@@ -185,5 +185,6 @@ With 2 members: merge Track C into A and B (each owns half the UI).
       ADR-006/007 amended). Offline verification done without the UI (RAGNOVA_OFFLINE switch;
       scripts/verify_offline.py). PDF table extraction was measured and rejected (T14/T20 refusals are generator limits, not
       parsing defects: ADR-009 follow-up). Still open: outside-tester sessions, the real network-off demo through
-      the UI, wiring the UI, a Python 3.11 check, CPU-only measurements — Ch12 §7.3)
+      the UI, wiring the UI, a Python 3.11 check — Ch12 §7.3). CPU-only measured: end-to-end latency misses the
+      15 s target (median 29 s; 14 s with TOP_K=3), answer quality unchanged)
 - [ ] Ch 13 — Mid-Term Report

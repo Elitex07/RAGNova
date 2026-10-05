@@ -75,12 +75,24 @@ def get_client(persist_dir: str | Path | None = None) -> chromadb.ClientAPI:
     )
 
 
+def _open_collection(client: chromadb.ClientAPI, name: str):
+    try:
+        return client.get_or_create_collection(name, metadata=_COLLECTION_METADATA)
+    except Exception as exc:  # noqa: BLE001 - re-raised below with the likely cause attached
+        raise RuntimeError(
+            f"Could not open the {name!r} collection ({type(exc).__name__}: {exc}). The most common cause: "
+            f"chroma_db/ was written by a different ChromaDB version than the one installed here "
+            f"({chromadb.__version__}); an index is not portable across versions (0.5.x and 1.x differ). "
+            f"It is rebuildable: delete chroma_db/ and run `python scripts/build_index.py`."
+        ) from exc
+
+
 def get_text_collection(client: chromadb.ClientAPI):
-    return client.get_or_create_collection(TEXT_COLLECTION, metadata=_COLLECTION_METADATA)
+    return _open_collection(client, TEXT_COLLECTION)
 
 
 def get_image_collection(client: chromadb.ClientAPI):
-    return client.get_or_create_collection(IMAGE_COLLECTION, metadata=_COLLECTION_METADATA)
+    return _open_collection(client, IMAGE_COLLECTION)
 
 
 def add_chunks(collection, chunks: list[Chunk], embeddings: list[list[float]]) -> None:

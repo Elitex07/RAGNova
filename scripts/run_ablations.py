@@ -48,6 +48,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 from src.core.config import settings
 from src.core.gold import LEGACY_NEGATIVES, load_gold_set
+from src.core.llm import generation_options
 from src.core.vector_store import get_client, get_text_collection
 from src.pipelines.documents import ingest as ingest_module
 from src.pipelines.documents.index import index_documents_directory
@@ -79,8 +80,7 @@ def _generate_recording(prompt: str) -> str:
 
     response = ollama.Client(host=settings.OLLAMA_HOST).generate(
         model=settings.OLLAMA_MODEL, prompt=prompt, stream=False,
-        options={"temperature": settings.LLM_TEMPERATURE, "num_predict": settings.LLM_MAX_TOKENS,
-                 "num_ctx": _CTX["num_ctx"]},
+        options={**generation_options(), "num_ctx": _CTX["num_ctx"]},
     )
     _PROMPT_TOKENS.append(int(len(prompt.split()) * 1.3))
     return response["response"]

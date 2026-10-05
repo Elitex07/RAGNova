@@ -256,13 +256,13 @@ Findings: the shipped chunk size and top-K are at or near the best on this corpu
 |---|---|---|
 | Text retrieval latency, warm, n = 25 | 38 ms / 40 ms (19 ms median in an earlier run; one machine, so expect a factor of two) | < 1 s |
 | Retrieval with images (CLIP + gate + merge), n = 8 | 232 ms / 254 ms | < 1 s |
-| End-to-end answer, warm, n = 13 | 2.9 s / 3.4 s, **language model on a GPU** | < 15 s |
+| End-to-end answer, warm, n = 13 | **GPU: 2.9 s / 3.4 s. CPU-only (`OLLAMA_NUM_GPU=0`): 29.2 s / 47.2 s, target NOT met.** With `TOP_K = 3` on CPU: 14.1 s median / 30.3 s worst (median under the target only) | < 15 s |
 | PDF indexing | 15.9 pages/s | >= 1 page/s |
 | Image indexing (CLIP + OCR) | 2.7 images/s | |
-| Audio transcription (Whisper `base`, CPU) | 9.5x real time | |
-| Whisper word error rate, 4 synthetic clips | mean 9.3%, worst 20.8% | < 15% |
+| Audio transcription (Whisper `base`, CPU, transcript cache bypassed) | 9.5x to 10.2x real time (two runs) | |
+| Whisper word error rate, 4 synthetic clips | mean 9.3% to 10.7% depending on the environment, worst 20.8% in both | < 15% (mean met, worst case not) |
 
-Caveats that belong with these numbers: the end-to-end figure is a GPU figure; the word error rate is on clean synthetic speech (which flatters it) with no number normalisation (which penalises it, "forty percent" heard as "40%"); peak memory was not measured; indexing figures include first-use model loading.
+Caveats that belong with these numbers: the first end-to-end figure is a GPU figure, and **the project's stated target hardware, a CPU-only laptop, was then measured and misses the 15 s target by about 2x** (retrieval and indexing are unaffected, since embedding, OCR and transcription run on the CPU either way; answer quality on CPU matched the GPU: 23 vs 22 of 25 answered, 8/8 negatives refused on both); the word error rate is on clean synthetic speech (which flatters it) with no number normalisation (which penalises it, "forty percent" heard as "40%"); peak memory was not measured; indexing figures include first-use model loading.
 
 ### G. Environment and reproducibility
 
@@ -274,4 +274,4 @@ Caveats that belong with these numbers: the end-to-end figure is a GPU figure; t
 - External testers and the feedback loop (they need the wired UI, which is still a scaffold).
 - The ablations of section 8.4 (segment size, TOP_K = 10, merge policy).
 - The offline verification of section 8.5 *through the UI with the network adapter off*. **Done without the UI** (`scripts/verify_offline.py`, `data/eval/offline_2026-10-05.txt`): ingest a new file, text query, image query, spoken query and citations all pass with every non-loopback connection blocked. It found that, with no offline setting, loading the embedding model makes 31 Hugging Face Hub attempts and stalls the first question about 49 s; `RAGNOVA_OFFLINE=1` removes both (0 attempts, 0.6 s).
-- CPU-only latency, peak memory, and a Python 3.11 check.
+- Peak memory, and a Python 3.11 check. (CPU-only latency was measured: see F; it misses the target.)
