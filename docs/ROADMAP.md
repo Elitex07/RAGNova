@@ -149,8 +149,8 @@ With 2 members: merge Track C into A and B (each owns half the UI).
 - [x] Ch 9 — Audio Pipeline (docs + real, tested code written — src/pipelines/audio/{ingestion,index,
       transcribe}.py; faster-whisper `base` transcription with VAD, word-count sliding-window chunks carrying
       timestamp ranges, written into `text_index` (ADR-005), voice-query `transcribe_query()`, 4 spoken clips
-      in data/audio/, tests/test_audio_pipeline.py (6 tests, 3 of them run the real `AudioIngestor` with only
-      Whisper faked), teaching doc ch09. Known, disclosed limitation: storage only upserts, so re-ingesting a
+      in data/audio/, tests/test_audio_pipeline.py (16 tests, 13 of them run the real `AudioIngestor` with only
+      Whisper faked; transcripts are cached by the audio's sha256 so every machine indexes the same text), teaching doc ch09. Known, disclosed limitation: storage only upserts, so re-ingesting a
       file that now yields fewer chunks leaves its old trailing chunks behind; documents and images share it,
       so the fix belongs in the storage layer, not here)
 - [x] Ch 10 — RAG Core (docs + real, tested code written — src/core/llm.py, src/pipelines/rag/{prompt,answer}.py,
@@ -175,8 +175,8 @@ With 2 members: merge Track C into A and B (each owns half the UI).
       from 3 synthetic files to 19 documents / 25 images / 8 audio clips with 30 openly-licensed files downloaded
       (data/SOURCES.md, Git LFS); one gold set (data/gold_set.json: 25 text, 16 cross-modal, 4 negatives).
       Measured on the grown corpus (2026-10-05, data/README.md's Results log): text Recall@5 = 1.00 / MRR =
-      0.75-0.81 (varies by index build: Whisper's audio transcripts differ slightly between builds), cross-modal
-      Recall@5 = 0.88 (14/16). Image floor settled by the ADR-011 gate; the text floor was
+      0.81 (reproducible: audio transcripts are cached by sha256, data/transcripts/; two earlier builds with
+      different transcripts gave 0.75), cross-modal Recall@5 = 0.88 (14/16). Image floor settled by the ADR-011 gate; the text floor was
       measured and deliberately left unchanged (ADR-009 update). The pinned requirements.txt was verified in a
       fresh Python 3.13 environment, which exposed and fixed three defects (unpinned `av` broke real
       transcription; chromadb 0.5.23's HNSW search missed the best chunk for ~1 in 3 questions, ADR-012;

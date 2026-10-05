@@ -109,6 +109,17 @@ class Settings:
     CLIP_PRETRAINED: str = os.environ.get("CLIP_PRETRAINED", "laion2b_s34b_b79k")
     WHISPER_MODEL_SIZE: str = os.environ.get("WHISPER_MODEL_SIZE", "base")
 
+    # Where each audio file's transcript is kept, keyed by the file's sha256
+    # (src/pipelines/audio/transcript_cache.py). Whisper's output is not
+    # identical across library versions or machines (measured 2026-10-05: the
+    # pinned and the newer environment transcribed the same clips slightly
+    # differently, and one early build differed on every clip), so without
+    # this the same audio gives a different index, and different retrieval
+    # numbers, depending on where it was built. With it, the transcript is
+    # part of the corpus: committed, identical everywhere, and not recomputed
+    # on every rebuild. Set to an empty string to disable.
+    WHISPER_TRANSCRIPT_CACHE_DIR: str = os.environ.get("WHISPER_TRANSCRIPT_CACHE_DIR", "./data/transcripts")
+
     CHROMA_PERSIST_DIR: str = os.environ.get("CHROMA_PERSIST_DIR", "./chroma_db")
 
     CHUNK_SIZE_WORDS: int = _get_int("CHUNK_SIZE_WORDS", 300)

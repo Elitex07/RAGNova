@@ -191,11 +191,11 @@ Licences used: CC BY 4.0 / 2.0, CC BY-SA 2.0 / 3.0 / 4.0, CC0, public domain. No
 | Metric | Result | n | Target |
 |---|---|---|---|
 | Recall@5 (text) | 1.00 | 25 | >= 0.80 |
-| MRR (text) | 0.75-0.81 (0.75 in two index builds, 0.81 in a third; see below) | 25 | >= 0.65 |
+| MRR (text) | 0.81 (reproducible; two earlier builds with different audio transcripts gave 0.75) | 25 | >= 0.65 |
 | Cross-modal Recall@5, text-to-image only | 0.75 (6/8) | 8 | >= 0.70 |
 | Cross-modal Recall@5, all 16 (text-to-image, image-to-document, audio-topic) | 0.88 (14/16) | 16 | |
 
-Context: the same 13 starter questions scored MRR 0.81 before the corpus grew and 0.77 after (on the first build); Recall@5 stayed 1.00. **MRR is not a single number here:** faster-whisper does not transcribe identically across index builds on the same machine, the 8 audio chunks sit in the same index as the documents, and a different transcript moved 3 of the 25 questions between rank 1 and rank 2 (0.75 vs 0.81). Report a range, or make the transcription deterministic first. Before the image gate (ADR-011) cross-modal was 15/16; the gate costs one text-free photo and refuses all 6 out-of-corpus questions instead of 1. With 25 questions one item moves Recall@5 by 0.04.
+Context: the same 13 starter questions scored MRR 0.81 before the corpus grew and 0.77 after (on the first build); Recall@5 stayed 1.00. **MRR depended on the transcripts, and now does not:** the 8 audio chunks sit in the same index as the documents, and different Whisper transcripts moved 3 of the 25 questions between rank 1 and rank 2 (0.75 against 0.81). Transcripts are now cached by the audio's sha256 and committed (`data/transcripts/`), so any machine builds the same index; a build in each of the two environments gave byte-identical audio chunks. Before the image gate (ADR-011) cross-modal was 15/16; the gate costs one text-free photo and refuses all 6 out-of-corpus questions instead of 1. With 25 questions one item moves Recall@5 by 0.04.
 
 ### D. Answer quality (methodology section 8.2; `data/eval/answers_2026-10-05_*.txt`)
 

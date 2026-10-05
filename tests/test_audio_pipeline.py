@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import math
 import re
@@ -15,6 +16,30 @@ from src.core.config import settings
 from src.core.schemas import Chunk, validate_chunk
 from src.core.vector_store import get_client, get_text_collection
 from src.pipelines.rag.prompt import format_provenance
+
+
+@pytest.fixture(autouse=True)
+def _no_transcript_cache_by_default(monkeypatch):
+    """The transcript cache (src/pipelines/audio/transcript_cache.py) is OFF
+    for every test in this module unless a test turns it on with `use_cache`.
+    Left on, these tests would write fake transcripts into the real
+    data/transcripts/ folder, and one test's fake transcript would be served
+    to the next test that happens to use the same fake audio bytes."""
+    from src.pipelines.audio import ingestion
+
+    monkeypatch.setattr(ingestion, "settings", dataclasses.replace(ingestion.settings, WHISPER_TRANSCRIPT_CACHE_DIR=""))
+
+
+@pytest.fixture
+def use_cache(tmp_path, monkeypatch):
+    """Turn the transcript cache on, in a throwaway folder; returns that folder."""
+    from src.pipelines.audio import ingestion
+
+    cache_dir = tmp_path / "transcripts"
+    monkeypatch.setattr(
+        ingestion, "settings", dataclasses.replace(ingestion.settings, WHISPER_TRANSCRIPT_CACHE_DIR=str(cache_dir))
+    )
+    return cache_dir
 
 
 def fake_embed_texts(texts: list[str]) -> list[list[float]]:
@@ -158,13 +183,13 @@ def _segment(text, start, end):
     return SimpleNamespace(text=text, start=start, end=end)
 
 
-def _real_ingestor(monkeypatch, attempts):
+def _real_ingestor(monkeypatch, attempts, **kwargs):
     from src.pipelines.audio import ingestion
 
     model = FakeWhisperModel(attempts)
-    monkeypatch.setattr(ingestion, "WhisperModel", lambda *args, **kwargs: model)
+    monkeypatch.setattr(ingestion, "WhisperModel", lambda *args, **kw: model)
     monkeypatch.setattr(ingestion.time, "sleep", lambda *_: None)  # skip retry back-off
-    return ingestion.AudioIngestor()
+    return ingestion.AudioIngestor(**kwargs)
 
 
 def _audio_file(directory, name="lecture.wav", content=b"RIFF fake"):
@@ -224,3 +249,138 @@ def test_real_audio_ingestor_does_not_duplicate_segments_when_a_retry_restarts_t
     text = " ".join(chunk.text for chunk in chunks)
     for phrase in ("Alpha beta gamma.", "Delta epsilon zeta.", "Eta theta iota."):
         assert text.count(phrase) == 1
+
+
+# ---------------------------------------------------------------------------
+# The transcript cache: the same audio bytes always give the same chunks.
+# `use_cache` (above) switches it on in a throwaway folder; in every other test
+# it is off.
+# ---------------------------------------------------------------------------
+
+TALK = [_segment("Welcome to the library orientation.", 1.234567, 4.0), _segment("The fine is five rupees.", 4.0, 9.987654)]
+
+
+def _chunk_view(chunks):
+    return [(c.chunk_id, c.text, c.start_s, c.end_s) for c in chunks]
+
+
+def test_a_second_ingest_of_the_same_audio_is_served_from_the_cache_and_is_identical(tmp_path, monkeypatch, use_cache):
+    audio = _audio_file(tmp_path)
+    first = _real_ingestor(monkeypatch, [TALK]).process_file(audio)
+    assert len(list(use_cache.glob("*.json"))) == 1
+
+    # attempts=[] means any call to Whisper would raise: a cache hit must not call it.
+    second = _real_ingestor(monkeypatch, []).process_file(audio)
+
+    assert _chunk_view(second) == _chunk_view(first)
+    assert first[0].start_s == 1.23          # timestamps are rounded identically on a miss and a hit
+
+
+def test_a_cache_hit_never_loads_whisper_at_all(tmp_path, monkeypatch, use_cache):
+    from src.pipelines.audio import ingestion
+
+    audio = _audio_file(tmp_path)
+    _real_ingestor(monkeypatch, [TALK]).process_file(audio)
+
+    def must_not_load(*args, **kwargs):
+        raise AssertionError("Whisper was loaded although the transcript was cached")
+
+    monkeypatch.setattr(ingestion, "WhisperModel", must_not_load)
+    assert ingestion.AudioIngestor().process_file(audio)
+
+
+def test_changing_the_audio_bytes_triggers_a_fresh_transcription(tmp_path, monkeypatch, use_cache):
+    audio = _audio_file(tmp_path, content=b"RIFF the first recording")
+    _real_ingestor(monkeypatch, [TALK]).process_file(audio)
+
+    audio.write_bytes(b"RIFF a different recording")
+    other = [_segment("Completely different speech.", 0.0, 5.0)]
+    chunks = _real_ingestor(monkeypatch, [other]).process_file(audio)
+
+    assert "Completely different speech." in chunks[0].text
+    assert len(list(use_cache.glob("*.json"))) == 2
+
+
+def test_the_whisper_model_size_is_part_of_the_cache_key(tmp_path, monkeypatch, use_cache):
+    audio = _audio_file(tmp_path)
+    _real_ingestor(monkeypatch, [TALK], model_size="base").process_file(audio)
+    other = [_segment("Heard by the bigger model.", 0.0, 5.0)]
+    chunks = _real_ingestor(monkeypatch, [other], model_size="small").process_file(audio)
+
+    assert "bigger model" in chunks[0].text
+    assert sorted(f.name.split(".")[1] for f in use_cache.glob("*.json")) == ["base", "small"]
+
+
+def test_a_corrupt_cache_file_is_ignored_and_rewritten(tmp_path, monkeypatch, use_cache):
+    audio = _audio_file(tmp_path)
+    _real_ingestor(monkeypatch, [TALK]).process_file(audio)
+    (cache_file,) = use_cache.glob("*.json")
+    cache_file.write_text("{ this is not json", encoding="utf-8")
+
+    chunks = _real_ingestor(monkeypatch, [TALK]).process_file(audio)
+
+    assert chunks and "library orientation" in chunks[0].text
+    import json
+    assert json.loads(cache_file.read_text(encoding="utf-8"))["segments"]      # rewritten, valid again
+
+
+def test_with_the_cache_disabled_nothing_is_written_and_whisper_runs_every_time(tmp_path, monkeypatch):
+    from src.pipelines.audio import ingestion
+
+    assert ingestion._transcript_cache_dir() is None          # the autouse fixture's default
+    audio = _audio_file(tmp_path)
+    _real_ingestor(monkeypatch, [TALK, TALK]).process_file(audio)
+    _real_ingestor(monkeypatch, [TALK]).process_file(audio)
+    assert not (tmp_path / "transcripts").exists()
+
+
+def test_a_segment_never_ends_after_the_audio_does(tmp_path, monkeypatch):
+    # FakeWhisperModel reports duration=20.0. A garbled decode once put a clip's
+    # last segment at 80.6 s on a 72.6 s file.
+    ingestor = _real_ingestor(monkeypatch, [[_segment("Intro words here.", 0.0, 5.0),
+                                            _segment("Garbled tail.", 18.0, 25.5)]])
+    chunks = ingestor.process_file(_audio_file(tmp_path))
+    assert max(c.end_s for c in chunks) <= 20.0
+
+
+def test_an_interrupted_transcription_does_not_leave_a_partial_cache(tmp_path, monkeypatch, use_cache):
+    ingestor = _real_ingestor(monkeypatch, [TALK])
+    stream = ingestor._transcribe_with_retry(_audio_file(tmp_path))
+    next(stream)                 # take one segment, then abandon the rest
+    stream.close()
+    assert not list(use_cache.glob("*.json"))
+
+
+def test_a_cache_write_failure_does_not_lose_the_transcript_or_retry_it(tmp_path, monkeypatch, use_cache):
+    from src.pipelines.audio import transcript_cache
+
+    def fail(*args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(transcript_cache, "store", fail)
+    # one attempt only: if the failed write triggered a retry, FakeWhisperModel would run out of attempts
+    chunks = _real_ingestor(monkeypatch, [TALK]).process_file(_audio_file(tmp_path))
+    assert chunks and "library orientation" in chunks[0].text
+
+
+def test_real_whisper_on_a_real_clip_is_reproduced_exactly_from_the_cache(tmp_path, use_cache):
+    # The point of the whole feature, with the real model: transcribe a real
+    # corpus clip, then ingest it again, and get the identical chunks without
+    # Whisper being loaded a second time.
+    from src.pipelines.audio import ingestion
+
+    clip = Path(__file__).resolve().parent.parent / "data" / "audio" / "it_helpdesk_wifi_instructions.wav"
+    loads = []
+    real_model = ingestion.WhisperModel
+    ingestion.WhisperModel = lambda *a, **k: (loads.append(1), real_model(*a, **k))[1]
+    try:
+        try:
+            first = ingestion.AudioIngestor().process_file(clip)
+        except Exception as exc:  # the Whisper weights are not available on this machine
+            pytest.skip(f"real Whisper model not available: {exc}")
+        second = ingestion.AudioIngestor().process_file(clip)
+    finally:
+        ingestion.WhisperModel = real_model
+
+    assert first and _chunk_view(second) == _chunk_view(first)
+    assert len(loads) == 1, "Whisper was loaded again for a clip whose transcript was cached"
