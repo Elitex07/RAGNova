@@ -22,6 +22,15 @@ from pathlib import Path
 
 GOLD_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "gold_set.json"
 
+# Out-of-corpus questions used in earlier chapters (ADR-009/ADR-010's original
+# numbers). Not gold rows, so they stay out of the JSON and the README tables,
+# but the measurement scripts add them to the negatives so those older
+# figures stay comparable. One list here, not one per script.
+LEGACY_NEGATIVES = [
+    "How much is the tuition fee for one semester?",
+    "What is the capital of France?",
+]
+
 # Section name -> the keys every row in it must carry.
 _REQUIRED = {
     "text": {"id", "question", "expected_source", "expected_pages"},

@@ -184,7 +184,7 @@ Licences used: CC BY 4.0 / 2.0, CC BY-SA 2.0 / 3.0 / 4.0, CC0, public domain. No
 
 ### B. Gold set (`data/gold_set.json`)
 
-25 text questions (T1-T13 on the synthetic corpus, T14-T25 on the downloaded one), 16 cross-modal (8 text-to-image, 4 image-to-document, 4 audio-topic), 4 negative controls. Wording overlap between a question and its answer chunk: median 50%, range 27-88%, never zero (`scripts/check_gold_set.py`); the earlier claim of "no shared keywords" was corrected. Whether dense retrieval beats keyword search (a BM25 baseline) has **not** been run.
+25 text questions (T1-T13 on the synthetic corpus, T14-T25 on the downloaded one), 16 cross-modal (8 text-to-image, 4 image-to-document, 4 audio-topic), 4 negative controls. Wording overlap between a question and its answer chunk: median 50%, range 27-88%, never zero (`scripts/check_gold_set.py`); the earlier claim of "no shared keywords" was corrected. Dense retrieval against a BM25 keyword baseline **was** run (see C2 below).
 
 ### C. Retrieval (methodology section 8.1; `scripts/evaluate_retrieval.py`, `scripts/evaluate_cross_modal.py`)
 
@@ -196,6 +196,19 @@ Licences used: CC BY 4.0 / 2.0, CC BY-SA 2.0 / 3.0 / 4.0, CC0, public domain. No
 | Cross-modal Recall@5, all 16 (text-to-image, image-to-document, audio-topic) | 0.88 (14/16) | 16 | |
 
 Context: the same 13 starter questions scored MRR 0.81 before the corpus grew and 0.77 after (on the first build); Recall@5 stayed 1.00. **MRR depended on the transcripts, and now does not:** the 8 audio chunks sit in the same index as the documents, and different Whisper transcripts moved 3 of the 25 questions between rank 1 and rank 2 (0.75 against 0.81). Transcripts are now cached by the audio's sha256 and committed (`data/transcripts/`), so any machine builds the same index; a build in each of the two environments gave byte-identical audio chunks. Before the image gate (ADR-011) cross-modal was 15/16; the gate costs one text-free photo and refuses all 6 out-of-corpus questions instead of 1. With 25 questions one item moves Recall@5 by 0.04.
+
+### C2. Dense versus keyword search (`scripts/evaluate_bm25_baseline.py`, `data/eval/bm25_baseline_2026-10-05.txt`)
+
+| Ranker (same 631 chunks, same hit rule) | Recall@5 | MRR |
+|---|---|---|
+| Dense (MiniLM), all 25 questions | 1.00 | 0.81 |
+| BM25, all 25 | 0.84 | 0.66 |
+| Dense, 16 questions with low wording overlap (<= 50%) | 1.00 | 0.82 |
+| BM25, same 16 | 0.75 | 0.55 |
+| Dense, 9 questions with higher overlap (> 50%) | 1.00 | 0.80 |
+| BM25, same 9 | 1.00 | 0.87 |
+
+Dense wins where the question's wording differs from the document's, and keyword search is as good (slightly better in rank) where it repeats it. Head to head: dense higher on 10 questions, BM25 on 5, tied on 10. An informational dense-plus-BM25 hybrid scored 0.96 / 0.82, no better than dense alone. Limits: BM25 without stemming; n = 25 (one question = 0.04).
 
 ### D. Answer quality (methodology section 8.2; `data/eval/answers_2026-10-05_*.txt`)
 

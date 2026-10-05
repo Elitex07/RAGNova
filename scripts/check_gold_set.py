@@ -48,6 +48,35 @@ def content_words(text: str) -> set[str]:
     return {w for w in re.findall(r"[a-z]{4,}", text.lower()) if w not in _STOP}
 
 
+def best_overlap(question: str, chunks: list, pages: list[int]) -> tuple[float, set[str]]:
+    """The share of the question's content words found in the best matching
+    chunk on one of `pages`, and which words those were."""
+    q_words = content_words(question)
+    best_share, best_shared = 0.0, set()
+    for chunk in chunks:
+        if chunk.page in pages:
+            shared = q_words & content_words(chunk.text)
+            share = len(shared) / len(q_words) if q_words else 0.0
+            if share > best_share:
+                best_share, best_shared = share, shared
+    return best_share, best_shared
+
+
+def question_overlaps(gold: dict) -> dict[str, float]:
+    """id -> wording overlap for every text question whose expected file and
+    pages exist. scripts/evaluate_bm25_baseline.py uses it to split the
+    questions into low- and high-overlap groups."""
+    cache: dict[str, list] = {}
+    out: dict[str, float] = {}
+    for row in gold["text"]:
+        path = PROJECT_ROOT / row["expected_source"]
+        if not path.exists():
+            continue
+        chunks = cache.setdefault(row["expected_source"], ingest_document(path))
+        out[row["id"]] = best_overlap(row["question"], chunks, row["expected_pages"])[0]
+    return out
+
+
 def main() -> int:
     gold = load_gold_set()
     problems = 0
@@ -68,14 +97,7 @@ def main() -> int:
             print(f"{row['id']:5s} PAGE(S) {absent} DO NOT EXIST in {row['expected_source']} (has {sorted(pages_present)})")
             problems += 1
             continue
-        q_words = content_words(row["question"])
-        best_share, best_shared = 0.0, set()
-        for chunk in chunks:
-            if chunk.page in row["expected_pages"]:
-                shared = q_words & content_words(chunk.text)
-                share = len(shared) / len(q_words) if q_words else 0.0
-                if share > best_share:
-                    best_share, best_shared = share, shared
+        best_share, best_shared = best_overlap(row["question"], chunks, row["expected_pages"])
         overlaps.append((row["id"], best_share))
         flag = "  <-- high" if best_share > FLAG_ABOVE else ""
         print(f"{row['id']:5s} {best_share:8.0%}  {sorted(best_shared)}{flag}")

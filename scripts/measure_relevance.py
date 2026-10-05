@@ -49,18 +49,15 @@ if hasattr(sys.stdout, "reconfigure"):
 
 from src.core.config import settings
 from src.core.embeddings import embed_text
-from src.core.gold import load_gold_set
+from src.core.gold import LEGACY_NEGATIVES, load_gold_set
 from src.pipelines.documents.search import search_text
 from src.pipelines.images.search import search_images
 
 TOP_K = 5
 
-# Negative controls used in earlier chapters, kept here (not in the gold set)
-# so ADR-009/ADR-010's original numbers stay comparable.
-EXTRA_NEGATIVES = [
-    "How much is the tuition fee for one semester?",
-    "What is the capital of France?",
-]
+# Negative controls from earlier chapters (src/core/gold.py), so ADR-009/ADR-010's
+# original numbers stay comparable.
+EXTRA_NEGATIVES = LEGACY_NEGATIVES
 
 
 def _cos(a: list[float], b: list[float]) -> float:
