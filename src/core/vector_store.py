@@ -23,6 +23,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import chromadb
+from chromadb.config import Settings as ChromaSettings
 
 from src.core.config import settings
 from src.core.schemas import Chunk, IMAGE_COLLECTION, TEXT_COLLECTION
@@ -38,20 +39,45 @@ from src.core.schemas import Chunk, IMAGE_COLLECTION, TEXT_COLLECTION
 # to turn a returned distance back into a similarity score.
 _COSINE_SPACE = {"hnsw:space": "cosine"}
 
+# Approximate-search effort. ChromaDB's search is HNSW, an APPROXIMATE
+# nearest-neighbour index: how hard it looks is set by `search_ef` (how many
+# candidates it keeps while searching), `construction_ef` and `M` (how well
+# the graph is built). The defaults (search_ef 10, construction_ef 100,
+# M 16) are tuned for millions of vectors where speed matters. Measured on
+# this project's 623-chunk text index with the version requirements.txt pins
+# (chromadb 0.5.23): over 29 gold questions the default index returned a
+# DIFFERENT top 5 from exact brute-force search for 9-10 of them, and a wrong
+# top 1 once or twice, varying run to run. With the values below it returned
+# the exact top 5 for all 29 (chromadb 1.5.9 was already exact at the
+# defaults, and stays exact with these). At a few thousand vectors the extra
+# effort costs milliseconds; a retrieval system that silently misses the best
+# chunk is the expensive failure. These apply when a collection is CREATED:
+# an index built before this change must be rebuilt (delete chroma_db/ and
+# run scripts/build_index.py) to pick them up.
+_HNSW_EFFORT = {"hnsw:search_ef": 200, "hnsw:construction_ef": 400, "hnsw:M": 32}
+_COLLECTION_METADATA = {**_COSINE_SPACE, **_HNSW_EFFORT}
+
 
 def get_client(persist_dir: str | Path | None = None) -> chromadb.ClientAPI:
     """A persistent ChromaDB client. Defaults to settings.CHROMA_PERSIST_DIR
     (the real, on-disk index); pass a `tmp_path`-derived directory in tests
-    so nothing ever writes into the real index during a test run."""
-    return chromadb.PersistentClient(path=str(persist_dir or settings.CHROMA_PERSIST_DIR))
+    so nothing ever writes into the real index during a test run.
+
+    Anonymous telemetry is switched off: this project is offline by design
+    (Objective O6), so it must not report usage to a third party, and with
+    some version combinations the telemetry call also fails noisily."""
+    return chromadb.PersistentClient(
+        path=str(persist_dir or settings.CHROMA_PERSIST_DIR),
+        settings=ChromaSettings(anonymized_telemetry=False),
+    )
 
 
 def get_text_collection(client: chromadb.ClientAPI):
-    return client.get_or_create_collection(TEXT_COLLECTION, metadata=_COSINE_SPACE)
+    return client.get_or_create_collection(TEXT_COLLECTION, metadata=_COLLECTION_METADATA)
 
 
 def get_image_collection(client: chromadb.ClientAPI):
-    return client.get_or_create_collection(IMAGE_COLLECTION, metadata=_COSINE_SPACE)
+    return client.get_or_create_collection(IMAGE_COLLECTION, metadata=_COLLECTION_METADATA)
 
 
 def add_chunks(collection, chunks: list[Chunk], embeddings: list[list[float]]) -> None:

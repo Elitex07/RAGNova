@@ -195,3 +195,32 @@ def test_search_results_satisfy_the_contract(indexed_client):
     for chunk in results:
         assert validate_chunk(chunk) == []
         assert chunk.score is not None
+
+
+def test_approximate_search_returns_the_same_top_five_as_exact_search(indexed_client):
+    # HNSW is an APPROXIMATE index. With chromadb's default effort settings, the
+    # version requirements.txt pins (0.5.23) returned a different top 5 from
+    # exact search for ~1 in 3 of these questions on this very corpus, and
+    # sometimes a wrong top 1 (src/core/vector_store.py explains the numbers).
+    # Real embeddings, the real corpus: brute-force every stored vector and
+    # require the index to agree for every text gold question and negative.
+    collection = get_text_collection(indexed_client)
+    stored = collection.get(include=["embeddings"])
+    gold = load_gold_set()
+    questions = [r["question"] for r in gold["text"]] + [r["question"] for r in gold["negatives"]]
+    disagreements = []
+    for question in questions:
+        query = embed_text(question)
+        exact = sorted(
+            ((sum(a * b for a, b in zip(query, vec)), cid) for vec, cid in zip(stored["embeddings"], stored["ids"])),
+            reverse=True,
+        )
+        approximate = collection.query(query_embeddings=[query], n_results=5)["ids"][0]
+        if {cid for _, cid in exact[:5]} != set(approximate):
+            disagreements.append(question[:60])
+    assert not disagreements, f"approximate search differs from exact search for {len(disagreements)} question(s): {disagreements}"
+
+
+def test_client_does_not_send_anonymous_telemetry(tmp_path):
+    # The project is offline by design (Objective O6): it must not report usage to a third party.
+    assert get_client(persist_dir=tmp_path / "chroma_telemetry").get_settings().anonymized_telemetry is False
