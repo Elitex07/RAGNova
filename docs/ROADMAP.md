@@ -175,7 +175,8 @@ With 2 members: merge Track C into A and B (each owns half the UI).
       from 3 synthetic files to 19 documents / 25 images / 8 audio clips with 30 openly-licensed files downloaded
       (data/SOURCES.md, Git LFS); one gold set (data/gold_set.json: 25 text, 16 cross-modal, 4 negatives).
       Measured on the grown corpus (2026-10-05, data/README.md's Results log): text Recall@5 = 1.00 / MRR =
-      0.75, cross-modal Recall@5 = 0.88 (14/16). Image floor settled by the ADR-011 gate; the text floor was
+      0.75-0.81 (varies by index build: Whisper's audio transcripts differ slightly between builds), cross-modal
+      Recall@5 = 0.88 (14/16). Image floor settled by the ADR-011 gate; the text floor was
       measured and deliberately left unchanged (ADR-009 update). The pinned requirements.txt was verified in a
       fresh Python 3.13 environment, which exposed and fixed three defects (unpinned `av` broke real
       transcription; chromadb 0.5.23's HNSW search missed the best chunk for ~1 in 3 questions, ADR-012;
