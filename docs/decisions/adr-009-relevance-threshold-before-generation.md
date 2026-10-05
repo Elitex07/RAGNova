@@ -70,8 +70,18 @@ Raising the floor trades correct answers for fewer noise chunks at about the sam
 No variant beats the current settings, so **this ADR's decision stands unchanged**: floor 0.30, `TOP_K = 5`, original prompt. All 6 negatives are refused end to end, but note that for two of them (the Python-sort question and the semester-fee question) it is the *model's* refusal, not the floor's; ADR-009's deterministic guarantee holds only for questions whose every chunk scores under 0.3.
 
 **Two failure patterns the measurement exposed, neither a gating problem:**
-1. `T14` and `T20` (a results table in the DPR paper, Table 1 of the OpenCLIP paper) are refused by every variant although the right chunk is in context. PDF table text extracts as a run of numbers without its headers. That is a document-parsing limit, not a threshold one.
+1. `T14` and `T20` (a results table in the DPR paper, Table 1 of the OpenCLIP paper) are refused by every variant although the right chunk is in context. *(Corrected below: the first diagnosis of this, "PDF table text extracts as a run of numbers without its headers", was a hypothesis, tested and found wrong.)*
 2. On an index of *documents only* (what `tests/test_rag_core.py` builds), T1's context is the correct chunk plus four irrelevant paper chunks and the model refused 3 of 3 runs, while on the production index it answers. Context composition changes a 3B model's behaviour unpredictably; `tests/test_rag_core.py::test_answer_query_cites_the_right_source_for_a_gold_question` is marked as an expected failure for that reason, with this section as the reason.
 
 The step beyond these knobs, if retrieval precision becomes the limit, is a cross-encoder reranker (considered and deferred in ADR-011).
+
+### Follow-up (2026-10-05): the T14 / T20 refusals, diagnosed properly
+
+The first explanation above ("table text extracts without headers, so fix the table extraction") was tested before any code was written, and it does not hold:
+
+- **PyMuPDF's `find_tables()` is not usable on this corpus.** It reported 176 "tables" over 259 pages in the 13 PDFs, mostly false positives (token boxes and letter grids in the BERT and *Algorithms* figures, empty plot grids in the OpenCLIP paper). DPR's target table came out fragmented (whole rows merged into single cells), OpenCLIP's Table 1 was not detected at all, and the lineless `strategy="text"` returned the entire page as one 77-row table with words split mid-token. Replacing page text with such output would have corrupted figure pages and still not fixed T20. Not adopted.
+- **T14 is a distractor problem, not a parsing one.** Given the expected chunk **alone**, the model answers (0 of 3 refusals). Given it with the other four retrieved chunks (three from the same paper, with other numbers) it refuses 3 of 3, even with the right chunk moved to position 1.
+- **T20 is a capability limit of the 3B model.** It refuses 3 of 3 even with the expected chunk alone, and also when the table's rows are rebuilt from word positions, so the table's line structure is not the cause either. The chunk readably contains `Ours LAION-2B H/14 78.0 ...`; the model does not make the "which row is best" step.
+
+So these two refusals are a limit of the generator on this question type, not a defect in ingestion, and no parsing change is justified. A larger model or a reranker plus a tighter prompt are the candidates if it matters; neither is in scope. `ROADMAP`, the results log and the report appendix are corrected to match.
 

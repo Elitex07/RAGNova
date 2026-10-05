@@ -215,6 +215,7 @@ Dense wins where the question's wording differs from the document's, and keyword
 - **Rated by Claude (an AI assistant), not by an independent human, and not on the four-dimension rubric of section 8.2.** One 1-5 score per answer combining correctness and citation. Average 4.21 / 5 over 29 questions (25 text, 4 negatives): 18 rated 5, 4 rated 4, 3 rated 3, 3 rated 2, 1 rated 1. Positives 4.08, negatives 5.00. Target of section 8.2 (mean faithfulness >= 4/5) is therefore not yet evidenced by human raters.
 - Citation correctness (a section 8.2 dimension), checked mechanically by looking for the fact in each cited chunk: 14 of 19 checked citations supported, 5 not (T7, T8, T13, T16, and one of T19's two). The Sources list shown to the user is always correct because it is built from chunk metadata, not model text.
 - Every out-of-corpus question was refused (4/4 negatives; 3 with no model call).
+- Of the 25 text questions, 2 are refused even though the right chunk is retrieved: T14 (the model answers from the right chunk alone but is distracted by four other chunks) and T20 (it cannot answer even from the right chunk alone). Both were tested and are generator limits, not parsing defects; a table-extraction fix was measured and rejected (`find_tables()` gave 176 mostly false detections in 259 pages).
 - With images included (`--images`): 16 correct, 2 muddled, 7 with no usable answer, against 18 / 3 / 4 text-only.
 - Single runs of a stochastic 3B model at temperature 0.1: a one-question difference is within noise.
 
