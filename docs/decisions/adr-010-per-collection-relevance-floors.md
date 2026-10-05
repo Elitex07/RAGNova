@@ -2,6 +2,7 @@
 
 ## Status
 Accepted — Day 12. Extends ADR-009; the image floor's value is provisional (see Revisit if).
+**Update 2026-10-05:** the measurement below showed no CLIP floor separates correct from irrelevant images. [ADR-011](adr-011-image-corroboration-gate.md) adds a corroboration gate on top of this floor; the per-collection floors themselves stand.
 
 ## Context
 

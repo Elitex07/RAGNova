@@ -168,11 +168,13 @@ With 2 members: merge Track C into A and B (each owns half the UI).
       real backend as Ch11 §5.6 shows)
 - [ ] Ch 12 — Integration & Feedback (docs + real, tested code written — image and audio write paths into
       ChromaDB, `search_images()`, rank-merged `retrieve()` across both collections (ADR-007), per-collection
-      relevance floors (ADR-010), `build_index.py` indexing all three folders, `tests/test_integration.py`
-      (28 passing, with fakes for the models), feedback log + `summarize_feedback.py` + `docs/feedback-log.md`.
-      Two real seam bugs found (Ch12 §5.3). Measured since: cross-modal Recall@5 = 1.00 on 8 questions
-      (`scripts/evaluate_cross_modal.py`, 2026-09-28) and text Recall@5 = 1.00 / MRR = 0.81 on 13 questions
-      (2026-09-29), see data/README.md's Results log. Still open: outside-tester sessions, deciding the image
-      floor (measured negative-control scores overlap the positives, see ADR-010), the ablations, the offline
-      demo — Ch12 §7.3)
+      relevance floors (ADR-010) plus an OCR-corroboration gate for images (ADR-011), `build_index.py` indexing
+      all three folders, `tests/test_integration.py` (32 passing, with fakes for the models), feedback log +
+      `summarize_feedback.py` + `docs/feedback-log.md`. Two real seam bugs found (Ch12 §5.3). The corpus grew
+      from 3 synthetic files to 19 documents / 25 images / 8 audio clips with 30 openly-licensed files downloaded
+      (data/SOURCES.md, Git LFS); one gold set (data/gold_set.json: 25 text, 16 cross-modal, 4 negatives).
+      Measured on the grown corpus (2026-10-05, data/README.md's Results log): text Recall@5 = 1.00 / MRR =
+      0.75, cross-modal Recall@5 = 0.88 (14/16). Image floor settled by the ADR-011 gate; the text floor was
+      measured and deliberately left unchanged (ADR-009 update). Still open: outside-tester sessions, the
+      ablations, the offline demo, wiring the UI — Ch12 §7.3)
 - [ ] Ch 13 — Mid-Term Report

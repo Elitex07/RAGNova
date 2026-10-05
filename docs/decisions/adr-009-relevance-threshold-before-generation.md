@@ -39,3 +39,39 @@ The gold set (`data/README.md`) grows enough negative and true-positive examples
 ---
 
 *Chapter 10 §3.2 and §5.4 work through the real scores that motivated 0.3 — a genuinely relevant chunk in this corpus scores comfortably in the 0.35–0.5 range, real off-topic queries score well under that; this ADR doesn't repeat that arithmetic, only records the decision it produced.*
+
+## Measurement update (2026-10-05): the gold set grew, so the threshold could finally be measured
+
+This is what "Revisit if" asked for. The corpus is now 19 documents (623 chunks) plus 8 audio transcripts, the gold set has 25 text questions and 6 negative controls (`python scripts/measure_relevance.py`), and the question is whether any score threshold separates answers from noise.
+
+**It does not, and a smarter rule does not either.** Labelling each of the top 5 results as expected (E), noise (N: clearly the wrong material) or neutral (n: not the expected chunk but plausibly fine, e.g. a synthetic audio transcript repeating a PDF's facts), the weakest correct chunk (T4, 0.366) scores below the strongest noise chunk (T1's, 0.383).
+
+| Rule on the top 5 | Questions whose expected chunk survives | Noise chunks kept, per question | Negatives refused by the rule alone |
+|---|---|---|---|
+| floor 0.30 (this ADR) | 25 / 25 | 1.04 | 4 / 6 |
+| floor 0.35 | 25 / 25 | 0.60 | 5 / 6 |
+| floor 0.40 | 20 / 25 | 0.40 | 6 / 6 |
+| floor 0.50 | 15 / 25 | 0.28 | 6 / 6 |
+| floor 0.30 + within 0.03 of the top score | 18 / 25 | 0.08 | 4 / 6 |
+| floor 0.30 + within 0.10 of the top score | 24 / 25 | 0.80 | 4 / 6 |
+
+Raising the floor trades correct answers for fewer noise chunks at about the same rate; "within X of the top" is worse, because a legitimate duplicate (the audio clip that repeats the notice) often outscores the expected chunk. Two negatives (the Python-sort question at 0.362 and the semester-fee question at 0.315) already clear 0.30, so the floor alone refuses only 4 of 6.
+
+**End to end, through the real model**, the picture is gentler than the retrieval table suggests (`llama3.2:3b`, the production index of documents plus audio, 25 positives and 6 negatives, one run per variant, so differences of one question are within the model's own noise):
+
+| Variant | Positives answered | Negatives refused |
+|---|---|---|
+| current: floor 0.30, original prompt, `TOP_K = 5` | 23 / 25 | 6 / 6 |
+| floor 0.35 | 22 / 25 | 6 / 6 |
+| prompt that says "ignore unrelated passages" | 22 / 25 | 6 / 6 |
+| floor 0.35 and that prompt | 23 / 25 | 6 / 6 |
+| `TOP_K = 3` | 22 / 25 | 6 / 6 (the expected chunk fell out of context for T14) |
+
+No variant beats the current settings, so **this ADR's decision stands unchanged**: floor 0.30, `TOP_K = 5`, original prompt. All 6 negatives are refused end to end, but note that for two of them (the Python-sort question and the semester-fee question) it is the *model's* refusal, not the floor's; ADR-009's deterministic guarantee holds only for questions whose every chunk scores under 0.3.
+
+**Two failure patterns the measurement exposed, neither a gating problem:**
+1. `T14` and `T20` (a results table in the DPR paper, Table 1 of the OpenCLIP paper) are refused by every variant although the right chunk is in context. PDF table text extracts as a run of numbers without its headers. That is a document-parsing limit, not a threshold one.
+2. On an index of *documents only* (what `tests/test_rag_core.py` builds), T1's context is the correct chunk plus four irrelevant paper chunks and the model refused 3 of 3 runs, while on the production index it answers. Context composition changes a 3B model's behaviour unpredictably; `tests/test_rag_core.py::test_answer_query_cites_the_right_source_for_a_gold_question` is marked as an expected failure for that reason, with this section as the reason.
+
+The step beyond these knobs, if retrieval precision becomes the limit, is a cross-encoder reranker (considered and deferred in ADR-011).
+

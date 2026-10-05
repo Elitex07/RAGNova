@@ -37,7 +37,7 @@ from src.pipelines.rag import answer as answer_module
 from src.pipelines.rag import retrieve as retrieve_module
 from src.pipelines.rag.answer import NOT_ENOUGH_INFO, answer_query, check_citations, stream_answer
 from src.pipelines.rag.prompt import build_prompt, format_provenance
-from src.pipelines.rag.retrieve import filter_by_floor, retrieve, rrf_merge
+from src.pipelines.rag.retrieve import filter_by_floor, filter_images, retrieve, rrf_merge
 from src.ui import backend
 from src.ui.citations import DOCX_PAGE_NOTE, citation_views
 from src.ui.feedback import FeedbackEntry, load_feedback, record_feedback, summarize
@@ -137,6 +137,11 @@ def fake_searches(monkeypatch):
                 _chunk("i_lo", modality="image", score=0.1, source="data/images/b.png")]
 
     monkeypatch.setattr(retrieve_module, "search_text", fake_search_text)
+    # ADR-011's gate asks MiniLM how well an image's OCR text agrees with the
+    # question. These tests are about floors and merging, not about that
+    # model, so by default the fake agrees; the gate itself is tested below
+    # with explicit scores.
+    monkeypatch.setattr(retrieve_module, "_ocr_agreement", lambda query, chunk: 1.0)
     return calls, fake_search_images
 
 
@@ -176,7 +181,87 @@ def test_retrieve_skips_text_search_for_an_empty_question(fake_searches):
     calls, image_search = fake_searches
     ids = [c.chunk_id for c in retrieve("  ", include_images=True, image_search=image_search)]
     assert "text" not in calls
-    assert ids == ["i_hi"]
+    # The image branch still RUNS on a blank question (calls["image"] is set)...
+    assert calls["image"] == "  "
+    # ...but ADR-011: a blank question gives a weak image (CLIP 0.25) nothing
+    # to be corroborated by, so it is dropped; only CLIP-confident ones survive.
+    assert ids == []
+    confident = lambda query_text=None, query_image=None, top_k=None, client=None: [_image("sure", 0.6)]
+    assert [c.chunk_id for c in retrieve("  ", include_images=True, image_search=confident)] == ["sure"]
+
+
+# ---------------------------------------------------------------------------
+# Part 2b — ADR-011: an image must be corroborated, not just nearest
+# ---------------------------------------------------------------------------
+
+def _image(cid, score, text="LIBRARY FINES Rs 2 per day"):
+    return _chunk(cid, modality="image", score=score, text=text, source=f"data/images/{cid}.png")
+
+
+def _must_not_be_called(query, chunk):
+    pytest.fail("agreement must not be consulted here")
+
+
+def test_filter_images_keeps_a_clip_confident_image_without_asking_agreement():
+    kept = filter_images([_image("a", 0.35)], "q", agreement=_must_not_be_called)
+    assert [c.chunk_id for c in kept] == ["a"]
+
+
+def test_filter_images_keeps_a_weak_clip_image_when_its_ocr_text_agrees():
+    kept = filter_images([_image("a", 0.25)], "q", agreement=lambda q, c: 0.45)
+    assert [c.chunk_id for c in kept] == ["a"]
+
+
+def test_filter_images_drops_a_weak_clip_image_when_its_ocr_text_does_not_agree():
+    # The measured failure this gate exists for: on the 15-image corpus the
+    # hostel-menu question's nearest image (a library-fines poster, CLIP 0.214)
+    # cleared the old 0.2 floor; on the 25-image corpus the Python-sort question's
+    # nearest image (a code screenshot, CLIP 0.291) is just as plausible and wrong.
+    assert filter_images([_image("a", 0.214)], "hostel mess menu", agreement=lambda q, c: 0.09) == []
+
+
+def test_filter_images_drops_a_weak_clip_photo_with_no_readable_text():
+    # Nothing to corroborate with, so it is dropped (the stated cost of the rule).
+    assert filter_images([_image("a", 0.25, text="")], "q", agreement=_must_not_be_called) == []
+
+
+def test_filter_images_still_applies_the_clip_floor_first():
+    assert filter_images([_image("a", 0.15)], "q", agreement=lambda q, c: 0.99) == []
+
+
+def test_filter_images_boundaries_are_inclusive():
+    # exactly the agreement threshold, and exactly the confident score
+    assert [c.chunk_id for c in filter_images([_image("a", 0.25)], "q", agreement=lambda q, c: 0.30)] == ["a"]
+    assert [c.chunk_id for c in filter_images([_image("b", 0.30)], "q", agreement=_must_not_be_called)] == ["b"]
+
+
+def test_retrieve_returns_nothing_when_text_is_below_floor_and_images_are_uncorroborated(monkeypatch):
+    # The end-to-end shape of the measured bug: no text chunk clears its
+    # floor, a poster clears CLIP's old 0.2 floor but its text disagrees.
+    monkeypatch.setattr(retrieve_module, "search_text", lambda q, top_k=None, client=None: [_chunk("t", score=0.24)])
+    images = lambda query_text=None, query_image=None, top_k=None, client=None: [_image("poster", 0.23)]
+    assert retrieve("hostel mess menu", include_images=True, image_search=images,
+                    image_agreement=lambda q, c: 0.1) == []
+
+
+def test_answer_query_refuses_without_calling_the_llm_when_only_uncorroborated_images_match(monkeypatch):
+    monkeypatch.setattr(retrieve_module, "search_text", lambda q, top_k=None, client=None: [])
+    images = lambda query_text=None, query_image=None, top_k=None, client=None: [_image("poster", 0.23)]
+    monkeypatch.setattr(answer_module, "retrieve",
+                        lambda q, **kw: retrieve(q, image_search=images, image_agreement=lambda qq, c: 0.1, **kw))
+    monkeypatch.setattr(answer_module, "generate", lambda p: pytest.fail("LLM must not be called"))
+    result = answer_query("How do I apply for a refund on tuition fees?", include_images=True)
+    assert result.answer == NOT_ENOUGH_INFO and result.citations == []
+
+
+def test_retrieve_does_not_gate_an_uploaded_image_on_ocr_agreement(monkeypatch):
+    # image -> image results have no question text to corroborate with, so
+    # only the CLIP floor applies to them.
+    monkeypatch.setattr(retrieve_module, "search_text", lambda q, top_k=None, client=None: [])
+    images = lambda query_text=None, query_image=None, top_k=None, client=None: [_image("similar", 0.6)]
+    ids = [c.chunk_id for c in retrieve("", query_image=Image.new("RGB", (4, 4)), image_search=images,
+                                        image_agreement=_must_not_be_called)]
+    assert ids == ["similar"]
 
 
 # ---------------------------------------------------------------------------

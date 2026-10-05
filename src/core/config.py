@@ -72,11 +72,27 @@ class Settings:
     # (ADR-003/ADR-007): CLIP text-to-image cosine scores for a genuinely
     # correct match sit systematically lower than MiniLM text-to-text
     # scores, so reusing 0.3 here would silently filter out every image.
-    # 0.2 is a starting point from CLIP's commonly reported range for real
-    # caption matches, NOT measured against this project's corpus (which
-    # has no images yet) -- measure it the same way Chapter 10 §3.2 did
-    # once data/images/ and the I1-I3 gold rows exist.
+    # Measured 2026-10-05 on the 25-image corpus (ADR-010/ADR-011): correct
+    # images score 0.216-0.346, but the top image for questions the corpus
+    # CANNOT answer scores 0.134-0.291, so no CLIP score alone separates
+    # them. 0.2 is therefore only the first, weak gate; the real one is the
+    # corroboration rule below.
     MIN_IMAGE_RELEVANCE_SCORE: float = _get_float("MIN_IMAGE_RELEVANCE_SCORE", 0.2)
+
+    # Image corroboration (ADR-011). An image whose CLIP score is below
+    # IMAGE_CONFIDENT_SCORE is only kept if the text read from it (OCR)
+    # also looks relevant to the question: the MiniLM similarity between the
+    # question and the image's OCR text must reach MIN_IMAGE_TEXT_AGREEMENT.
+    # Two independent models agreeing is far stronger evidence than either
+    # alone. Measured on 8 positive and 6 negative questions: this rule kept
+    # 7 of 8 correct images and refused all 6 negatives, where CLIP >= 0.2
+    # alone refused 1 of 6. The margins are THIN (a correct image at 0.301
+    # against a negative at 0.292) and the sample is small, so treat both
+    # numbers as provisional, like every threshold in this file.
+    # The cost, stated plainly: a photo with no readable text is only kept
+    # when CLIP alone reaches IMAGE_CONFIDENT_SCORE.
+    MIN_IMAGE_TEXT_AGREEMENT: float = _get_float("MIN_IMAGE_TEXT_AGREEMENT", 0.30)
+    IMAGE_CONFIDENT_SCORE: float = _get_float("IMAGE_CONFIDENT_SCORE", 0.30)
 
     # Reciprocal Rank Fusion constant for merging text_index and
     # image_index results by rank (ADR-007): score = sum(1 / (RRF_K + rank)).
