@@ -176,6 +176,10 @@ With 2 members: merge Track C into A and B (each owns half the UI).
       (data/SOURCES.md, Git LFS); one gold set (data/gold_set.json: 25 text, 16 cross-modal, 4 negatives).
       Measured on the grown corpus (2026-10-05, data/README.md's Results log): text Recall@5 = 1.00 / MRR =
       0.75, cross-modal Recall@5 = 0.88 (14/16). Image floor settled by the ADR-011 gate; the text floor was
-      measured and deliberately left unchanged (ADR-009 update). Still open: outside-tester sessions, the
-      ablations, the offline demo, wiring the UI — Ch12 §7.3)
+      measured and deliberately left unchanged (ADR-009 update). The pinned requirements.txt was verified in a
+      fresh Python 3.13 environment, which exposed and fixed three defects (unpinned `av` broke real
+      transcription; chromadb 0.5.23's HNSW search missed the best chunk for ~1 in 3 questions, ADR-012;
+      telemetry); performance measured (data/eval/performance_2026-10-05.txt). Real measured data is dumped
+      into reports/methodology-draft.md's appendix. Still open: outside-tester sessions, the ablations, the
+      offline demo, wiring the UI, a Python 3.11 check, CPU-only measurements — Ch12 §7.3)
 - [ ] Ch 13 — Mid-Term Report
