@@ -10,6 +10,7 @@ Chapter 12 piece that lets one question also surface images.
 
 from __future__ import annotations
 
+import re
 from dataclasses import replace
 
 from PIL import Image
@@ -97,6 +98,88 @@ def filter_images(chunks: list[Chunk], query: str, agreement=None) -> list[Chunk
     return kept
 
 
+# Words that say nothing about WHAT a question is about: question words,
+# function words, and the generic names for kinds of picture ("show me the
+# screenshot of ..."), which would otherwise "share a word" with any image whose
+# text happens to contain one of them. Used only by shares_content_word().
+_GENERIC_WORDS = frozenset("""
+a an the of in on at to for and or but if is are was were be been am do does did has have had
+i me my we our you your he she it its they them their this that these those there here
+what which who whom whose when where why how can could would should will shall may might must
+with from by as about into over under than then so not no any some all each every more most
+show find tell give get see look want need please
+picture pictures image images photo photos photograph screenshot screenshots poster notice
+page window diagram
+""".split())
+
+
+def _content_words(text: str) -> set[str]:
+    """Lower-cased alphanumeric words of 3+ letters, minus _GENERIC_WORDS, with a
+    trailing plural "s" removed ("books" matches "book"). Deliberately crude: it
+    is a veto against answers that share no word at all, not a ranking signal."""
+    words = set()
+    for raw in re.findall(r"[a-z0-9]+", text.lower()):
+        if len(raw) < 3 or raw in _GENERIC_WORDS:
+            continue
+        words.add(raw[:-1] if len(raw) > 3 and raw.endswith("s") else raw)
+    return words
+
+
+def shares_content_word(query: str, text: str) -> bool:
+    """True when the question and the text have at least one content word in
+    common (see _content_words)."""
+    return bool(_content_words(query) & _content_words(text))
+
+
+def gate_image_channels(
+    clip_hits: list[Chunk],
+    ocr_hits: list[Chunk],
+    query: str,
+    agreement=None,
+    ocr_only_min_agreement: float | None = None,
+    require_shared_word: bool = False,
+) -> list[Chunk]:
+    """ADR-014: the image gate over TWO searches, CLIP (`clip_hits`, scores are
+    CLIP cosines) and the OCR-text search (`ocr_hits`, scores are the question's
+    MiniLM cosine with the image's text). Returns the surviving images, best
+    first, in the order of the two rankings fused by rank (rrf_merge, ADR-007).
+
+    An image is kept when EITHER
+      - it passes ADR-011's rule on its CLIP score (filter_images' logic,
+        unchanged: floor, then confident-by-CLIP or corroborated by its text), OR
+      - `ocr_only_min_agreement` is set, the OCR search found it and its text
+        agrees with the question at least that much (and, with
+        `require_shared_word`, shares a content word with it), whatever CLIP
+        thought of it.
+
+    With no OCR hits and `ocr_only_min_agreement=None` this is exactly
+    filter_images(clip_hits, query): the equivalence is tested, and it is what
+    makes the channel safe to switch off. `agreement(query, chunk)` defaults to
+    the MiniLM cosine and is injected by tests, as in filter_images().
+    """
+    agreement = agreement or _ocr_agreement
+    clip_score = {c.chunk_id: c.score for c in clip_hits}
+    ocr_score = {c.chunk_id: c.score for c in ocr_hits}
+    kept = []
+    for chunk in rrf_merge([clip_hits, ocr_hits]):
+        score = clip_score.get(chunk.chunk_id)
+        passes_clip_rule = False
+        if score is not None and score >= settings.MIN_IMAGE_RELEVANCE_SCORE:
+            passes_clip_rule = score >= settings.IMAGE_CONFIDENT_SCORE or bool(
+                query.strip()
+                and chunk.text.strip()
+                and agreement(query, chunk) >= settings.MIN_IMAGE_TEXT_AGREEMENT
+            )
+        passes_ocr_rule = (
+            ocr_only_min_agreement is not None
+            and ocr_score.get(chunk.chunk_id, -1.0) >= ocr_only_min_agreement
+            and (not require_shared_word or shares_content_word(query, chunk.text))
+        )
+        if passes_clip_rule or passes_ocr_rule:
+            kept.append(chunk)
+    return kept
+
+
 def retrieve(
     query: str,
     top_k: int | None = None,
@@ -105,6 +188,7 @@ def retrieve(
     query_image: Image.Image | None = None,
     image_search=None,
     image_agreement=None,
+    image_text_search=None,
 ) -> list[Chunk]:
     """The one retrieval call the RAG core makes: relevant chunks from
     every enabled collection, merged into one ranked list of at most
@@ -165,6 +249,19 @@ def retrieve(
         image_hits = filter_by_floor(raw_image_hits, settings.MIN_IMAGE_RELEVANCE_SCORE)
     else:
         raw_image_hits = image_search(query_text=query, top_k=top_k, client=client)
-        image_hits = filter_images(raw_image_hits, query, image_agreement)
+        if settings.IMAGE_TEXT_SEARCH:
+            if image_text_search is None:
+                from src.pipelines.images.search import search_image_text as image_text_search
+            ocr_hits = image_text_search(query_text=query, top_k=top_k, client=client)
+            image_hits = gate_image_channels(
+                raw_image_hits,
+                ocr_hits,
+                query,
+                image_agreement,
+                settings.IMAGE_OCR_ONLY_MIN_AGREEMENT,
+                settings.IMAGE_OCR_ONLY_NEEDS_SHARED_WORD,
+            )
+        else:
+            image_hits = filter_images(raw_image_hits, query, image_agreement)
 
     return rrf_merge([text_hits, image_hits])[:top_k]

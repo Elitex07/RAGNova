@@ -43,6 +43,19 @@ def _get_optional_int(name: str) -> int | None:
     return int(raw) if raw else None
 
 
+def _get_optional_float(name: str) -> float | None:
+    """A float setting that is simply absent unless someone sets it."""
+    raw = os.environ.get(name, "").strip()
+    return float(raw) if raw else None
+
+
+def _get_bool(name: str, default: bool) -> bool:
+    raw = os.environ.get(name, "").strip().lower()
+    if not raw:
+        return default
+    return raw in ("1", "true", "yes", "on")
+
+
 @dataclass(frozen=True)
 class Settings:
     OLLAMA_MODEL: str = os.environ.get("OLLAMA_MODEL", "llama3.2:3b")
@@ -112,6 +125,20 @@ class Settings:
     # when CLIP alone reaches IMAGE_CONFIDENT_SCORE.
     MIN_IMAGE_TEXT_AGREEMENT: float = _get_float("MIN_IMAGE_TEXT_AGREEMENT", 0.30)
     IMAGE_CONFIDENT_SCORE: float = _get_float("IMAGE_CONFIDENT_SCORE", 0.30)
+
+    # OCR-text channel for images (ADR-014). Images are normally found by CLIP
+    # alone; the text read from them was used only to corroborate a weak CLIP
+    # match and to build the prompt. With IMAGE_TEXT_SEARCH on, a second search
+    # (the question against MiniLM vectors of every image's OCR text, in
+    # image_text_index) runs beside CLIP and the two image rankings are fused by
+    # rank. IMAGE_OCR_ONLY_MIN_AGREEMENT, if set, also keeps an image that CLIP
+    # did not convince but whose OCR text matches the question at least that
+    # well; IMAGE_OCR_ONLY_NEEDS_SHARED_WORD additionally asks for one shared
+    # content word. All three are opt-in measurements until the ADR says
+    # otherwise; with the defaults below retrieval behaves exactly as before.
+    IMAGE_TEXT_SEARCH: bool = _get_bool("IMAGE_TEXT_SEARCH", False)
+    IMAGE_OCR_ONLY_MIN_AGREEMENT: float | None = _get_optional_float("IMAGE_OCR_ONLY_MIN_AGREEMENT")
+    IMAGE_OCR_ONLY_NEEDS_SHARED_WORD: bool = _get_bool("IMAGE_OCR_ONLY_NEEDS_SHARED_WORD", False)
 
     # Reciprocal Rank Fusion constant for merging text_index and
     # image_index results by rank (ADR-007): score = sum(1 / (RRF_K + rank)).

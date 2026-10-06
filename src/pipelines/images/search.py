@@ -20,7 +20,7 @@ from PIL import Image
 
 from src.core.config import settings
 from src.core.schemas import Chunk
-from src.core.vector_store import get_client, get_image_collection
+from src.core.vector_store import get_client, get_image_collection, get_image_text_collection
 from src.pipelines.documents.search import _chunk_from_result
 from src.pipelines.images.embedding import OpenCLIPEmbedder
 from src.pipelines.images.models import ImageIngestionConfig
@@ -75,6 +75,48 @@ def search_images(
 
     results = collection.query(
         query_embeddings=[query_vector],
+        n_results=min(top_k, count),
+        include=["documents", "metadatas", "distances"],
+    )
+    return [
+        _chunk_from_result(chunk_id, text, metadata, distance)
+        for chunk_id, text, metadata, distance in zip(
+            results["ids"][0], results["documents"][0],
+            results["metadatas"][0], results["distances"][0],
+        )
+    ]
+
+
+def search_image_text(
+    query_text: str,
+    top_k: int | None = None,
+    client=None,
+    embed=None,
+) -> list[Chunk]:
+    """Search images by what they SAY (ADR-014): the question, embedded with
+    MiniLM, against the MiniLM vectors of every image's OCR text in
+    image_text_index. The result is the same kind of Chunk list search_images()
+    returns (same ids, modality "image"), but `.score` is the cosine between the
+    question and the image's text, the same quantity ADR-011 calls "agreement",
+    not a CLIP score. The two scales are never compared; the callers fuse the
+    two lists by rank.
+
+    [] for a blank question, or when image_text_index is empty (an index built
+    before ADR-014, or no image has readable text). `embed` defaults to MiniLM
+    and is injected by tests so they need no model weights.
+    """
+    if not query_text.strip():
+        return []
+    top_k = top_k or settings.TOP_K
+    client = client or get_client()
+    collection = get_image_text_collection(client)
+    count = collection.count()
+    if count == 0:
+        return []
+    if embed is None:
+        from src.core.embeddings import embed_text as embed
+    results = collection.query(
+        query_embeddings=[embed(query_text)],
         n_results=min(top_k, count),
         include=["documents", "metadatas", "distances"],
     )
