@@ -164,9 +164,15 @@ With 2 members: merge Track C into A and B (each owns half the UI).
 - [ ] Ch 11 — UI (docs + real, tested code written for the non-drawing half — streaming answers
       (`generate_stream()`, `stream_answer()`), per-citation display rules (`src/ui/citations.py`),
       uploads / voice / image-query plumbing (`src/ui/backend.py`, `transcribe_query()`,
-      `index_document_file()`). The page itself, `src/app.py` (PR #4, merged), is still the scaffold:
-      `process_query()` returns canned keyword-matched answers with fake citations. Still open: wire it to the
-      real backend as Ch11 §5.6 shows)
+      `index_document_file()`). The page itself, `src/app.py`, is wired to the real backend (PR #10, PrateekGG:
+      streaming answers, voice and image queries, citations, feedback form, corpus upload). Reviewed by running it
+      (2026-10-07): the page, refusals, the feedback log, OCR of a query image and corpus upload worked;
+      defects found and fixed on top: a failed model call was silently replaced by the canned answer and the
+      error was erased by the next `st.rerun()`; canned answers were rated and logged under the real model's
+      name; an attached query image stayed on every later question; the server listened on every network
+      interface. The canned path is now opt-in, labelled, and logged as `scaffold-mock`; `tests/test_app.py` runs
+      the real script headlessly. Not yet verified: a streamed answer end to end (the Ollama install was broken
+      that day) and the microphone path)
 - [ ] Ch 12 — Integration & Feedback (docs + real, tested code written — image and audio write paths into
       ChromaDB, `search_images()`, rank-merged `retrieve()` across both collections (ADR-007), per-collection
       relevance floors (ADR-010) plus an OCR-corroboration gate for images (ADR-011), `build_index.py` indexing
