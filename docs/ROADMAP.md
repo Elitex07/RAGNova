@@ -171,8 +171,9 @@ With 2 members: merge Track C into A and B (each owns half the UI).
       error was erased by the next `st.rerun()`; canned answers were rated and logged under the real model's
       name; an attached query image stayed on every later question; the server listened on every network
       interface. The canned path is now opt-in, labelled, and logged as `scaffold-mock`; `tests/test_app.py` runs
-      the real script headlessly. Not yet verified: a streamed answer end to end (the Ollama install was broken
-      that day) and the microphone path)
+      the real script headlessly. Verified later that day with a working model: Test the model, a streamed cited answer,
+      a refusal, an image + question, canned-mode labelling and both feedback-log labels. Not yet verified: the
+      microphone path and the real network-off run)
 - [ ] Ch 12 — Integration & Feedback (docs + real, tested code written — image and audio write paths into
       ChromaDB, `search_images()`, rank-merged `retrieve()` across both collections (ADR-007), per-collection
       relevance floors (ADR-010) plus an OCR-corroboration gate for images (ADR-011), `build_index.py` indexing

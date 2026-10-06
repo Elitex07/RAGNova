@@ -169,3 +169,8 @@ def test_streamlit_config_keeps_the_app_on_this_machine_and_telemetry_off():
     config = tomllib.loads((PROJECT_ROOT / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
     assert config["server"]["address"] == "127.0.0.1"
     assert config["browser"]["gatherUsageStats"] is False
+
+
+def test_streamlit_config_is_headless_so_a_fresh_machine_does_not_stop_at_the_email_prompt():
+    config = tomllib.loads((PROJECT_ROOT / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
+    assert config["server"]["headless"] is True
