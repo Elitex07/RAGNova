@@ -130,13 +130,65 @@ def ocr_image(image: Image.Image) -> str:
     return normalize_text(engine.extract_text(image).text)
 
 
-def ollama_ready() -> bool:
-    """Is `ollama serve` reachable? Checked once per page load so the app
-    can say so up front, instead of failing on the first question."""
+def _listed_model_names(listing) -> set[str]:
+    """Model names out of whatever `Client.list()` returned (an object with
+    `.models` in ollama-python 0.4+, a plain dict before)."""
+    models = getattr(listing, "models", None)
+    if models is None and isinstance(listing, dict):
+        models = listing.get("models", [])
+    names = set()
+    for entry in models or []:
+        name = getattr(entry, "model", None)
+        if name is None and isinstance(entry, dict):
+            name = entry.get("model") or entry.get("name")
+        if name:
+            names.add(name)
+    return names
+
+
+def ollama_status() -> tuple[str, str]:
+    """What can be known about the language model WITHOUT running it:
+    ("ready" | "missing_model" | "unreachable", detail).
+
+    "ready" means the server answers and the model is pulled. It does not
+    mean the model can start: on 2026-10-07 a half-applied Ollama update left
+    the server answering while every generate call failed with "llama-server
+    binary not found". Only `check_model_generates()` or an actual answer
+    proves that, so the page must not call "ready" "online".
+    """
     import ollama
 
     try:
-        ollama.Client(host=settings.OLLAMA_HOST).list()
-        return True
-    except Exception:
-        return False
+        listing = ollama.Client(host=settings.OLLAMA_HOST).list()
+    except Exception as exc:
+        return "unreachable", str(exc)
+    names = _listed_model_names(listing)
+    wanted = settings.OLLAMA_MODEL
+    if wanted in names or f"{wanted}:latest" in names:
+        return "ready", wanted
+    return "missing_model", f"{wanted} is not among: {', '.join(sorted(names)) or 'no models'}"
+
+
+def ollama_ready() -> bool:
+    """Server reachable and model pulled (see `ollama_status` for what that
+    does and does not prove)."""
+    return ollama_status()[0] == "ready"
+
+
+def check_model_generates() -> tuple[bool, str]:
+    """Ask the model for a few tokens: (worked, message). An on-demand check
+    behind a button, not run on every page load, because it loads the model
+    into memory. It is the one check that fails when the model cannot start."""
+    import ollama
+
+    from src.core.llm import generation_options
+
+    try:
+        reply = ollama.Client(host=settings.OLLAMA_HOST).generate(
+            model=settings.OLLAMA_MODEL,
+            prompt="Reply with the single word: OK",
+            options={**generation_options(), "num_predict": 8},
+        )
+    except Exception as exc:
+        return False, str(exc)
+    return True, f"{settings.OLLAMA_MODEL} answered: {str(reply['response']).strip()[:40]!r}"
