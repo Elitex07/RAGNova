@@ -1,5 +1,5 @@
 {
-  "_comment": "The gold-standard evaluation set. SINGLE SOURCE OF TRUTH: scripts/evaluate_*.py and tests/test_retrieval.py read this file via src/core/gold.py, and tests/test_gold_set.py fails if the human-readable tables in data/README.md drift from it. Edit both together. Rows T1-T13 were written against the synthetic Ch6 starter corpus, T14-T25 against the downloaded study materials (data/SOURCES.md); every row was written before it was measured.",
+  "_comment": "The gold-standard evaluation set. SINGLE SOURCE OF TRUTH: scripts/evaluate_*.py and tests/test_retrieval.py read this file via src/core/gold.py, and tests/test_gold_set.py fails if the human-readable tables in data/README.md drift from it. Edit both together. Rows T1-T13 were written against the synthetic Ch6 starter corpus, T14-T25 against the downloaded study materials (data/SOURCES.md); every row was written before it was measured. Rows with tier heldout-2026-10-07 (I15-I28, N9-N16, and the six images they use that were added the same day) were committed before any retrieval was run on them; they are the only data used to choose between image-gate variants, and all older rows are a regression check.",
   "text": [
     {"id": "T1", "question": "If I don't get my system actually running by evaluation day, how many marks am I giving up?", "expected_source": "data/documents/notice.pdf", "expected_pages": [2]},
     {"id": "T2", "question": "As an undergrad, how many items can I check out from the library at once, and for how long?", "expected_source": "data/documents/library_hours.pdf", "expected_pages": [1]},
@@ -41,7 +41,21 @@
     {"id": "I11", "query": "Show me the secure remote-access client window that is connected to the library network", "expected_sources": ["data/images/screenshot_vpn_client.png"]},
     {"id": "I12", "query": "Which picture is the schedule that splits project marks between the demo, the report and the viva?", "expected_sources": ["data/images/notice_midterm_schedule.png"]},
     {"id": "I13", "query": "Find the screenshot of a Python script open in an editor next to a plot window", "expected_sources": ["data/images/commons_screenshot_python_matplotlib_code.jpg", "data/images/commons_screenshot_matplotlib_figures_code.png"]},
-    {"id": "I14", "query": "Show me a photograph of the building where an early university computer was kept", "expected_sources": ["data/images/commons_photo_former_computer_laboratory_tower.jpg", "data/images/commons_photo_digital_computer_laboratory.jpg"]}
+    {"id": "I14", "query": "Show me a photograph of the building where an early university computer was kept", "expected_sources": ["data/images/commons_photo_former_computer_laboratory_tower.jpg", "data/images/commons_photo_digital_computer_laboratory.jpg"]},
+    {"id": "I15", "query": "Which building houses the IT help desk and the data centre?", "expected_sources": ["data/images/diagram_campus_map.png"], "tier": "heldout-2026-10-07"},
+    {"id": "I16", "query": "What happens the second time someone breaks the laboratory account rules?", "expected_sources": ["data/images/notice_lab_rules.png"], "tier": "heldout-2026-10-07"},
+    {"id": "I17", "query": "Which picture shows a student's library barcode and the years their ID is valid?", "expected_sources": ["data/images/photo_id_card_sample.png"], "tier": "heldout-2026-10-07"},
+    {"id": "I18", "query": "Which floor of Academic Block B has the department office?", "expected_sources": ["data/images/photo_campus_building_plaque.png"], "tier": "heldout-2026-10-07"},
+    {"id": "I19", "query": "What should I do before using the single sign-on page for the first time?", "expected_sources": ["data/images/screenshot_portal_login.png"], "tier": "heldout-2026-10-07"},
+    {"id": "I20", "query": "How many students can be on a project team, according to the submission portal?", "expected_sources": ["data/images/screenshot_synopsis_portal.png"], "tier": "heldout-2026-10-07"},
+    {"id": "I21", "query": "Which window shows the address of the gateway I connect to for the digital library?", "expected_sources": ["data/images/screenshot_vpn_client.png"], "tier": "heldout-2026-10-07"},
+    {"id": "I22", "query": "Which screenshot shows a free-fall simulation script open in Visual Studio Code?", "expected_sources": ["data/images/commons_screenshot_python_matplotlib_code.jpg"], "tier": "heldout-2026-10-07"},
+    {"id": "I23", "query": "When is the annual sports day, and where do I register for the races?", "expected_sources": ["data/images/notice_sports_day.png"], "tier": "heldout-2026-10-07"},
+    {"id": "I24", "query": "What time does the last shuttle bus leave the Academic Block in the evening?", "expected_sources": ["data/images/notice_shuttle_bus.png"], "tier": "heldout-2026-10-07"},
+    {"id": "I25", "query": "How much attendance do I need before I am allowed to sit the exams?", "expected_sources": ["data/images/screenshot_attendance_portal.png"], "tier": "heldout-2026-10-07"},
+    {"id": "I26", "query": "Where is the blood donation camp being held, and from what time?", "expected_sources": ["data/images/notice_blood_donation.png"], "tier": "heldout-2026-10-07"},
+    {"id": "I27", "query": "Why does my mailbox show a warning, and what should I delete?", "expected_sources": ["data/images/screenshot_mailbox_quota.png"], "tier": "heldout-2026-10-07"},
+    {"id": "I28", "query": "What should I wear and bring to the internship fair?", "expected_sources": ["data/images/notice_internship_fair.png"], "tier": "heldout-2026-10-07"}
   ],
   "image_to_doc": [
     {"id": "M1", "query_image": "data/images/screenshot_synopsis_portal.png", "expected_sources": ["data/documents/notice.pdf"]},
@@ -63,6 +77,14 @@
     {"id": "N5", "question": "Show me a photo of a cat sitting on a sofa"},
     {"id": "N6", "question": "What does the Eiffel Tower look like at night?"},
     {"id": "N7", "question": "What is the fee for the hostel laundry service?"},
-    {"id": "N8", "question": "Who won the Turing Award in 2018?"}
+    {"id": "N8", "question": "Who won the Turing Award in 2018?"},
+    {"id": "N9", "question": "How much does a ticket for the campus shuttle bus cost?", "tier": "heldout-2026-10-07"},
+    {"id": "N10", "question": "Who won the 100 m sprint at last year's sports day?", "tier": "heldout-2026-10-07"},
+    {"id": "N11", "question": "What is my attendance percentage in the Operating Systems course?", "tier": "heldout-2026-10-07"},
+    {"id": "N12", "question": "Do blood donors get a reward or a certificate at the camp?", "tier": "heldout-2026-10-07"},
+    {"id": "N13", "question": "How can I raise my mailbox limit to 50 GB?", "tier": "heldout-2026-10-07"},
+    {"id": "N14", "question": "Which company at the internship fair offers the highest stipend?", "tier": "heldout-2026-10-07"},
+    {"id": "N15", "question": "How many credits is the Machine Learning course worth?", "tier": "heldout-2026-10-07"},
+    {"id": "N16", "question": "What is the name of the college principal?", "tier": "heldout-2026-10-07"}
   ]
 }
