@@ -16,6 +16,7 @@ from PIL import Image
 from src.core.config import settings
 from src.core.llm import generate, generate_stream
 from src.core.schemas import Chunk
+from src.pipelines.rag.context import trim_chunks
 from src.pipelines.rag.prompt import build_prompt
 from src.pipelines.rag.retrieve import filter_by_floor, retrieve
 
@@ -92,6 +93,13 @@ def _filter_relevant(chunks: list[Chunk]) -> list[Chunk]:
     return filter_by_floor(chunks, settings.MIN_RELEVANCE_SCORE)
 
 
+def _for_prompt(chunks: list[Chunk], query: str) -> list[Chunk]:
+    """What the model is shown: the retrieved chunks, shortened when
+    CONTEXT_WORDS_PER_CHUNK is set (context.py). Only the prompt changes; the
+    caller keeps citing the full chunks."""
+    return trim_chunks(chunks, query, settings.CONTEXT_WORDS_PER_CHUNK)
+
+
 def answer_query(
     query: str,
     top_k: int | None = None,
@@ -124,7 +132,7 @@ def answer_query(
             query=query, answer=NOT_ENOUGH_INFO, citations=[], model=settings.OLLAMA_MODEL
         )
 
-    prompt = build_prompt(query or IMAGE_ONLY_QUESTION, relevant)
+    prompt = build_prompt(query or IMAGE_ONLY_QUESTION, _for_prompt(relevant, query))
     check_prompt_fits(prompt)
     answer_text = generate(prompt)
     check_citations(answer_text, relevant, query)
@@ -157,7 +165,7 @@ def stream_answer(
     )
     if not relevant:
         return [], iter([NOT_ENOUGH_INFO])
-    prompt = build_prompt(query or IMAGE_ONLY_QUESTION, relevant)
+    prompt = build_prompt(query or IMAGE_ONLY_QUESTION, _for_prompt(relevant, query))
     check_prompt_fits(prompt)
     return relevant, generate_stream(prompt)
 

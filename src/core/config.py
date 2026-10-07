@@ -59,7 +59,9 @@ def _get_bool(name: str, default: bool) -> bool:
 @dataclass(frozen=True)
 class Settings:
     OLLAMA_MODEL: str = os.environ.get("OLLAMA_MODEL", "llama3.2:3b")
-    OLLAMA_HOST: str = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+    # The IP literal, not the name "localhost": on Windows the name costs about 2.2 s per
+    # new connection (IPv6 first, then IPv4), the literal 0.2 s. Measured 2026-10-07.
+    OLLAMA_HOST: str = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
     LLM_TEMPERATURE: float = _get_float("LLM_TEMPERATURE", 0.1)
 
     # How many of the model's layers Ollama puts on the GPU. Unset (the default)
@@ -87,6 +89,13 @@ class Settings:
     # tokens, which overflow this window (2 of 25 prompts); answer.py now warns
     # when a prompt comes within 90% of it.
     LLM_NUM_CTX: int = _get_int("LLM_NUM_CTX", 4096)
+
+    # Shorten what the model reads (ADR-015, src/pipelines/rag/context.py): when
+    # above 0, each retrieved chunk is cut to about this many of its
+    # sentences-most-like-the-question words before it goes into the PROMPT.
+    # Citations still show the full chunk. 0 = off (the default). On this model
+    # the wait is almost all prompt reading, so this is the one lever on latency.
+    CONTEXT_WORDS_PER_CHUNK: int = _get_int("CONTEXT_WORDS_PER_CHUNK", 0)
 
     # Cosine-similarity floor a retrieved chunk must clear before it's
     # allowed into the generation prompt at all (ADR-009). Below this, a

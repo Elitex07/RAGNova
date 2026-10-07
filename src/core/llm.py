@@ -23,6 +23,24 @@ import ollama
 
 from src.core.config import settings
 
+# One Ollama client per (host, client class), reused. A fresh client means a fresh
+# connection, and on Windows a connection to the NAME "localhost" costs about 2.2 s
+# (IPv6 is tried first), against 0.2 s for 127.0.0.1 and 4 ms on a connection that
+# is already open (measured 2026-10-07). The old code built a new client for every
+# answer, so every answer paid that, and the page paid it again on every click for
+# the status check. The class is part of the key so a test that patches
+# `ollama.Client` gets its own client, never a cached real one.
+_clients: dict[tuple[str, type], "ollama.Client"] = {}
+
+
+def ollama_client(host: str | None = None) -> "ollama.Client":
+    """The shared client for `host` (default settings.OLLAMA_HOST)."""
+    host = host or settings.OLLAMA_HOST
+    key = (host, ollama.Client)
+    if key not in _clients:
+        _clients[key] = ollama.Client(host=host)
+    return _clients[key]
+
 
 def generation_options() -> dict:
     """The Ollama `options` for every generation call, in one place (generate()
@@ -56,7 +74,7 @@ def generate(prompt: str) -> str:
     (2048) enough to hold TOP_K retrieved chunks plus prompt scaffolding
     (see settings.LLM_NUM_CTX's docstring for the arithmetic).
     """
-    client = ollama.Client(host=settings.OLLAMA_HOST)
+    client = ollama_client()
     try:
         response = client.generate(
             model=settings.OLLAMA_MODEL,
@@ -88,7 +106,7 @@ def generate_stream(prompt: str) -> Iterator[str]:
     connection error is raised from inside the loop, re-wrapped in the
     same RuntimeError message generate() uses.
     """
-    client = ollama.Client(host=settings.OLLAMA_HOST)
+    client = ollama_client()
     try:
         for part in client.generate(
             model=settings.OLLAMA_MODEL,

@@ -156,10 +156,10 @@ def ollama_status() -> tuple[str, str]:
     binary not found". Only `check_model_generates()` or an actual answer
     proves that, so the page must not call "ready" "online".
     """
-    import ollama
+    from src.core.llm import ollama_client
 
     try:
-        listing = ollama.Client(host=settings.OLLAMA_HOST).list()
+        listing = ollama_client().list()
     except Exception as exc:
         return "unreachable", str(exc)
     names = _listed_model_names(listing)
@@ -179,12 +179,10 @@ def check_model_generates() -> tuple[bool, str]:
     """Ask the model for a few tokens: (worked, message). An on-demand check
     behind a button, not run on every page load, because it loads the model
     into memory. It is the one check that fails when the model cannot start."""
-    import ollama
-
-    from src.core.llm import generation_options
+    from src.core.llm import generation_options, ollama_client
 
     try:
-        reply = ollama.Client(host=settings.OLLAMA_HOST).generate(
+        reply = ollama_client().generate(
             model=settings.OLLAMA_MODEL,
             prompt="Reply with the single word: OK",
             options={**generation_options(), "num_predict": 8},

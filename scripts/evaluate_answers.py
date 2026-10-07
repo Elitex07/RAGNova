@@ -21,6 +21,7 @@ scripts/evaluate_retrieval.py: the script measures/formats, a human judges.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from datetime import date
 from pathlib import Path
@@ -41,19 +42,30 @@ from src.pipelines.rag.prompt import format_provenance
 _GOLD = load_gold_set()
 GOLD_QUESTIONS = [
     {"id": r["id"], "question": r["question"], "expected_source": r["expected_source"],
-     "expected_page": "/".join(str(n) for n in r["expected_pages"])}
+     "expected_page": "/".join(str(n) for n in r["expected_pages"]), "tier": r.get("tier")}
     for r in _GOLD["text"]
 ] + [
-    {"id": r["id"], "question": r["question"], "expected_source": None, "expected_page": None}
+    {"id": r["id"], "question": r["question"], "expected_source": None, "expected_page": None, "tier": r.get("tier")}
     for r in _GOLD["negatives"]
 ]
+
+
+def select_rows(items: list[dict], rows: str) -> list[dict]:
+    """--rows: 'regression' = rows without a held-out text tier (T1-T25, N1-N16), 'heldout' = only the
+    held-out TEXT tier (T26-T33, N17-N20), 'all' = both. Text-to-image rows are added separately."""
+    held = lambda item: (item.get("tier") or "").startswith("heldout-text")
+    if rows == "regression":
+        return [i for i in items if not held(i)]
+    if rows == "heldout":
+        return [i for i in items if held(i)]
+    return items
 
 
 # The text-to-image rows, asked as questions: does the answer cite the expected image,
 # and is it an answer rather than a refusal? (Only with --image-rows.)
 IMAGE_QUESTIONS = [
     {"id": r["id"], "question": r["query"], "expected_source": " or ".join(r["expected_sources"]),
-     "expected_page": None, "expected_images": r["expected_sources"]}
+     "expected_page": None, "expected_images": r["expected_sources"], "tier": r.get("tier")}
     for r in _GOLD["text_to_image"]
 ]
 
@@ -62,9 +74,17 @@ def _refused(result) -> bool:
     return result.answer.strip().startswith(NOT_ENOUGH_INFO[:40])
 
 
-def run(include_images: bool = False, image_rows: bool = False) -> list[dict]:
+def _bare(result) -> bool:
+    """An answer with fewer than three real words once its citation markers are removed (a refusal
+    always has more, so it is never bare): the model returned "[2]" and nothing else. Counted as 'answered' by a
+    refusal check, but it answers nothing (seen 2026-10-07: 2 of 25 at the default, 3 of 8 with
+    trimmed context), so the tallies report it separately."""
+    return len(re.findall(r"[A-Za-z0-9]+", re.sub(r"\[\d+\]", " ", result.answer))) < 3
+
+
+def run(include_images: bool = False, image_rows: bool = False, which: str = "all") -> list[dict]:
     rows = []
-    for item in GOLD_QUESTIONS + (IMAGE_QUESTIONS if image_rows else []):
+    for item in select_rows(GOLD_QUESTIONS, which) + (IMAGE_QUESTIONS if image_rows else []):
         result = answer_query(item["question"], include_images=include_images or image_rows)
         rows.append({**item, "result": result})
     return rows
@@ -78,22 +98,32 @@ def print_tallies(rows: list[dict]) -> None:
     positives = [r for r in rows if r["id"].startswith("T")]
     print("\n" + "=" * 70)
     print("TALLIES (automatic; a person still judges whether each answer is right)")
+    def tier_of(row) -> str:
+        tier = row.get("tier") or ""
+        return "held-out text" if tier.startswith("heldout-text") else "held-out image" if tier.startswith("heldout") else "earlier"
+
+    def split(group, count) -> str:
+        parts = []
+        for name in ("earlier", "held-out image", "held-out text"):
+            members = [r for r in group if tier_of(r) == name]
+            if members:
+                parts.append(f"{name} {sum(count(r) for r in members)}/{len(members)}")
+        return ", ".join(parts)
+
     if positives:
-        print(f"  text rows answered (not refused):        {sum(not _refused(r['result']) for r in positives)}/{len(positives)}")
+        print(f"  text rows answered (not refused):        {sum(not _refused(r['result']) for r in positives)}/{len(positives)}"
+              f"   ({split(positives, lambda r: not _refused(r['result']))})")
+        print(f"  ... of which substantive (not bare [n]): {sum(not _refused(r['result']) and not _bare(r['result']) for r in positives)}/{len(positives)}"
+              f"   bare: {[r['id'] for r in positives if _bare(r['result'])] or 'none'}")
     if negatives:
-        held = [r for r in negatives if int(r["id"][1:]) >= 9]
         print(f"  negatives refused:                       {sum(_refused(r['result']) for r in negatives)}/{len(negatives)}"
-              f"   (N1-N8: {sum(_refused(r['result']) for r in negatives if r not in held)}/{len(negatives) - len(held)},"
-              f" held-out N9+: {sum(_refused(r['result']) for r in held)}/{len(held)})")
+              f"   ({split(negatives, lambda r: _refused(r['result']))})")
         leaked = [r["id"] for r in negatives if not _refused(r["result"])]
         print(f"  negatives that were answered instead:    {leaked if leaked else 'none'}")
     if images:
         cited = [r for r in images if any(c.source in r["expected_images"] for c in r["result"].citations)]
         answered = [r for r in images if not _refused(r["result"])]
-        held = [r for r in images if int(r["id"][1:]) >= 15]
-        held_cited = [r for r in held if r in cited]
-        print(f"  image questions: expected image cited:   {len(cited)}/{len(images)}   (I1-I14: {len(cited) - len(held_cited)}/{len(images) - len(held)},"
-              f" held-out I15+: {len(held_cited)}/{len(held)})")
+        print(f"  image questions: expected image cited:   {len(cited)}/{len(images)}   ({split(images, lambda r: r in cited)})")
         print(f"  image questions answered (not refused):  {len(answered)}/{len(images)}")
         print(f"  image questions NOT citing the image:    {[r['id'] for r in images if r not in cited]}")
 
@@ -123,13 +153,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run the gold questions through the real RAG core.")
     parser.add_argument("--images", action="store_true",
                         help="also search image_index (include_images=True); default is text only")
+    parser.add_argument("--rows", choices=("all", "regression", "heldout"), default="all",
+                        help="which T/N rows to run: regression = T1-T25 and N1-N16 only, heldout = T26-T33 and N17-N20 only")
     parser.add_argument("--image-rows", action="store_true",
                         help="also run the text-to-image gold rows (I*) as questions; implies --images")
     args = parser.parse_args()
     mode = "text + images (include_images=True)" if (args.images or args.image_rows) else "text only"
-    total = len(GOLD_QUESTIONS) + (len(IMAGE_QUESTIONS) if args.image_rows else 0)
+    total = len(select_rows(GOLD_QUESTIONS, args.rows)) + (len(IMAGE_QUESTIONS) if args.image_rows else 0)
     print(f"Running {total} gold questions through answer_query(), {mode}...")
-    rows = run(include_images=args.images, image_rows=args.image_rows)
+    rows = run(include_images=args.images, image_rows=args.image_rows, which=args.rows)
     print_report(rows)
     print_tallies(rows)
 
@@ -137,7 +169,7 @@ def main() -> None:
     print("Rate each answer 1-5 by hand (docs/ROADMAP.md's Ch10 bar), then "
           "add a row to data/README.md's Results log, e.g.:")
     print(f"| {date.today().isoformat()} | Ch10 | - | - | - | Answer-quality check, "
-          f"{len(GOLD_QUESTIONS)} questions (T + N rows), human-rated 1-5: "
+          f"{len(select_rows(GOLD_QUESTIONS, args.rows))} questions (T + N rows), human-rated 1-5: "
           f"<fill in average and notes> |")
 
 
