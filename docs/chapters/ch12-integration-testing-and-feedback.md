@@ -229,6 +229,8 @@ tests/test_integration.py::test_audio_chunks_that_break_the_contract_are_refused
 - ~~Wire PR #4's scaffold~~ **Done by PR #10; reviewed and run against a working model 2026-10-07** (results log, two rows). Still open from it: the microphone path (needs a person and a microphone) and the feedback sessions themselves.
 - **Before any feedback session, on the machine that will run it:** start the app with `streamlit run src/app.py` **from the project root** (it then reads `.streamlit/config.toml`: localhost only, no telemetry, no email prompt; the browser is not opened for you, so open the URL it prints), press **Test the model** in the sidebar and see it answer (the first call after Ollama starts took 1 minute on 2026-10-07, so do this before the testers arrive), and switch off Ollama's **Auto-download updates** and **Cloud** settings. An Ollama update (0.20.6 to 0.35.1) was left half applied on 2026-10-05, with its `lib` folder empty, so the server answered `list` while every generate call failed with "llama-server binary not found"; nothing in the app noticed until a question was asked.
 
+- **Everything in this list that needs a person now has one runnable checklist**, [`docs/human-verification-checklist.md`](../human-verification-checklist.md): the pre-session steps, the microphone path, the real network-off demonstration, the outside-tester protocol (with the privacy rule: the raw feedback log is git-ignored, only its summary is committed), a blind rating sheet for an independent rater (`scripts/export_rating_sheet.py`, so the AI-rated 4.21/5 can finally be checked by a person), and the Python 3.11 steps.
+
 ---
 
 **Next:** Chapter 13 — Mid-Term Report.
