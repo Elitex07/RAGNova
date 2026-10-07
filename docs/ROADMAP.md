@@ -183,7 +183,9 @@ With 2 members: merge Track C into A and B (each owns half the UI).
       (data/SOURCES.md, Git LFS); one gold set (data/gold_set.json: 25 text, 22 cross-modal, 8 negatives).
       Measured on the grown corpus (2026-10-05, data/README.md's Results log): text Recall@5 = 1.00 / MRR =
       0.81 (reproducible: audio transcripts are cached by sha256, data/transcripts/; two earlier builds with
-      different transcripts gave 0.75), cross-modal Recall@5 = 0.82 (18/22; text-to-image 10/14; the four misses I3, I8, I10, I14 recorded, not tuned).
+      different transcripts gave 0.75), cross-modal Recall@5 = 0.89 (32/36; text-to-image 24/28 after 14 held-out rows and six new images; the same four
+      misses I3, I8, I10, I14, recorded, not tuned). An OCR-text image search (ADR-014) was built and measured against
+      evidence committed first: it recovers I3 and I10, the pre-registered rule did not adopt it, it ships off.
       Image floor settled by the ADR-011 gate, re-measured on 14 positives / 10 negatives (11/14 kept, 9/10 refused,
       thresholds held); the text floor was
       measured and deliberately left unchanged (ADR-009 update). The pinned requirements.txt was verified in a

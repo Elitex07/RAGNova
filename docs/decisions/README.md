@@ -45,6 +45,10 @@ Never delete an ADR. A superseded decision plus its replacement tells a better s
 | [008](adr-008-docx-pagination-via-explicit-breaks.md) | DOCX pages tracked from explicit breaks only | `w:lastRenderedPageBreak` — looks like a solution, absent from our own generated files and non-reproducible even in real ones | |
 | [009](adr-009-relevance-threshold-before-generation.md) | Gate chunks on a relevance-score floor before generation | No threshold, trust the LLM's own judgment — makes negative controls non-deterministic and still risks hallucination on stuffed-in irrelevant context | |
 | [010](adr-010-per-collection-relevance-floors.md) | A separate relevance floor per collection | One shared 0.3 — silently filters out every image (modality gap) | |
+| [011](adr-011-image-corroboration-gate.md) | Keep a weak CLIP image only if its OCR text corroborates it | CLIP floor alone: refuses 3 of 10 out-of-corpus questions | ✅ |
+| [012](adr-012-hnsw-search-effort.md) | Higher HNSW search effort (ef 200, construction 400, M 32) | ChromaDB defaults: missed the best chunk for about 1 question in 3 on the pinned version | ✅ |
+| [013](adr-013-transcript-cache.md) | Cache each audio file's transcript by the audio's bytes | Hardening Whisper's decoding: it was already deterministic within an environment | ✅ |
+| [014](adr-014-image-text-channel.md) | Find images by their text too: built, measured, **not enabled** | Enabling it on the older rows that tuned the gate | ✅ |
 
 **All ten are now written.**
 

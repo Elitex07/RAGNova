@@ -129,7 +129,8 @@ def main() -> None:
             images = images_for(variant, hits, r["question"])
             refused = not images
             (out["held"] if r["tier"] == HELDOUT else out["reg"])["r"] += refused
-            out["rows"][r["id"]] = (not refused, [c.source.split("/")[-1] for c in images])
+            # a SET of surviving images: a pure reordering is not a difference
+            out["rows"][r["id"]] = (not refused, sorted(c.source.split("/")[-1] for c in images))
         results[name] = out
 
     n = {"held_p": sum(r.get("tier") == HELDOUT for r in positives), "reg_p": sum(r.get("tier") != HELDOUT for r in positives),
