@@ -1,5 +1,5 @@
 {
-  "_comment": "The gold-standard evaluation set. SINGLE SOURCE OF TRUTH: scripts/evaluate_*.py and tests/test_retrieval.py read this file via src/core/gold.py, and tests/test_gold_set.py fails if the human-readable tables in data/README.md drift from it. Edit both together. Rows T1-T13 were written against the synthetic Ch6 starter corpus, T14-T25 against the downloaded study materials (data/SOURCES.md); every row was written before it was measured. Rows with tier heldout-2026-10-07 (I15-I28, N9-N16, and the six images they use that were added the same day) were committed before any retrieval was run on them; they are the only data used to choose between image-gate variants, and all older rows are a regression check.",
+  "_comment": "The gold-standard evaluation set. SINGLE SOURCE OF TRUTH: scripts/evaluate_*.py and tests/test_retrieval.py read this file via src/core/gold.py, and tests/test_gold_set.py fails if the human-readable tables in data/README.md drift from it. Edit both together. Rows T1-T13 were written against the synthetic Ch6 starter corpus, T14-T25 against the downloaded study materials (data/SOURCES.md); every row was written before it was measured. Rows with tier heldout-text-2026-10-07 (T26-T33, N17-N20, on four documents no earlier question used) were committed before they were run, to confirm the CPU profile once. Rows with tier heldout-2026-10-07 (I15-I28, N9-N16, and the six images they use that were added the same day) were committed before any retrieval was run on them; they are the only data used to choose between image-gate variants, and all older rows are a regression check.",
   "text": [
     {"id": "T1", "question": "If I don't get my system actually running by evaluation day, how many marks am I giving up?", "expected_source": "data/documents/notice.pdf", "expected_pages": [2]},
     {"id": "T2", "question": "As an undergrad, how many items can I check out from the library at once, and for how long?", "expected_source": "data/documents/library_hours.pdf", "expected_pages": [1]},
@@ -25,7 +25,15 @@
     {"id": "T22", "question": "Why can't I just replace each undirected edge by two opposite directed edges when some edge weights are negative?", "expected_source": "data/documents/algorithms_ch08_shortest_paths.pdf", "expected_pages": [3]},
     {"id": "T23", "question": "How does the running time of the naive recursive Fibonacci algorithm compare to the size of the Fibonacci number it computes?", "expected_source": "data/documents/algorithms_ch03_dynamic_programming.pdf", "expected_pages": [3]},
     {"id": "T24", "question": "Do I need to install one program or two before I can start writing R code in the course?", "expected_source": "data/documents/zenodo_first_steps_to_r.docx", "expected_pages": [1]},
-    {"id": "T25", "question": "If I want participants to agree to share their data later, should I promise them that I will delete it afterwards?", "expected_source": "data/documents/zenodo_learning_data_ethics.docx", "expected_pages": [1]}
+    {"id": "T25", "question": "If I want participants to agree to share their data later, should I promise them that I will delete it afterwards?", "expected_source": "data/documents/zenodo_learning_data_ethics.docx", "expected_pages": [1]},
+    {"id": "T26", "question": "How many parameters do the base and large models used as the generative reader have?", "expected_source": "data/documents/acl_fusion_in_decoder.pdf", "expected_pages": [4], "tier": "heldout-text-2026-10-07"},
+    {"id": "T27", "question": "How many GPU hours does training on 100 passages take?", "expected_source": "data/documents/acl_fusion_in_decoder.pdf", "expected_pages": [5], "tier": "heldout-text-2026-10-07"},
+    {"id": "T28", "question": "Why should a database identifier contain letters as well as numbers?", "expected_source": "data/documents/zenodo_ten_simple_rules_identifiers.docx", "expected_pages": [1], "tier": "heldout-text-2026-10-07"},
+    {"id": "T29", "question": "If I version identifiers record by record, where in the identifier does the version number go?", "expected_source": "data/documents/zenodo_ten_simple_rules_identifiers.docx", "expected_pages": [2], "tier": "heldout-text-2026-10-07"},
+    {"id": "T30", "question": "Do I need any prior knowledge to take the course on governing AI in scientific publishing?", "expected_source": "data/documents/zenodo_ai_governance_syllabus.docx", "expected_pages": [1], "tier": "heldout-text-2026-10-07"},
+    {"id": "T31", "question": "How long is each live online session of that governance course?", "expected_source": "data/documents/zenodo_ai_governance_syllabus.docx", "expected_pages": [1], "tier": "heldout-text-2026-10-07"},
+    {"id": "T32", "question": "Why does backtracking fail on the coin change problem with large inputs, and what replaces it?", "expected_source": "data/documents/zenodo_cpp_solved_problems.docx", "expected_pages": [1], "tier": "heldout-text-2026-10-07"},
+    {"id": "T33", "question": "Which search method does the maze escape problem use, and what stops it walking in circles?", "expected_source": "data/documents/zenodo_cpp_solved_problems.docx", "expected_pages": [1], "tier": "heldout-text-2026-10-07"}
   ],
   "text_to_image": [
     {"id": "I1", "query": "Where can I see the Wi-Fi authentication screen for campus wireless?", "expected_sources": ["data/images/screenshot_wifi_setup.png"]},
@@ -85,6 +93,10 @@
     {"id": "N13", "question": "How can I raise my mailbox limit to 50 GB?", "tier": "heldout-2026-10-07"},
     {"id": "N14", "question": "Which company at the internship fair offers the highest stipend?", "tier": "heldout-2026-10-07"},
     {"id": "N15", "question": "How many credits is the Machine Learning course worth?", "tier": "heldout-2026-10-07"},
-    {"id": "N16", "question": "What is the name of the college principal?", "tier": "heldout-2026-10-07"}
+    {"id": "N16", "question": "What is the name of the college principal?", "tier": "heldout-2026-10-07"},
+    {"id": "N17", "question": "What is the boiling point of mercury?", "tier": "heldout-text-2026-10-07"},
+    {"id": "N18", "question": "Which team won the cricket world cup in 2011?", "tier": "heldout-text-2026-10-07"},
+    {"id": "N19", "question": "What is the registration fee for the course on governing AI in scientific publishing?", "tier": "heldout-text-2026-10-07"},
+    {"id": "N20", "question": "How many layers does the T5 model used as the generative reader have?", "tier": "heldout-text-2026-10-07"}
   ]
 }
