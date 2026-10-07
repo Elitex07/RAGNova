@@ -258,13 +258,14 @@ Findings: the shipped chunk size and top-K are at or near the best on this corpu
 |---|---|---|
 | Text retrieval latency, warm, n = 25 | 38 ms / 40 ms (19 ms median in an earlier run; one machine, so expect a factor of two) | < 1 s |
 | Retrieval with images (CLIP + gate + merge), n = 8 | 232 ms / 254 ms | < 1 s |
-| End-to-end answer, warm, n = 13 | **GPU: 2.9 s / 3.4 s. CPU-only (`OLLAMA_NUM_GPU=0`): 29.2 s / 47.2 s, target NOT met.** With `TOP_K = 3` on CPU: 14.1 s median / 30.3 s worst (median under the target only) | < 15 s |
+| End-to-end answer, cold prompt, n = 17 (Ollama 0.40.0, after the connection fix) | **GPU: 0.50 s median / 0.97 s worst. CPU-only (`OLLAMA_NUM_GPU=0`): 15.8 s / 25.3 s at the default `TOP_K = 5`, 0.8 s over the target; with the documented profile `TOP_K = 3`: 9.2 s median, 14.9 s p90, 15.5 s worst.** On Ollama 0.20.6 the CPU median had been 29.2 s (14.1 s with `TOP_K = 3`) and the GPU 2.9 s; the difference is most likely the engine (the benchmark's question set also changed) plus a 2.2 s per-call connection cost the app has since stopped paying (ADR-015) | < 15 s |
+| Where the CPU time goes, per answer (Ollama's own timings, default) | model reads the prompt 13.2 s (about 150 tokens per second, 2036 tokens), writes the answer 2.2 s (about 37 tokens), loads 0 s; on the GPU 0.26 s, 0.19 s, 0 s | |
 | PDF indexing | 15.9 pages/s | >= 1 page/s |
 | Image indexing (CLIP + OCR) | 2.7 images/s | |
 | Audio transcription (Whisper `base`, CPU, transcript cache bypassed) | 9.5x to 10.2x real time (two runs) | |
 | Whisper word error rate, 4 synthetic clips | mean 9.3% to 10.7% depending on the environment, worst 20.8% in both | < 15% (mean met, worst case not) |
 
-Caveats that belong with these numbers: the first end-to-end figure is a GPU figure, and **the project's stated target hardware, a CPU-only laptop, was then measured and misses the 15 s target by about 2x** (retrieval and indexing are unaffected, since embedding, OCR and transcription run on the CPU either way; answer quality on CPU matched the GPU: 23 vs 22 of 25 answered, 8/8 negatives refused on both); the word error rate is on clean synthetic speech (which flatters it) with no number normalisation (which penalises it, "forty percent" heard as "40%"); peak memory was not measured; indexing figures include first-use model loading.
+Caveats that belong with these numbers: the first end-to-end figure is a GPU figure, and **the project's stated target hardware, a CPU-only laptop, was then measured: on Ollama 0.20.6 it missed the 15 s target by about 2x (29.2 s); after an engine update and a fix to a 2.2 s connection cost it misses it by 0.8 s at the defaults (15.8 s) and meets it with the documented profile `TOP_K = 3` (median 9.2 s, p90 14.9 s, worst 15.5 s)**, on a desktop CPU, not a laptop (retrieval and indexing are unaffected, since embedding, OCR and transcription run on the CPU either way; answer quality on CPU matched the GPU on 2026-10-05: 23 vs 22 of 25 answered, 8/8 negatives refused on both; and "answered" proved too weak a measure, see ADR-015: the evaluation now also counts bare citation-only answers); the word error rate is on clean synthetic speech (which flatters it) with no number normalisation (which penalises it, "forty percent" heard as "40%"); peak memory was not measured; indexing figures include first-use model loading.
 
 ### G. Environment and reproducibility
 
@@ -276,4 +277,4 @@ Caveats that belong with these numbers: the first end-to-end figure is a GPU fig
 - External testers and the feedback loop (they need the wired UI, which is still a scaffold).
 - The ablations of section 8.4 (segment size, TOP_K = 10, merge policy).
 - The offline verification of section 8.5 *through the UI with the network adapter off*. **Done without the UI** (`scripts/verify_offline.py`, `data/eval/offline_2026-10-05.txt`): ingest a new file, text query, image query, spoken query and citations all pass with every non-loopback connection blocked. It found that, with no offline setting, loading the embedding model makes 31 Hugging Face Hub attempts and stalls the first question about 49 s; `RAGNOVA_OFFLINE=1` removes both (0 attempts, 0.6 s).
-- Peak memory, and a Python 3.11 check. (CPU-only latency was measured: see F; it misses the target.)
+- Peak memory, and a Python 3.11 check. (CPU-only latency was measured: see F; the default misses the target by 0.8 s, the `TOP_K = 3` profile meets it on this desktop CPU. A real laptop has not been measured.)

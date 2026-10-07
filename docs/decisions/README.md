@@ -49,6 +49,7 @@ Never delete an ADR. A superseded decision plus its replacement tells a better s
 | [012](adr-012-hnsw-search-effort.md) | Higher HNSW search effort (ef 200, construction 400, M 32) | ChromaDB defaults: missed the best chunk for about 1 question in 3 on the pinned version | ✅ |
 | [013](adr-013-transcript-cache.md) | Cache each audio file's transcript by the audio's bytes | Hardening Whisper's decoding: it was already deterministic within an environment | ✅ |
 | [014](adr-014-image-text-channel.md) | Find images by their text too: built, measured, **not enabled** | Enabling it on the older rows that tuned the gate | ✅ |
+| [015](adr-015-cpu-only-latency.md) | CPU-only latency: one shared Ollama client on `127.0.0.1` for everyone, `TOP_K=3` as an opt-in CPU profile | Lowering the default `TOP_K`, or trimming each chunk (it returned bare citations) | ✅ |
 
 **All ten are now written.**
 

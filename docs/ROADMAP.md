@@ -197,6 +197,8 @@ With 2 members: merge Track C into A and B (each owns half the UI).
       scripts/verify_offline.py). PDF table extraction was measured and rejected (T14/T20 refusals are generator limits, not
       parsing defects: ADR-009 follow-up). Still open, only because each needs a person: the microphone path, outside-tester sessions,
       the real network-off demo, an independent answer rating, a Python 3.11 check — one runnable checklist,
-      docs/human-verification-checklist.md, with a blind rating-sheet tool, scripts/export_rating_sheet.py). CPU-only measured: end-to-end latency misses the
-      15 s target (median 29 s; 14 s with TOP_K=3), answer quality unchanged)
+      docs/human-verification-checklist.md, with a blind rating-sheet tool, scripts/export_rating_sheet.py). CPU-only (ADR-015, Ollama 0.40.0, 2026-10-07): the old 29 s median was
+      most likely the engine, plus a 2.2 s connection cost the app paid on every answer and every click (fixed: shared client on
+      127.0.0.1); the model's reading of the prompt is 85% of what is left. Default 15.8 s median, 0.8 s over the 15 s
+      target; the documented CPU profile TOP_K=3 gives 9.2 s median and 14.9 s p90; GPU answers in 0.5 s)
 - [ ] Ch 13 — Mid-Term Report
