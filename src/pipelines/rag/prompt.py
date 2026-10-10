@@ -11,6 +11,11 @@ from __future__ import annotations
 
 from src.core.schemas import Chunk
 
+# The id prefix attachments.py gives an attached image. Kept here as a literal
+# rather than imported: attachments.py is the one that may grow, this file must
+# stay a pure function with nothing to import but the schema.
+ATTACHMENT_ID_PREFIX = "attachment__"
+
 _SYSTEM_INSTRUCTIONS = (
     "You answer questions using ONLY the numbered context below, taken from "
     "the user's own indexed files. Follow these rules exactly:\n"
@@ -37,6 +42,8 @@ def format_provenance(chunk: Chunk) -> str:
     yet (Ch9 isn't wired in), but the branch is written now so this
     function doesn't need to change the day it is.
     """
+    if chunk.chunk_id.startswith(ATTACHMENT_ID_PREFIX):
+        return chunk.source                      # already reads "attached image (name)"
     if chunk.modality in ("pdf", "docx") and chunk.page is not None:
         return f"{chunk.source}, page {chunk.page}"
     if chunk.modality == "audio" and chunk.start_s is not None and chunk.end_s is not None:
@@ -53,7 +60,16 @@ def format_provenance(chunk: Chunk) -> str:
 _IMAGE_WITHOUT_TEXT = "(An image matching the question. No readable text was found in it.)"
 
 
+# The same, for an image the user attached to the question (attachments.py).
+_ATTACHMENT_WITHOUT_TEXT = (
+    "(The user attached this image. No readable text was found in it, and you cannot "
+    "look at pictures, so say that you cannot tell what it shows.)"
+)
+
+
 def _context_text(chunk: Chunk) -> str:
+    if chunk.chunk_id.startswith(ATTACHMENT_ID_PREFIX) and not chunk.text.strip():
+        return _ATTACHMENT_WITHOUT_TEXT
     if chunk.modality == "image" and not chunk.text.strip():
         return _IMAGE_WITHOUT_TEXT
     if chunk.modality == "image":

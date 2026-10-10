@@ -189,10 +189,21 @@ def retrieve(
     image_search=None,
     image_agreement=None,
     image_text_search=None,
+    sources: list[str] | None = None,
 ) -> list[Chunk]:
     """The one retrieval call the RAG core makes: relevant chunks from
     every enabled collection, merged into one ranked list of at most
     `top_k`.
+
+    `sources` is the scope the user chose (the "answer from these files only"
+    picker in the page). None, the default, is everything and behaves exactly as
+    before: the floors and the image gate decide what is relevant. With a list,
+    the search is limited to those files and NO floor or gate is applied, because
+    the user has already said where the answer lives: a question like "who is
+    this person?" scores far below the corpus-wide floor against a CV that is
+    plainly the thing being asked about (measured 2026-10-10 on an uploaded CV:
+    1 of 6 questions about it retrieved it). The model's own refusal rule is what
+    still guards a question the scoped files cannot answer.
 
     - text_index is always searched with `query` and gated on
       MIN_RELEVANCE_SCORE (exactly Chapter 10's behaviour).
@@ -223,9 +234,12 @@ def retrieve(
     # there is simply no text search in that case — only the image one.
     text_hits = []
     if query.strip():
-        text_hits = filter_by_floor(
-            search_text(query, top_k=top_k, client=client), settings.MIN_RELEVANCE_SCORE
-        )
+        if sources is None:
+            text_hits = filter_by_floor(
+                search_text(query, top_k=top_k, client=client), settings.MIN_RELEVANCE_SCORE
+            )
+        else:
+            text_hits = search_text(query, top_k=top_k, client=client, sources=sources)
 
     # query_image implies image search even if the caller forgot
     # include_images=True — a passed-in image should never be silently
@@ -244,7 +258,15 @@ def retrieve(
     if image_search is None:
         from src.pipelines.images.search import search_images as image_search
 
-    if query_image is not None:
+    if sources is not None:
+        # The user's scope: rank within it, no gate (see the docstring).
+        if query_image is not None:
+            image_hits = image_search(query_image=query_image, top_k=top_k, client=client, sources=sources)
+        elif query.strip():
+            image_hits = image_search(query_text=query, top_k=top_k, client=client, sources=sources)
+        else:
+            image_hits = []
+    elif query_image is not None:
         raw_image_hits = image_search(query_image=query_image, top_k=top_k, client=client)
         image_hits = filter_by_floor(raw_image_hits, settings.MIN_IMAGE_RELEVANCE_SCORE)
     else:

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 from PIL import Image
@@ -102,6 +103,93 @@ def index_counts(client=None) -> dict[str, int]:
         "text": get_text_collection(client).count(),
         "image": get_image_collection(client).count(),
     }
+
+
+def list_sources(client=None) -> list[str]:
+    """Every file that has something in the index, as the `source` path the index
+    stores (sorted), for the "answer from these files only" picker. Metadata only:
+    no vectors are read, so it is cheap enough to run on every page rerun."""
+    from src.core.vector_store import get_client, get_image_collection, get_text_collection
+
+    client = client or get_client()
+    found: set[str] = set()
+    for collection in (get_text_collection(client), get_image_collection(client)):
+        if collection.count():
+            found.update(m["source"] for m in collection.get(include=["metadatas"])["metadatas"])
+    return sorted(found)
+
+
+def sources_for_upload(saved: Path, listed: list[str]) -> list[str]:
+    """The index entry for a file that was just saved and indexed. The index stores
+    the path relative to the folder the app was started from, which this does not
+    assume: it matches on the file name, so an upload still selects itself when the
+    app was started from somewhere unexpected. [] when nothing matches (a file
+    that produced no chunks is not in the index, and there is nothing to select)."""
+    return [s for s in listed if Path(s).name == saved.name]
+
+
+@dataclass
+class UploadResult:
+    ok: bool
+    message: str                # what the page shows the user
+    focus: list[str]            # the index entries to answer from next ([] = leave the scope alone)
+
+
+def add_to_corpus(filename: str, data: bytes, data_root: Path | None = None) -> UploadResult:
+    """Save an uploaded file, index it, and say what happened.
+
+    A file that indexes to nothing (a scanned PDF with no text layer, a picture
+    with no text) is reported as a failure: the old page said "Indexed (0 chunks
+    added)" in green, and the file then could never be asked about. A file that
+    does index is selected as the scope for the next questions, because corpus-wide
+    search hides a freshly added file from most questions about it (a "who is this
+    person?" about a CV scores below the relevance floor; measured 2026-10-10)."""
+    saved = save_upload(filename, data, data_root=data_root)
+    chunks = index_file(saved)
+    if not chunks:
+        return UploadResult(
+            False,
+            f"`{saved.name}` was saved but nothing could be read from it (0 chunks), so it cannot be asked about. "
+            "A scanned PDF with no text layer, or a picture with no text, produces this.",
+            [],
+        )
+    return UploadResult(
+        True,
+        f"✅ Indexed `{saved.name}` ({chunks} chunks). Answers now come from this file only; "
+        "clear **Answer from** to use everything again.",
+        sources_for_upload(saved, list_sources()),
+    )
+
+
+def attachment_note(name: str, text: str, tesseract_installed: bool) -> str:
+    """The line the page shows about an image attached to a question: what was
+    read from it, or why nothing was. The three cases are different facts (the
+    picture has text / the picture has none / this machine cannot read pictures)
+    and the old page reported the last two identically, as "no readable text"."""
+    from src.pipelines.rag.attachments import ATTACHMENT_MAX_WORDS
+
+    if text.strip():
+        words = len(text.split())
+        cut = f" Only the first {ATTACHMENT_MAX_WORDS} words are used." if words > ATTACHMENT_MAX_WORDS else ""
+        return f"📎 Attached image `{name}`: read {words} words of text from it. The answer can use and cite that text.{cut}"
+    if tesseract_installed:
+        return (
+            f"📎 Attached image `{name}`: no text could be read from it. RAGNova reads text in pictures; "
+            "it cannot describe what a photo shows."
+        )
+    return (
+        f"📎 Attached image `{name}`: Tesseract is not installed, so text in pictures cannot be read. "
+        "Only look-alike images already in the index can be found."
+    )
+
+
+def ocr_available() -> bool:
+    """Whether Tesseract is installed. ocr_image() answers "" both for a picture
+    with no text and for a machine with no Tesseract, and the page has to tell the
+    two apart: one is a fact about the picture, the other a fact about the setup."""
+    from src.pipelines.images.ocr import TesseractOCREngine
+
+    return TesseractOCREngine().is_available
 
 
 def transcribe_audio_bytes(data: bytes, suffix: str = ".wav") -> str:

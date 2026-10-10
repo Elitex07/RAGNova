@@ -37,16 +37,20 @@ from PIL import Image
 
 from src.core.config import settings
 from src.pipelines.rag.answer import check_citations, stream_answer
+from src.pipelines.rag.attachments import image_attachment
 from src.ui.backend import (
     AUDIO_EXTS,
     DOCUMENT_EXTS,
     IMAGE_EXTS,
+    add_to_corpus,
+    attachment_note,
     check_model_generates,
     index_counts,
-    index_file,
+    kind_of,
+    list_sources,
+    ocr_available,
     ocr_image,
     ollama_status,
-    save_upload,
     transcribe_audio_bytes,
 )
 from src.ui.citations import CitationView, citation_views
@@ -58,10 +62,12 @@ CANNED_BANNER = (
     "⚠️ Canned demo answer: hand-written text in src/app.py, not retrieved from "
     "the index and not written by the model. Do not rate it as a RAGNova answer."
 )
+SOURCE_ICONS = {"document": "📄", "image": "🖼️", "audio": "🎙️"}
 GREETING = (
     "Hello! I am **RAGNova**, your offline multimodal assistant. "
     "You can ask me questions about campus policies, project deadlines, Wi-Fi configuration, "
-    "or library hours."
+    "or library hours. To ask about your own files, add them in the sidebar: the page "
+    "then answers from that file alone, and **Answer from** switches back to everything."
 )
 
 # ---------------------------------------------------------------------------
@@ -246,17 +252,40 @@ with st.sidebar:
     if uploaded_kb_file is not None and st.button("Save & Index File", key="btn_index_upload"):
         with st.spinner(f"Indexing {uploaded_kb_file.name}..."):
             try:
-                saved_path = save_upload(
+                result = add_to_corpus(
                     uploaded_kb_file.name,
                     uploaded_kb_file.getvalue(),
                     data_root=PROJECT_ROOT / "data",
                 )
-                chunks_added = index_file(saved_path)
-                st.session_state.kb_flash = (True, f"✅ Indexed `{saved_path.name}` ({chunks_added} chunks added)")
+                if result.focus:
+                    st.session_state.focus_sources = result.focus
+                st.session_state.kb_flash = (result.ok, result.message)
                 st.session_state.kb_nonce += 1       # empty the uploader so it cannot be indexed twice by accident
             except Exception as err:
                 st.session_state.kb_flash = (False, f"Failed to index file: {err}")
         st.rerun()
+
+    st.divider()
+    st.subheader("🎯 Answer from")
+    try:
+        listed_sources = list_sources()
+    except Exception as err:
+        listed_sources = []
+        st.warning(f"⚠️ Could not list the indexed files: {err}")
+    # A stored pick that is no longer in the index (a file removed, an index rebuilt) would crash the widget.
+    st.session_state["focus_sources"] = [s for s in st.session_state.get("focus_sources", []) if s in listed_sources]
+    st.multiselect(
+        "Files to answer from",
+        options=listed_sources,
+        key="focus_sources",
+        format_func=lambda path: f"{SOURCE_ICONS.get(kind_of(path), '📄')} {Path(path).name}",
+        placeholder="Everything indexed",
+        label_visibility="collapsed",
+    )
+    st.caption(
+        "Nothing picked: all indexed files, with the relevance checks that refuse questions the files cannot answer. "
+        "Files picked: only those files, with no relevance check; the model still says when they do not contain the answer."
+    )
 
     st.divider()
     st.subheader("🛠️ Engine Mode")
@@ -283,6 +312,18 @@ st.markdown(
     '<div class="sub-title">Ask questions in plain language across your documents, screenshots, and audio recordings — 100% offline.</div>',
     unsafe_allow_html=True,
 )
+
+def clear_focus() -> None:
+    # A callback, not code after the button: Streamlit forbids changing a widget's value
+    # once it has been drawn in this run, and the picker in the sidebar is drawn first.
+    st.session_state["focus_sources"] = []
+
+
+focus = list(st.session_state.get("focus_sources", []))
+if focus:
+    banner, clear = st.columns([5, 1])
+    banner.info("📌 Answering from **" + ", ".join(Path(s).name for s in focus) + "** only.")
+    clear.button("Use everything", key="btn_clear_focus", on_click=clear_focus)
 
 # Initialize conversation history and state
 if "messages" not in st.session_state:
@@ -609,6 +650,18 @@ with col_img:
         # an image that quietly stays attached rewrites every later question.
         st.info("📎 Query image attached. It is used for your next question only.")
 
+# One-click questions for the files picked above (the "what is in this?" first move).
+if focus:
+    these = "this file" if len(focus) == 1 else "these files"
+    suggestions = [
+        f"Give me a short summary of {these}.",
+        "What are the key points?",
+        "List the names, dates and numbers it mentions.",
+    ]
+    for column, suggestion in zip(st.columns(len(suggestions)), suggestions):
+        if column.button(suggestion, key=f"suggest_{suggestion}"):
+            st.session_state["active_prompt_override"] = suggestion
+
 # Chat input
 user_prompt = st.chat_input("Type your question here (e.g., 'How many marks does the prototype carry?')...")
 
@@ -622,7 +675,7 @@ if st.session_state.get("active_prompt_override"):
 # ---------------------------------------------------------------------------
 if user_prompt:
     query_pil = None
-    ocr_text = ""
+    attachments = []
     image_note = None
     if query_img_file is not None:
         if engine_mode == ENGINE_CANNED:
@@ -631,14 +684,12 @@ if user_prompt:
             try:
                 query_pil = Image.open(query_img_file)
                 ocr_text = ocr_image(query_pil)
-                if ocr_text:
-                    image_note = f"📎 Query image attached. Text read from it was added to your question: “{ocr_text[:300]}”"
-                else:
-                    image_note = "📎 Query image attached (no readable text in it)."
+                attachments = [image_attachment(query_img_file.name, ocr_text)]
+                image_note = attachment_note(query_img_file.name, ocr_text, ocr_available())
             except Exception as exc:
                 query_pil = None
+                attachments = []
                 image_note = f"⚠️ Could not use the attached image ({exc}); the question was run without it."
-    full_query = f"{user_prompt} {ocr_text}".strip() if ocr_text else user_prompt
 
     st.session_state.messages.append(new_message("user", content=user_prompt, image_note=image_note))
     with st.chat_message("user"):
@@ -656,15 +707,17 @@ if user_prompt:
             with st.spinner("Retrieving offline multimodal sources & streaming answer..."):
                 try:
                     retrieved_chunks, token_stream = stream_answer(
-                        full_query,
+                        user_prompt,
                         top_k=settings.TOP_K,
                         include_images=True,
                         query_image=query_pil,
+                        sources=focus or None,
+                        attachments=attachments,
                     )
                     answer_text = st.write_stream(token_stream)
 
                     # Check citations for hallucination (Chapter 11 §1.3)
-                    out_of_range = check_citations(answer_text, retrieved_chunks, full_query)
+                    out_of_range = check_citations(answer_text, retrieved_chunks, user_prompt)
                     warning_msg = None
                     if out_of_range:
                         warning_msg = f"⚠️ Citation Alert: The model referenced source index {sorted(out_of_range)}, which was not in the retrieved context."

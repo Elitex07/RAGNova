@@ -41,6 +41,7 @@ ENGINE_CANNED = "Canned demo answers (not the real system)"
 # that only that hand-written answer contains.
 CANNED_QUESTION = "How many marks does the prototype carry?"
 CANNED_FRAGMENT = "40% of the total marks"
+SOURCES = ["data/documents/notice.pdf", "data/documents/resume_v3.pdf", "data/images/notice_midterm_schedule.png"]
 RUNNER_ERROR = "llama-server binary not found"      # what the broken Ollama install said on 2026-10-07
 
 
@@ -71,6 +72,7 @@ class Page:
 def page(monkeypatch) -> Page:
     monkeypatch.setattr(backend, "ollama_status", lambda: ("ready", settings.OLLAMA_MODEL))
     monkeypatch.setattr(backend, "index_counts", lambda client=None: {"text": 1, "image": 1})
+    monkeypatch.setattr(backend, "list_sources", lambda client=None: SOURCES)
     logged: list = []
     monkeypatch.setattr(feedback, "record_feedback", lambda entry, path=None: logged.append(entry))
     at = AppTest.from_file(APP, default_timeout=60)
@@ -79,14 +81,17 @@ def page(monkeypatch) -> Page:
     return Page(at, logged)
 
 
-def _live_answer(text: str):
-    """A stand-in for stream_answer() that retrieves one real-looking chunk and streams `text`."""
+def _live_answer(text: str, calls: list | None = None):
+    """A stand-in for stream_answer() that retrieves one real-looking chunk and streams `text`.
+    Each call's arguments are appended to `calls` when it is given."""
     chunk = Chunk(
         chunk_id="n1", source="data/documents/notice.pdf", modality="pdf",
         text="The working prototype will carry forty percent.", page=2, embedding_model="test",
     )
 
-    def fake(query, top_k=None, client=None, include_images=False, query_image=None):
+    def fake(query, top_k=None, client=None, include_images=False, query_image=None, sources=None, attachments=None):
+        if calls is not None:
+            calls.append({"query": query, "sources": sources, "attachments": attachments, "query_image": query_image})
         return [chunk], iter([word + " " for word in text.split(" ")])
 
     return fake
@@ -174,3 +179,97 @@ def test_streamlit_config_keeps_the_app_on_this_machine_and_telemetry_off():
 def test_streamlit_config_is_headless_so_a_fresh_machine_does_not_stop_at_the_email_prompt():
     config = tomllib.loads((PROJECT_ROOT / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
     assert config["server"]["headless"] is True
+
+
+# ---------------------------------------------------------------------------
+# Answering from the files the user picked (2026-10-10)
+# ---------------------------------------------------------------------------
+
+CV = "data/documents/resume_v3.pdf"
+
+
+def _banners(at) -> list[str]:
+    return [i.value for i in at.info if "Answering from" in i.value]
+
+
+def test_the_picker_offers_every_indexed_file(page):
+    [picker] = page.at.sidebar.multiselect
+    assert len(picker.options) == len(SOURCES)
+
+
+def test_without_a_pick_questions_run_over_everything_and_no_banner_is_shown(page, monkeypatch):
+    calls: list = []
+    monkeypatch.setattr(answer_module, "stream_answer", _live_answer("Forty percent [1].", calls))
+
+    page.ask(CANNED_QUESTION)
+
+    assert calls[-1]["sources"] is None
+    assert _banners(page.at) == []
+    assert not [b for b in page.at.button if b.label.startswith("Give me a short summary")]
+
+
+def test_with_a_pick_the_banner_names_the_file_and_the_question_is_limited_to_it(page, monkeypatch):
+    calls: list = []
+    monkeypatch.setattr(answer_module, "stream_answer", _live_answer("He is a student [1].", calls))
+    page.at.session_state["focus_sources"] = [CV]
+    page.at.run()
+
+    assert any("resume_v3.pdf" in text for text in _banners(page.at))
+    page.ask("who is this person")
+
+    assert calls[-1]["sources"] == [CV]
+
+
+def test_use_everything_drops_the_scope_for_the_next_question(page, monkeypatch):
+    calls: list = []
+    monkeypatch.setattr(answer_module, "stream_answer", _live_answer("Forty percent [1].", calls))
+    page.at.session_state["focus_sources"] = [CV]
+    page.at.run()
+
+    [clear] = [b for b in page.at.button if b.label == "Use everything"]
+    clear.click().run()
+    assert not page.at.exception, [e.value for e in page.at.exception]
+    assert page.at.session_state["focus_sources"] == [] and _banners(page.at) == []
+
+    page.ask(CANNED_QUESTION)
+    assert calls[-1]["sources"] is None
+
+
+def test_a_suggested_question_is_asked_over_the_picked_file(page, monkeypatch):
+    calls: list = []
+    monkeypatch.setattr(answer_module, "stream_answer", _live_answer("Skills: Python [1].", calls))
+    page.at.session_state["focus_sources"] = [CV]
+    page.at.run()
+
+    [chip] = [b for b in page.at.button if b.label == "What are the key points?"]
+    chip.click().run()
+
+    assert not page.at.exception, [e.value for e in page.at.exception]
+    messages = page.at.session_state["messages"]
+    assert messages[-2]["content"] == "What are the key points?" and messages[-1]["engine"] == "live"
+    assert calls[-1]["sources"] == [CV]
+
+
+def test_a_picked_file_that_is_no_longer_indexed_is_dropped_instead_of_crashing_the_page(page):
+    page.at.session_state["focus_sources"] = ["data/documents/gone.pdf"]
+    page.at.run()
+
+    assert not page.at.exception, [e.value for e in page.at.exception]
+    assert page.at.session_state["focus_sources"] == [] and _banners(page.at) == []
+
+
+def test_a_question_with_no_picture_attached_passes_no_attachment(page, monkeypatch):
+    calls: list = []
+    monkeypatch.setattr(answer_module, "stream_answer", _live_answer("Forty percent [1].", calls))
+    page.ask(CANNED_QUESTION)
+    assert calls[-1]["attachments"] == [] and calls[-1]["query_image"] is None
+
+
+def test_an_answer_citing_a_source_that_was_not_shown_is_flagged_on_the_page(page, monkeypatch):
+    """The model cites [7] but one chunk was retrieved: the page must warn (the check runs on the question as typed)."""
+    monkeypatch.setattr(answer_module, "stream_answer", _live_answer("Forty percent [7]."))
+
+    reply = page.ask(CANNED_QUESTION)
+
+    assert "Citation Alert" in (reply["warning"] or "")
+    assert any("Citation Alert" in w.value for w in page.at.warning)
