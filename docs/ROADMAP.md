@@ -173,7 +173,10 @@ With 2 members: merge Track C into A and B (each owns half the UI).
       interface. The canned path is now opt-in, labelled, and logged as `scaffold-mock`; `tests/test_app.py` runs
       the real script headlessly. Verified later that day with a working model: Test the model, a streamed cited answer,
       a refusal, an image + question, canned-mode labelling and both feedback-log labels. Not yet verified: the
-      microphone path and the real network-off run)
+      microphone path and the real network-off run. 2026-10-10, first use on someone's own files: a CV added with
+      Add to Corpus could not be asked about (the corpus-wide relevance floor) and an attached screenshot was never read
+      by the model; now an "Answer from" scope and an attached image as context [1] (ADR-016, results log). The pinned
+      environment could not run the new tests that day: Windows Application Control blocked scikit-learn there)
 - [ ] Ch 12 — Integration & Feedback (docs + real, tested code written — image and audio write paths into
       ChromaDB, `search_images()`, rank-merged `retrieve()` across both collections (ADR-007), per-collection
       relevance floors (ADR-010) plus an OCR-corroboration gate for images (ADR-011), `build_index.py` indexing

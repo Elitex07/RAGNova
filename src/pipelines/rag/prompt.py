@@ -70,9 +70,10 @@ _ATTACHMENT_WITHOUT_TEXT = (
 def _attachment_note(chunks: list[Chunk]) -> str:
     """When the user attached an image, which numbered block it is. Without this
     the context can hold several images (the attachment plus look-alikes retrieval
-    found) and "this image" has no single referent: measured 2026-10-10, 3 of 5
-    questions about an attached notice were answered from a different image or
-    refused, e.g. "What does this image say?" answered with another notice's text."""
+    found) and "this image" has no single referent: measured 2026-10-10, 3 of the 5
+    "this image" questions about attached pictures were answered from a different
+    image or refused, e.g. "What does this image say?" answered with another
+    notice's text (data/eval/scoped_sources_2026-10-10_run2_*; ADR-016)."""
     numbers = [i for i, chunk in enumerate(chunks, start=1) if chunk.chunk_id.startswith(ATTACHMENT_ID_PREFIX)]
     if not numbers:
         return ""

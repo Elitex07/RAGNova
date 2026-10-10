@@ -120,6 +120,32 @@ py -3.11 -m venv .venv311
 
 ---
 
+## 7. The pinned environment, and your own files in the page
+
+Two jobs from 2026-10-10 (ADR-016) that only a person at this machine can finish.
+
+**7a. Run the pinned environment's tests once it will start.** On 2026-10-10 `.venv-pinned313` (Python 3.13, Streamlit 1.41.1, ChromaDB 0.5.23) could not import scikit-learn: Windows reported *"An Application Control policy has blocked this file"* for a native library (`_argkmin_classmode`, and once `pyduccfft`), reproduced by `python -I -c "import sentence_transformers"` with no repository code. That is a Windows security policy (Smart App Control or an organisation policy), so it is yours to decide about; nothing in the repository tried to get around it. Until it runs, the 52 new tests in `test_scoped_sources.py`, `test_attachments.py` and `test_app.py` have passed only in `.venv`.
+
+```bash
+.venv-pinned313\Scripts\python -m pytest -q
+```
+
+**Pass:** all passed, one expected failure. The test to watch is `test_a_picked_file_that_is_no_longer_indexed_is_dropped_instead_of_crashing_the_page`: Streamlit 1.41.1 *raises* on a stored pick that is not among the options (1.65 quietly drops it), so this guard can only fail there.
+**Record:** a results-log row with the count, or the error text if it is still blocked.
+
+**7b. Try your own file, as the first person to use it did.** Start the page as in section 1.
+
+1. Add a document of your own with **Add to Corpus** and **Save & Index File**. Expect: a green line naming the file and its chunk count, a banner "Answering from *file* only", and the file selected under **Answer from**.
+2. Ask "who is this person?" or "what is in this document?" (whatever fits the file), then press one of the three one-click questions. Expect an answer that cites the file.
+3. Ask something the file cannot answer ("what is the capital of France?"). Expect the refusal, with no sources listed under it. **If it answers anyway, that is the finding to record:** inside a scope the model's own refusal is the only guard (four of four were refused in the check, a small sample).
+4. Press **Use everything** and ask the same "who is this person?". Expect the refusal: that is the old corpus-wide behaviour, kept on purpose.
+5. Open **Visual / Query Image**, attach a screenshot that contains text, and ask "what does this image say?". Expect the note "read N words of text from it" and an answer that cites the attachment as [1]; the answer is often only the headline. A photo with no text should say that it has none.
+6. **Afterwards, delete the file you uploaded** from `data/documents/` (or `images/`, `audio/`): uploads land in the same folders as the shipped corpus, so a personal file sits there untracked and `git add data/` would stage it. Removing it from the index as well needs `python scripts/build_index.py`.
+
+**Record:** a results-log row: what you added, what each step showed, and anything that surprised you.
+
+---
+
 ## When something here fails
 
 Write the failure down in the results log with the real output, in the same words the log's other rows use: what you ran, what you saw, what you did not check. A recorded failure is evidence; an unrecorded one is just a rumour.

@@ -41,7 +41,7 @@ ENGINE_CANNED = "Canned demo answers (not the real system)"
 # that only that hand-written answer contains.
 CANNED_QUESTION = "How many marks does the prototype carry?"
 CANNED_FRAGMENT = "40% of the total marks"
-SOURCES = ["data/documents/notice.pdf", "data/documents/resume_v3.pdf", "data/images/notice_midterm_schedule.png"]
+SOURCES = ["data/documents/notice.pdf", "data/documents/cv.pdf", "data/images/notice_midterm_schedule.png"]
 RUNNER_ERROR = "llama-server binary not found"      # what the broken Ollama install said on 2026-10-07
 
 
@@ -185,7 +185,7 @@ def test_streamlit_config_is_headless_so_a_fresh_machine_does_not_stop_at_the_em
 # Answering from the files the user picked (2026-10-10)
 # ---------------------------------------------------------------------------
 
-CV = "data/documents/resume_v3.pdf"
+CV = "data/documents/cv.pdf"
 
 
 def _banners(at) -> list[str]:
@@ -214,7 +214,7 @@ def test_with_a_pick_the_banner_names_the_file_and_the_question_is_limited_to_it
     page.at.session_state["focus_sources"] = [CV]
     page.at.run()
 
-    assert any("resume_v3.pdf" in text for text in _banners(page.at))
+    assert any("cv.pdf" in text for text in _banners(page.at))
     page.ask("who is this person")
 
     assert calls[-1]["sources"] == [CV]
