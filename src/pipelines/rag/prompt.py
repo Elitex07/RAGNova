@@ -67,6 +67,22 @@ _ATTACHMENT_WITHOUT_TEXT = (
 )
 
 
+def _attachment_note(chunks: list[Chunk]) -> str:
+    """When the user attached an image, which numbered block it is. Without this
+    the context can hold several images (the attachment plus look-alikes retrieval
+    found) and "this image" has no single referent: measured 2026-10-10, 3 of 5
+    questions about an attached notice were answered from a different image or
+    refused, e.g. "What does this image say?" answered with another notice's text."""
+    numbers = [i for i, chunk in enumerate(chunks, start=1) if chunk.chunk_id.startswith(ATTACHMENT_ID_PREFIX)]
+    if not numbers:
+        return ""
+    which = " and ".join(f"[{n}]" for n in numbers)
+    return (
+        f"The user attached an image to this question: {which}. When the question says \"this image\", "
+        f"\"the image\" or \"the picture\", it means {which}, not any other image in the context.\n\n"
+    )
+
+
 def _context_text(chunk: Chunk) -> str:
     if chunk.chunk_id.startswith(ATTACHMENT_ID_PREFIX) and not chunk.text.strip():
         return _ATTACHMENT_WITHOUT_TEXT
@@ -98,6 +114,7 @@ def build_prompt(query: str, chunks: list[Chunk]) -> str:
     return (
         f"{_SYSTEM_INSTRUCTIONS}\n\n"
         f"Context:\n{context_section}\n\n"
+        f"{_attachment_note(chunks)}"
         f"Question: {query}\n\n"
         f"Answer:"
     )

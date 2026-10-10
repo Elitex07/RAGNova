@@ -16,7 +16,6 @@ from PIL import Image
 from src.core.config import settings
 from src.core.llm import generate, generate_stream
 from src.core.schemas import Chunk
-from src.pipelines.rag.attachments import retrieval_query
 from src.pipelines.rag.context import trim_chunks
 from src.pipelines.rag.prompt import build_prompt
 from src.pipelines.rag.retrieve import filter_by_floor, retrieve
@@ -112,10 +111,13 @@ def _gather(
 ) -> list[Chunk]:
     """Everything the model may be shown, in citation order: the user's
     attachments first (they put them there; nothing filters them), then what
-    retrieval found. An attachment's text also helps FIND related files, but the
-    model is asked the question as typed."""
+    retrieval found for the question as typed. The attachment's text is NOT added
+    to the retrieval query: tried both ways on 2026-10-10 it made no difference to
+    9 synthetic rows (9/9 each) and, on 4 questions about two real screenshots,
+    gluing it on brought in unrelated corpus chunks and gave 0 usable answers
+    against 2 without (one run each of a stochastic model; ADR-016)."""
     found = retrieve(
-        retrieval_query(query, attachments), top_k=top_k, client=client,
+        query, top_k=top_k, client=client,
         include_images=include_images, query_image=query_image, sources=sources,
     )
     return [*(attachments or []), *found]

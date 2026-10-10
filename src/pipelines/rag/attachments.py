@@ -25,10 +25,6 @@ from src.pipelines.rag.prompt import ATTACHMENT_ID_PREFIX
 # an attachment gets a fixed share of it: 400 words is about 520 tokens of 4096.
 ATTACHMENT_MAX_WORDS = 400
 
-# How much of an attachment's text is added to the RETRIEVAL query. MiniLM reads
-# about 256 tokens and the question comes first, so more would only be ignored.
-RETRIEVAL_EXTRA_CHARS = 600
-
 
 def image_attachment(name: str, text: str, index: int = 1) -> Chunk:
     """The attached image `name` with the `text` read from it (may be empty)."""
@@ -48,10 +44,3 @@ def image_attachment(name: str, text: str, index: int = 1) -> Chunk:
 
 def is_attachment(chunk: Chunk) -> bool:
     return chunk.chunk_id.startswith(ATTACHMENT_ID_PREFIX)
-
-
-def retrieval_query(query: str, attachments: list[Chunk] | None) -> str:
-    """The question, followed by a short piece of each attachment's text, used
-    only to FIND related indexed files. The model is shown the question as typed."""
-    extra = " ".join(a.text[:RETRIEVAL_EXTRA_CHARS] for a in attachments or []).strip()
-    return f"{query} {extra}" if extra else query

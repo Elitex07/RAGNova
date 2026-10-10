@@ -273,3 +273,24 @@ def test_an_answer_citing_a_source_that_was_not_shown_is_flagged_on_the_page(pag
 
     assert "Citation Alert" in (reply["warning"] or "")
     assert any("Citation Alert" in w.value for w in page.at.warning)
+
+
+def test_a_refusal_lists_no_sources_even_though_chunks_were_retrieved(page, monkeypatch):
+    """With a scope or an attached image, chunks are retrieved before the model decides they do not hold the answer."""
+    from src.pipelines.rag.answer import NOT_ENOUGH_INFO
+
+    monkeypatch.setattr(answer_module, "stream_answer", _live_answer(NOT_ENOUGH_INFO))
+    reply = page.ask("what is the capital of France")
+
+    assert reply["content"].strip() == NOT_ENOUGH_INFO
+    assert not reply["views"]
+    assert not any("Sources & Citations" in x.label for x in page.at.expander)
+
+
+def test_an_answer_that_merely_mentions_the_refusal_phrase_midway_keeps_its_sources(page, monkeypatch):
+    from src.pipelines.rag.answer import NOT_ENOUGH_INFO
+
+    monkeypatch.setattr(answer_module, "stream_answer", _live_answer(f"Forty percent [1]. Note: {NOT_ENOUGH_INFO}"))
+    reply = page.ask(CANNED_QUESTION)
+
+    assert [v.number for v in reply["views"]] == [1]

@@ -36,7 +36,7 @@ import streamlit as st
 from PIL import Image
 
 from src.core.config import settings
-from src.pipelines.rag.answer import check_citations, stream_answer
+from src.pipelines.rag.answer import NOT_ENOUGH_INFO, check_citations, stream_answer
 from src.pipelines.rag.attachments import image_attachment
 from src.ui.backend import (
     AUDIO_EXTS,
@@ -723,7 +723,10 @@ if user_prompt:
                         warning_msg = f"⚠️ Citation Alert: The model referenced source index {sorted(out_of_range)}, which was not in the retrieved context."
                     reply = {
                         "content": answer_text,
-                        "views": citation_views(retrieved_chunks),
+                        # A refusal lists no sources: with a scope or an attachment chunks are retrieved even
+                        # when the model finds the answer is not in them, and "Sources" under a refusal reads
+                        # as if the refusal were grounded in them.
+                        "views": None if answer_text.strip().startswith(NOT_ENOUGH_INFO) else citation_views(retrieved_chunks),
                         "warning": warning_msg,
                         "engine": "live",
                     }

@@ -25,10 +25,8 @@ from src.core.schemas import Chunk
 from src.pipelines.rag import answer as answer_module
 from src.pipelines.rag.attachments import (
     ATTACHMENT_MAX_WORDS,
-    RETRIEVAL_EXTRA_CHARS,
     image_attachment,
     is_attachment,
-    retrieval_query,
 )
 from src.pipelines.rag.prompt import build_prompt, format_provenance
 from src.ui.citations import citation_views
@@ -62,21 +60,6 @@ def test_a_long_screenshot_keeps_only_its_first_words_and_says_so():
 def test_a_screenshot_within_the_limit_is_kept_whole():
     words = " ".join(f"w{i}" for i in range(ATTACHMENT_MAX_WORDS))
     assert image_attachment("ok.png", words).text == words
-
-
-def test_the_retrieval_query_is_the_question_plus_a_bounded_slice_of_each_attachment():
-    text = "x" * (RETRIEVAL_EXTRA_CHARS + 500)
-    query = retrieval_query("when is it", [image_attachment("a.png", text)])
-    assert query.startswith("when is it ")
-    assert len(query) == len("when is it ") + RETRIEVAL_EXTRA_CHARS
-
-
-def test_with_no_attachment_or_no_text_the_retrieval_query_is_the_question_untouched():
-    assert retrieval_query("when is it", None) == "when is it"
-    assert retrieval_query("when is it", []) == "when is it"
-    assert retrieval_query("when is it", [image_attachment("blank.png", "")]) == "when is it"
-    spaces = Chunk(chunk_id="attachment__1", source="attached image (b.png)", modality="image", text="   ", embedding_model="none")
-    assert retrieval_query("when is it", [spaces, spaces]) == "when is it"       # nothing to add, so not even a trailing space
 
 
 # ---------------------------------------------------------------------------
@@ -147,10 +130,11 @@ def test_the_attachment_comes_first_in_the_prompt_and_in_the_citations(pipeline)
     assert "[1] attached image (shot.png)" in pipeline["prompts"][0]
 
 
-def test_the_model_is_asked_the_question_as_typed_while_retrieval_also_gets_the_picture_text(pipeline):
+def test_the_model_and_retrieval_both_get_the_question_as_typed_and_the_picture_text_is_not_glued_on(pipeline):
+    """Glued on, the picture's generic words pulled unrelated corpus chunks into the context (ADR-016)."""
     answer_module.answer_query("what does it say", attachments=[image_attachment("shot.png", SHOT_TEXT)])
     assert "Question: what does it say\n" in pipeline["prompts"][0]
-    assert pipeline["retrieve"][0]["query"] == f"what does it say {SHOT_TEXT}"
+    assert pipeline["retrieve"][0]["query"] == "what does it say"
 
 
 def test_an_answer_can_come_from_the_attachment_alone(pipeline):
@@ -193,3 +177,38 @@ def test_streaming_with_nothing_retrieved_and_no_attachment_refuses_without_the_
     chunks, stream = answer_module.stream_answer("what does it say")
     assert chunks == [] and list(stream) == [answer_module.NOT_ENOUGH_INFO]
     assert pipeline["prompts"] == []
+
+
+# ---------------------------------------------------------------------------
+# "this image" must have one referent (2026-10-10)
+# ---------------------------------------------------------------------------
+
+def _other_image() -> Chunk:
+    return Chunk(chunk_id="i1", source="data/images/notice_library_fines.png", modality="image",
+                 text="Late Return Fine: Rs 2.00 per day", embedding_model="m", score=0.4)
+
+
+def test_the_prompt_says_which_block_is_the_attached_image_and_that_this_image_means_it():
+    prompt = build_prompt("What does this image say?", [image_attachment("shot.png", SHOT_TEXT), _other_image()])
+    assert 'The user attached an image to this question: [1].' in prompt
+    assert '"this image", "the image" or "the picture", it means [1], not any other image in the context.' in prompt
+    assert prompt.index("The user attached an image") < prompt.index("Question: What does this image say?")
+    assert prompt.index("[2] data/images/notice_library_fines.png") < prompt.index("The user attached an image")
+
+
+def test_the_note_names_the_attachments_real_number_when_it_is_not_first():
+    prompt = build_prompt("What does this say?", [_found(), _other_image(), image_attachment("shot.png", SHOT_TEXT)])
+    assert "The user attached an image to this question: [3]." in prompt
+
+
+def test_without_an_attachment_the_prompt_has_no_note_and_is_exactly_what_it_was():
+    chunks = [_found(), _other_image()]
+    prompt = build_prompt("What does this image say?", chunks)
+    assert "attached" not in prompt
+    assert prompt.endswith("\n\nQuestion: What does this image say?\n\nAnswer:")
+    assert "Context:\n[1] data/documents/notice.pdf, page 2\n" in prompt
+
+
+def test_the_note_is_in_the_prompt_the_model_actually_gets(pipeline):
+    answer_module.answer_query("What does this image say?", attachments=[image_attachment("shot.png", SHOT_TEXT)])
+    assert "The user attached an image to this question: [1]." in pipeline["prompts"][0]

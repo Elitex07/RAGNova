@@ -180,9 +180,13 @@ def main() -> int:
             run(row_id, kind, question, words)
         for row_id, which, question, words in ATTACHED:
             path = pictures[which]
-            text = ocr_image(Image.open(path))
+            picture = Image.open(path)
+            text = ocr_image(picture)
             print(f"  (attached {path.name}: Tesseract read {len(text.split())} words: {text[:80]!r})")
-            run(row_id, f"attached {which} image", question, words, attachments=[image_attachment(path.name, text)])
+            # As the page does: the picture is both an attachment (its text is context [1]) and a search key (look-alike
+            # indexed images are retrieved). The first three runs passed only the attachment, so they under-reported the
+            # noise the look-alikes add; from the fourth run on this mirrors the page.
+            run(row_id, f"attached {which} image", question, words, attachments=[image_attachment(path.name, text)], query_image=picture)
 
     print("SUMMARY")
     for group in sorted({kind for _, kind, _ in rows}):
