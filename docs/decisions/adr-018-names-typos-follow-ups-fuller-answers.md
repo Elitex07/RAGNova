@@ -1,7 +1,7 @@
 # ADR-018: Names, typos, follow-ups and fuller answers: switched on, pending the measurement run
 
 ## Status
-**Proposed, switched on in code, not yet measured with the real model** (2026-10-11). The code, the rows (E24-E28) and the variant (V8 in `scripts/evaluate_entity_questions.py`) were written in a container with no Ollama and no model weights, so no answer was generated. Before this is called accepted, run stage 1 and stage 2 for V8 (commands below) and record the result here. If V8 is not a candidate, or stage 2 vetoes it, set the four settings below back to 0 in `.env` and record why. Builds on ADR-017.
+**Accepted** (2026-10-11). V8 passed both stages of ADR-017's rule, unchanged, on the second run (below). Builds on ADR-017.
 
 ## Context
 
@@ -40,6 +40,19 @@ own words ("The context does not mention the number of layers ..."), caused by t
 detail rule refused with the fixed sentence). The detail rule now ends with "reply with the refusal sentence of the
 last rule, word for word". The adoption rule, the refusal check and the rows are unchanged; both stages are to be
 re-run on this prompt.
+
+## Second measurement (2026-10-11, after the refusal fix; the run that decides)
+
+| | positives /15 | negatives refused /13 | score /28 |
+|---|---|---|---|
+| V0 (main) | 5 | 13 | 18 |
+| V5 (ADR-017's best) | 12 | 13 | 25 |
+| **V8** | **13** | **13** | **26** (+8, the winner) |
+
+Stage 2 (older rows, may only veto): V0 total 67 (text 26, negatives 20, images 21), V8 73 (text 32, negatives 20,
+images 21); no older negative newly answered, no older positive lost: **not vetoed**. V8 still misses E5 ("Tell me
+about Alex Morgan.") and, in this run, E4 ("Who is Alex Morgan?", answered in the first run): the card is cited in
+both, the 3B model refuses. One run each of a stochastic model; a one-question difference is noise.
 
 ## Alternatives considered
 

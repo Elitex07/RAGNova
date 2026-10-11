@@ -52,7 +52,7 @@ Never delete an ADR. A superseded decision plus its replacement tells a better s
 | [015](adr-015-cpu-only-latency.md) | CPU-only latency: one shared Ollama client on `127.0.0.1` for everyone, `TOP_K=3` as an opt-in CPU profile | Lowering the default `TOP_K`, or trimming each chunk (it returned bare citations) | ✅ |
 | [016](adr-016-answer-from-picked-files-and-attached-images.md) | Answer from the files you pick (no relevance floor inside a scope), and an attached image is context the model can read | Lowering the global relevance floor; gluing the picture's text onto the search; removing look-alike image search | ✅ |
 | [017](adr-017-name-lookups-lexical-admit.md) | Name and identifier lookups: a lexical admit and a who/what-is prompt rule, built and measured, **not enabled** | Switching them on by default (one near-miss negative answered wrongly); lowering the floors | ✅ |
-| [018](adr-018-names-typos-follow-ups-fuller-answers.md) | Names, typos, follow-ups and fuller answers switched on: ADR-017 plus a name-phrase rule, a spelling fix, follow-up resolution, a detail rule, cited-only sources. **Pending its V8 run** | An LLM rewrite of follow-ups (a second model call); lowering the floors | ⏳ |
+| [018](adr-018-names-typos-follow-ups-fuller-answers.md) | Names, typos, follow-ups and fuller answers switched on: ADR-017 plus a name-phrase rule, a spelling fix, follow-up resolution, a detail rule, cited-only sources. Adopted: V8 26/28 against 18/28, not vetoed on the older rows | An LLM rewrite of follow-ups (a second model call); lowering the floors | ✅ |
 
 **All ten are now written.**
 
