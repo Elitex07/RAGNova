@@ -122,6 +122,11 @@
     {"id": "E20", "question": "Who is the hostel warden?", "kind": "negative", "tier": "heldout-entity-2026-10-11"},
     {"id": "E21", "question": "What is Alex Morgan's blood group?", "kind": "negative", "tier": "heldout-entity-2026-10-11"},
     {"id": "E22", "question": "What is the capital of Australia?", "kind": "negative", "tier": "heldout-entity-2026-10-11"},
-    {"id": "E23", "question": "Who is the head of the library?", "kind": "negative", "tier": "heldout-entity-2026-10-11"}
+    {"id": "E23", "question": "Who is the head of the library?", "kind": "negative", "tier": "heldout-entity-2026-10-11"},
+    {"id": "E24", "question": "Who is Dr. Sharma?", "kind": "negative", "tier": "heldout-entity-2026-10-11b"},
+    {"id": "E25", "question": "Who is Mr. S. Rao?", "kind": "negative", "tier": "heldout-entity-2026-10-11b"},
+    {"id": "E26", "question": "Who is Mr. V. Rao?", "kind": "negative", "tier": "heldout-entity-2026-10-11b"},
+    {"id": "E27", "question": "Who is Dr S Rao?", "kind": "positive", "expected_sources": ["data/images/photo_lab_door_sign.png"], "answer_keywords": ["faculty", "associate professor", "in-charge", "in charge"], "tier": "heldout-entity-2026-10-11b"},
+    {"id": "E28", "question": "tell me lab rul no. 2", "kind": "positive", "expected_sources": ["data/images/notice_lab_rules.png"], "answer_keywords": ["credential"], "tier": "heldout-entity-2026-10-11b"}
   ]
 }

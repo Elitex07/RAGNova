@@ -10,13 +10,14 @@ switched on is decided here, by a rule written before anything was run.
 
 DECLARED BEFORE RUNNING (committed before the first run)
 
-  Rows. The 23 entity rows of data/gold_set.json (section "entity": 13 positives, 10 negatives), committed
-  before any retrieval or model was run on them (E4 is the question that failed; it was written after seeing the
+  Rows. The entity rows of data/gold_set.json (section "entity"). E1-E23 (13 positives, 10 negatives) were committed
+  before the first run; E24-E28 were added with ADR-018's name-phrase rule and typo fix, before V8 was run. E1-E23 were
+  committed before any retrieval or model was run on them (E4 is the question that failed; it was written after seeing the
   failure, the rest were not). Each is asked through answer_query(include_images=True), as the page asks it.
 
   A positive is CORRECT when its answer is not a refusal, contains at least one of its answer_keywords
   (case-insensitive), AND at least one of its expected sources is among the numbered citations.
-  A negative is CORRECT when its answer is a refusal.   SCORE = correct positives + correct negatives (max 23).
+  A negative is CORRECT when its answer is a refusal.   SCORE = correct positives + correct negatives.
 
   Variants: retrieval in {off, L2 = lexical distinctive max_df 2, L4 = lexical distinctive max_df 4,
   LA = lexical all-known-words max_df 2} times prompt in {P0 = shipped, P1 = with the who/what-is rule}: eight.
@@ -46,7 +47,9 @@ import argparse
 import dataclasses
 import importlib.util
 import sys
+import time
 from pathlib import Path
+from types import SimpleNamespace
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
@@ -71,27 +74,64 @@ VARIANTS = {}
 for _i, (_r, _p) in enumerate([(r, p) for p in (False, True) for r in RETRIEVAL]):
     VARIANTS[f"V{_i}"] = (_r, _p)
 # V0 = (off, P0)  V1 = (L2, P0)  V2 = (L4, P0)  V3 = (LA, P0)  V4 = (off, P1)  V5 = (L2, P1)  V6 = (L4, P1)  V7 = (LA, P1)
+# V8 (ADR-018, added 2026-10-11 after the first run): V5 with the name-phrase rule now inside the lexical admit, plus
+# the detail rule and the spelling fix: what ships since ADR-018. V0-V7 run with those two OFF so they reproduce the
+# first run's settings (the name-phrase rule cannot be switched off: it is part of the admit).
+VARIANTS["V8"] = ("L2", True)
+ADR018 = {"V8"}
 
 REQUIRED_GAIN = 3
 REGRESSION_TOLERANCE = 2
 
 
+# --show only: V8 with one of its four pieces switched off, to see which piece changes one row's answer.
+ABLATIONS = {"V8-lexical": {"LEXICAL_ADMIT": False}, "V8-whowhat": {"PROMPT_WHO_WHAT_RULE": False},
+             "V8-detail": {"PROMPT_DETAIL_RULE": False}, "V8-spelling": {"QUERY_SPELLING_FIX": False}}
+
+
 def configure(variant: str) -> None:
+    off = ABLATIONS.get(variant, {})
+    variant = "V8" if off else variant
     retrieval, rule = VARIANTS[variant]
     on, mode, max_df = RETRIEVAL[retrieval]
-    new = dataclasses.replace(BASE_SETTINGS, LEXICAL_ADMIT=on, LEXICAL_MODE=mode, LEXICAL_MAX_DF=max_df, PROMPT_WHO_WHAT_RULE=rule)
+    extras = variant in ADR018
+    new = dataclasses.replace(BASE_SETTINGS, LEXICAL_ADMIT=on, LEXICAL_MODE=mode, LEXICAL_MAX_DF=max_df, PROMPT_WHO_WHAT_RULE=rule,
+                              PROMPT_DETAIL_RULE=extras, QUERY_SPELLING_FIX=extras)
+    new = dataclasses.replace(new, **off)
     retrieve_module.settings = new
     answer_module.settings = new
 
 
 def describe(variant: str) -> str:
     retrieval, rule = VARIANTS[variant]
+    if variant in ADR018:
+        return f"{variant} (ADR-018: L2 + who/what + detail rule + spelling fix)"
     return f"{variant} (retrieval {retrieval}, prompt {'P1 who/what-is rule' if rule else 'P0 shipped'})"
 
 
 def components(variant: str) -> int:
     retrieval, rule = VARIANTS[variant]
-    return (retrieval != "off") + bool(rule)
+    return (retrieval != "off") + bool(rule) + (2 if variant in ADR018 else 0)
+
+
+ASK_ATTEMPTS = 3          # a crashed Ollama runner (HTTP 500) is restarted by the server on the next request
+ASK_RETRY_WAIT = 5        # seconds between attempts
+ERRORS: list[str] = []
+
+
+def ask(question: str, **kwargs):
+    """answer_query, retried when the model server fails. A question that still fails gets an empty answer
+    with no citations, which no rule counts as correct (not a refusal, no keyword, no source), so an error
+    can only lower a variant's score; every error is listed at the end."""
+    for attempt in range(1, ASK_ATTEMPTS + 1):
+        try:
+            return answer_query(question, **kwargs)
+        except Exception as exc:  # ollama.ResponseError, connection errors, timeouts
+            print(f"   ! attempt {attempt}/{ASK_ATTEMPTS} failed on {question!r}: {type(exc).__name__}: {str(exc)[:160]}")
+            if attempt < ASK_ATTEMPTS:
+                time.sleep(ASK_RETRY_WAIT)
+    ERRORS.append(question)
+    return SimpleNamespace(answer="", citations=[])
 
 
 def refused(result) -> bool:
@@ -111,7 +151,7 @@ def run_entity(variant: str, verbose: bool) -> dict:
     rows = load_gold_set()["entity"]
     out = {"variant": variant, "ok": {}, "retrieved": {}}
     for row in rows:
-        result = answer_query(row["question"], include_images=True)
+        result = ask(row["question"], include_images=True)
         out["ok"][row["id"]] = judge(row, result)
         if row["kind"] == "positive":
             out["retrieved"][row["id"]] = any(c.source in row["expected_sources"] for c in result.citations)
@@ -125,13 +165,13 @@ def run_entity(variant: str, verbose: bool) -> dict:
     return out
 
 
-def stage1() -> int:
+def stage1(only: list[str] | None = None) -> int:
     gold = load_gold_set()["entity"]
     n_pos = sum(r["kind"] == "positive" for r in gold)
     n_neg = len(gold) - n_pos
     print(f"model {BASE_SETTINGS.OLLAMA_MODEL}, TOP_K {BASE_SETTINGS.TOP_K}; {n_pos} positives, {n_neg} negatives\n")
     results = {}
-    for variant in VARIANTS:
+    for variant in only or VARIANTS:
         print(f"######## {describe(variant)}")
         results[variant] = run_entity(variant, verbose=True)
         r = results[variant]
@@ -160,14 +200,14 @@ def regression_score(variant: str) -> dict:
     negatives = [q for q in old_gold if q["id"].startswith("N")]
     out = {"substantive": set(), "refused": set(), "images": set()}
     for q in positives:
-        result = answer_query(q["question"])
+        result = ask(q["question"])
         if not refused(result) and not evaluate_answers._bare(result):
             out["substantive"].add(q["id"])
     for q in negatives:
-        if refused(answer_query(q["question"])):
+        if refused(ask(q["question"])):
             out["refused"].add(q["id"])
     for q in evaluate_answers.IMAGE_QUESTIONS:
-        result = answer_query(q["question"], include_images=True)
+        result = ask(q["question"], include_images=True)
         if not refused(result) and any(c.source in q["expected_images"] for c in result.citations):
             out["images"].add(q["id"])
     out["total"] = len(out["substantive"]) + len(out["refused"]) + len(out["images"])
@@ -190,15 +230,55 @@ def stage2(winner: str) -> int:
     return 0
 
 
+def show(row_id: str) -> int:
+    """Information only, decides nothing: one row's full answer and sources under V0, V8 and V8 minus each piece."""
+    rows = {q["id"]: q for q in evaluate_answers.GOLD_QUESTIONS}
+    rows.update({q["id"]: q for q in evaluate_answers.IMAGE_QUESTIONS})
+    rows.update({r["id"]: r for r in load_gold_set()["entity"]})
+    if row_id not in rows:
+        print(f"no row {row_id}")
+        return 1
+    question = rows[row_id]["question"]
+    images = row_id.startswith(("I", "E"))
+    print(f"{row_id}: {question!r} (include_images={images})\n")
+    for variant in ("V0", "V8", *ABLATIONS):
+        configure(variant)
+        result = ask(question, include_images=images)
+        print(f"#### {variant}: {'REFUSED' if refused(result) else 'ANSWERED'}")
+        print(result.answer.strip())
+        for n, c in enumerate(result.citations, start=1):
+            print(f"   [{n}] {c.source.split('/')[-1]}" + (f" p{c.page}" if c.page else "") + f"  {c.text[:160]!r}")
+        print()
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     parser.add_argument("--regression", metavar="VARIANT", help="stage 2: run the older rows for V0 and this variant")
+    parser.add_argument("--show", metavar="ROW", help="information only: one row's answers under V0, V8 and V8 minus each piece")
+    parser.add_argument("--variants", metavar="LIST",
+                        help="stage 1 on these variants only, e.g. V0,V8 (V0 is always run: it is the baseline); "
+                             "for trying another model, not for adopting a variant")
     args = parser.parse_args()
-    if args.regression:
+    if args.show:
+        code = show(args.show)
+    elif args.regression:
         if args.regression not in VARIANTS or args.regression == "V0":
             parser.error(f"VARIANT must be one of {[v for v in VARIANTS if v != 'V0']}")
-        return stage2(args.regression)
-    return stage1()
+        code = stage2(args.regression)
+    else:
+        only = None
+        if args.variants:
+            only = ["V0"] + [v.strip() for v in args.variants.split(",") if v.strip() and v.strip() != "V0"]
+            unknown = [v for v in only if v not in VARIANTS]
+            if unknown:
+                parser.error(f"unknown variant(s) {unknown}; choose from {list(VARIANTS)}")
+        code = stage1(only)
+    if ERRORS:
+        print(f"\n{len(ERRORS)} question(s) failed {ASK_ATTEMPTS} times on the model server and were scored wrong:")
+        for q in ERRORS:
+            print(f"  {q!r}")
+    return code
 
 
 if __name__ == "__main__":

@@ -9,6 +9,8 @@ testable without ChromaDB or Ollama running.
 
 from __future__ import annotations
 
+import re
+
 from src.core.schemas import Chunk
 
 # The id prefix attachments.py gives an attached image. Kept here as a literal
@@ -16,39 +18,90 @@ from src.core.schemas import Chunk
 # stay a pure function with nothing to import but the schema.
 ATTACHMENT_ID_PREFIX = "attachment__"
 
-_SYSTEM_INSTRUCTIONS = (
+_HEADER = (
     "You answer questions using ONLY the numbered context below, taken from "
     "the user's own indexed files. Follow these rules exactly:\n"
-    "1. Base your answer only on the context given. Never use outside "
-    "knowledge, even if you happen to know the answer.\n"
-    "2. Cite every claim with the matching bracketed number, e.g. [1] or "
-    "[2], right after the sentence it supports.\n"
-    "3. If the context does not contain the answer, say plainly: "
+)
+_RULE_ONLY_CONTEXT = (
+    "Base your answer only on the context given. Never use outside "
+    "knowledge, even if you happen to know the answer."
+)
+_RULE_CITE = (
+    "Cite every claim with the matching bracketed number, e.g. [1] or "
+    "[2], right after the sentence it supports."
+)
+# PROMPT_WHO_WHAT_RULE (ADR-017): for a "who / what is X" question the model says what the context states about X.
+_RULE_WHO_WHAT = (
+    "If the question asks who or what someone or something is, answer with "
+    "what the context says about it (for a person, what the context states about "
+    "them), and nothing more."
+)
+# PROMPT_DETAIL_RULE (2026-10-11): with only rules 1-3 the 3B model answered "what is greedy algorithm, tell me in
+# brief" and "who is Raiden" with one bare sentence and no citation, though five sources were retrieved. Its last
+# sentence was added after the first V8 run: asked for detail, the model refused N20 in its own words ("The context
+# does not mention the number of layers ...") instead of the fixed sentence, so neither the page nor the evaluation
+# could tell it was a refusal, and the page listed sources under it.
+_RULE_DETAIL = (
+    "Use the context fully: answer in complete sentences with the relevant details "
+    "it gives (definitions, key points, steps, numbers, names). When the user asks "
+    "for a brief answer, give a short paragraph of two to four sentences with the key "
+    "points, not a single line. A question that is only a name or a term means: what "
+    "does the context say about it? When the context does not hold the answer, do not "
+    "explain what is missing: reply with the refusal sentence of the last rule, word for word."
+)
+# Only when there is an earlier exchange (follow-ups, 2026-10-11): "tell me more" means nothing on its own.
+_RULE_HISTORY = (
+    "The earlier conversation is shown only so you know what a follow-up such as "
+    "\"tell me more\", \"it\" or \"they\" refers to. Take every fact from the "
+    "numbered context, never from the earlier answers."
+)
+_REFUSAL = (
     '"I don\'t have enough information in the indexed documents to answer '
     'that." Do not guess, and do not cite a number if you are not using it.'
 )
+_RULE_REFUSE = "If the context does not contain the answer, say plainly: " + _REFUSAL
+# With the who/what rule the refusal also covers "does not contain the specific fact asked for", so that the new
+# rule cannot be read as permission to guess.
+_RULE_REFUSE_STRICT = (
+    "If the context does not mention what the question asks about, or does not "
+    "contain the specific fact asked for, say plainly: " + _REFUSAL
+)
+
+
+def _instructions(who_what_rule: bool = False, detail_rule: bool = False, has_history: bool = False) -> str:
+    """The numbered rules. With every option off this is, byte for byte, the prompt every earlier measurement used."""
+    rules = [_RULE_ONLY_CONTEXT, _RULE_CITE]
+    if who_what_rule:
+        rules.append(_RULE_WHO_WHAT)
+    if detail_rule:
+        rules.append(_RULE_DETAIL)
+    if has_history:
+        rules.append(_RULE_HISTORY)
+    rules.append(_RULE_REFUSE_STRICT if who_what_rule else _RULE_REFUSE)
+    return _HEADER + "\n".join(f"{i}. {rule}" for i, rule in enumerate(rules, start=1))
+
+
+_SYSTEM_INSTRUCTIONS = _instructions()
+_SYSTEM_INSTRUCTIONS_WHO_WHAT = _instructions(who_what_rule=True)
 
 _NO_CONTEXT_NOTICE = "(No relevant context was found for this question.)"
 
-# The shipped instructions plus one rule (PROMPT_WHO_WHAT_RULE, off by default): for a "who / what is X" question
-# the model says what the context states about X. Rule 3 of the shipped text becomes rule 4, and gains "or does
-# not contain the specific fact asked for" so that the new rule cannot be read as permission to guess.
-_SYSTEM_INSTRUCTIONS_WHO_WHAT = (
-    "You answer questions using ONLY the numbered context below, taken from "
-    "the user's own indexed files. Follow these rules exactly:\n"
-    "1. Base your answer only on the context given. Never use outside "
-    "knowledge, even if you happen to know the answer.\n"
-    "2. Cite every claim with the matching bracketed number, e.g. [1] or "
-    "[2], right after the sentence it supports.\n"
-    "3. If the question asks who or what someone or something is, answer with "
-    "what the context says about it (for a person, what the context states about "
-    "them), and nothing more.\n"
-    "4. If the context does not mention what the question asks about, or does not "
-    "contain the specific fact asked for, say plainly: "
-    '"I don\'t have enough information in the indexed documents to answer '
-    'that." Do not guess, and do not cite a number if you are not using it.'
-)
+# How much of the previous answer the model is shown for a follow-up: enough to know the topic, not so much that
+# it crowds out the context (the model reads about 150 tokens a second on a CPU, ADR-015).
+HISTORY_ANSWER_WORDS = 80
 
+
+def _history_section(history: list[tuple[str, str]] | None) -> str:
+    """The earlier exchange(s), (question, answer) oldest first, without their [n] markers: those numbers belonged to
+    another context and would point at the wrong block here."""
+    if not history:
+        return ""
+    lines = []
+    for question, answer in history:
+        words = re.sub(r"\s*\[\d+\]", "", answer).split()
+        short = " ".join(words[:HISTORY_ANSWER_WORDS]) + (" ..." if len(words) > HISTORY_ANSWER_WORDS else "")
+        lines.append(f"User: {question}\nAssistant: {short}")
+    return "Earlier conversation:\n" + "\n".join(lines) + "\n\n"
 
 
 def format_provenance(chunk: Chunk) -> str:
@@ -114,7 +167,28 @@ def _context_text(chunk: Chunk) -> str:
     return chunk.text
 
 
-def build_prompt(query: str, chunks: list[Chunk], who_what_rule: bool = False) -> str:
+def _scope_note(scope: list[str] | None) -> str:
+    """When the user picked files under "Answer from", which files "it" / "this file" means. Without this the model
+    never learns that a scope exists: on 2026-10-11, with it_onboarding.docx picked, "List the names, dates and numbers
+    it mentions." was refused though the blocks held a two-week suspension and other numbers (ADR-018)."""
+    if not scope:
+        return ""
+    names = ", ".join(name.replace("\\", "/").rsplit("/", 1)[-1] for name in scope)
+    return (
+        f"The user chose to answer from these files only: {names}. When the question says \"it\", \"this file\", "
+        f"\"the document\" or \"these files\", it means them, and the numbered context is taken from them. A request "
+        f"to summarise them, give their key points, or list what they mention is answered from that context.\n\n"
+    )
+
+
+def build_prompt(
+    query: str,
+    chunks: list[Chunk],
+    who_what_rule: bool = False,
+    detail_rule: bool = False,
+    history: list[tuple[str, str]] | None = None,
+    scope: list[str] | None = None,
+) -> str:
     """Build the full prompt sent to the LLM: system instructions, numbered
     context blocks (best match first, matching `chunks`' own order), then
     the question.
@@ -132,10 +206,12 @@ def build_prompt(query: str, chunks: list[Chunk], who_what_rule: bool = False) -
     else:
         context_section = _NO_CONTEXT_NOTICE
 
-    instructions = _SYSTEM_INSTRUCTIONS_WHO_WHAT if who_what_rule else _SYSTEM_INSTRUCTIONS
+    instructions = _instructions(who_what_rule, detail_rule, bool(history))
     return (
         f"{instructions}\n\n"
         f"Context:\n{context_section}\n\n"
+        f"{_history_section(history)}"
+        f"{_scope_note(scope)}"
         f"{_attachment_note(chunks)}"
         f"Question: {query}\n\n"
         f"Answer:"

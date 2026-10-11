@@ -127,8 +127,8 @@ def test_a_question_of_only_common_words_looks_nothing_up(index):
 
 
 def test_the_coverage_bar_is_adjustable_and_the_default_is_sixty_percent(index):
-    assert admit("Who is Alex Smith?", index, max_df=4, min_coverage=0.4) != []      # 1 of 2 = 50% clears 40%
-    assert admit("Who is Alex Smith?", index, max_df=4) == []                         # but not 60%
+    assert admit("who is alex smith?", index, max_df=4, min_coverage=0.4) != []      # 1 of 2 = 50% clears 40%
+    assert admit("who is alex smith?", index, max_df=4) == []                         # but not 60%
 
 
 def test_at_most_limit_chunks_are_admitted_shortest_first(index):
@@ -270,7 +270,7 @@ def test_the_setting_reaches_the_prompt_the_model_is_given(monkeypatch):
 
 
 def test_a_coverage_exactly_at_the_bar_is_admitted(index):
-    assert admit("Who is Alex Smith?", index, max_df=4, min_coverage=0.5) != []      # 1 of 2 = 0.5 clears a bar of 0.5
+    assert admit("who is alex smith?", index, max_df=4, min_coverage=0.5) != []      # 1 of 2 = 0.5 clears a bar of 0.5
 
 
 def test_top_k_bounds_a_text_only_question_too(wired):

@@ -199,6 +199,7 @@ def retrieve(
     image_text_search=None,
     sources: list[str] | None = None,
     lexical_search=None,
+    spelling_fixer=None,
 ) -> list[Chunk]:
     """The one retrieval call the RAG core makes: relevant chunks from
     every enabled collection, merged into one ranked list of at most
@@ -238,6 +239,10 @@ def retrieve(
     search to match, and an exact word is the right tool for it. `lexical_search(query, client=, max_df=)`
     returns (text chunks, image chunks) and is injected by tests (settings.LEXICAL_MODE, LEXICAL_MAX_DF).
 
+    With settings.QUERY_SPELLING_FIX on, the similarity searches and the image gate use the question with
+    words the corpus does not know swapped for the common word they were most likely meant to be
+    (lexical.spelling_fix); `spelling_fixer(query, client=)` is injected by tests.
+
     `image_search` defaults to search_images() and `image_agreement` to the
     MiniLM OCR-agreement scorer; tests inject fakes so they don't need
     CLIP's or MiniLM's weights.
@@ -255,6 +260,13 @@ def retrieve(
         lexical_text, lexical_image = lexical_search(
             query, client=client, max_df=settings.LEXICAL_MAX_DF, mode=settings.LEXICAL_MODE
         )
+
+    # The similarity searches get the question with its typos fixed ("lab rul no. 2" -> "lab rule no. 2"); the
+    # lexical admit above and the prompt keep it as typed (lexical.spelling_fix says why).
+    if settings.QUERY_SPELLING_FIX and query.strip():
+        if spelling_fixer is None:
+            from src.pipelines.rag.lexical import fix_spelling as spelling_fixer
+        query = spelling_fixer(query, client=client)
 
     text_hits = []
     if query.strip():

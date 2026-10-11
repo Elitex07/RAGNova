@@ -266,6 +266,11 @@ Questions that name a person, identifier, file or product that the corpus mentio
 | E21 | What is Alex Morgan's blood group? | negative | Refuses | Near-miss: the ID card lists Alex Morgan's details but no blood group. |
 | E22 | What is the capital of Australia? | negative | Refuses | Far-miss: not in the corpus. |
 | E23 | Who is the head of the library? | negative | Refuses | Far-miss: the library's desks and hours appear, no head is named. |
+| E24 | Who is Dr. Sharma? | negative | Refuses | Added 2026-10-11 with the name-phrase rule (ADR-018), before it was measured: the title belongs to Rao, the surname to Mr. V. Sharma. |
+| E25 | Who is Mr. S. Rao? | negative | Refuses | Same kind: the initial is Rao's, the title Sharma's. |
+| E26 | Who is Mr. V. Rao? | negative | Refuses | Same kind: Mr. V. is Sharma, not Rao. |
+| E27 | Who is Dr S Rao? | positive | `images/photo_lab_door_sign.png` | E7 typed without the dots: the rule must still find him. |
+| E28 | tell me lab rul no. 2 | positive | `images/notice_lab_rules.png` | Refused on the live page on 2026-10-11 ("tell me lab rules" was answered); written after seeing that failure. Rule 2 is about credential sharing. |
 
 ## Results log
 

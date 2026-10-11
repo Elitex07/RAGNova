@@ -33,7 +33,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 from src.core.gold import load_gold_set
 from src.pipelines.rag import answer_query
-from src.pipelines.rag.answer import NOT_ENOUGH_INFO
+from src.pipelines.rag.answer import is_refusal
 from src.pipelines.rag.prompt import format_provenance
 
 # The questions come from data/gold_set.json (src/core/gold.py), shared with
@@ -71,7 +71,7 @@ IMAGE_QUESTIONS = [
 
 
 def _refused(result) -> bool:
-    return result.answer.strip().startswith(NOT_ENOUGH_INFO[:40])
+    return is_refusal(result.answer)
 
 
 def _bare(result) -> bool:
