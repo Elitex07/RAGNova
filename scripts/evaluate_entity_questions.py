@@ -82,12 +82,20 @@ REQUIRED_GAIN = 3
 REGRESSION_TOLERANCE = 2
 
 
+# --show only: V8 with one of its four pieces switched off, to see which piece changes one row's answer.
+ABLATIONS = {"V8-lexical": {"LEXICAL_ADMIT": False}, "V8-whowhat": {"PROMPT_WHO_WHAT_RULE": False},
+             "V8-detail": {"PROMPT_DETAIL_RULE": False}, "V8-spelling": {"QUERY_SPELLING_FIX": False}}
+
+
 def configure(variant: str) -> None:
+    off = ABLATIONS.get(variant, {})
+    variant = "V8" if off else variant
     retrieval, rule = VARIANTS[variant]
     on, mode, max_df = RETRIEVAL[retrieval]
     extras = variant in ADR018
     new = dataclasses.replace(BASE_SETTINGS, LEXICAL_ADMIT=on, LEXICAL_MODE=mode, LEXICAL_MAX_DF=max_df, PROMPT_WHO_WHAT_RULE=rule,
                               PROMPT_DETAIL_RULE=extras, QUERY_SPELLING_FIX=extras)
+    new = dataclasses.replace(new, **off)
     retrieve_module.settings = new
     answer_module.settings = new
 
@@ -200,10 +208,35 @@ def stage2(winner: str) -> int:
     return 0
 
 
+def show(row_id: str) -> int:
+    """Information only, decides nothing: one row's full answer and sources under V0, V8 and V8 minus each piece."""
+    rows = {q["id"]: q for q in evaluate_answers.GOLD_QUESTIONS}
+    rows.update({q["id"]: q for q in evaluate_answers.IMAGE_QUESTIONS})
+    rows.update({r["id"]: r for r in load_gold_set()["entity"]})
+    if row_id not in rows:
+        print(f"no row {row_id}")
+        return 1
+    question = rows[row_id]["question"]
+    images = row_id.startswith(("I", "E"))
+    print(f"{row_id}: {question!r} (include_images={images})\n")
+    for variant in ("V0", "V8", *ABLATIONS):
+        configure(variant)
+        result = answer_query(question, include_images=images)
+        print(f"#### {variant}: {'REFUSED' if refused(result) else 'ANSWERED'}")
+        print(result.answer.strip())
+        for n, c in enumerate(result.citations, start=1):
+            print(f"   [{n}] {c.source.split('/')[-1]}" + (f" p{c.page}" if c.page else "") + f"  {c.text[:160]!r}")
+        print()
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     parser.add_argument("--regression", metavar="VARIANT", help="stage 2: run the older rows for V0 and this variant")
+    parser.add_argument("--show", metavar="ROW", help="information only: one row's answers under V0, V8 and V8 minus each piece")
     args = parser.parse_args()
+    if args.show:
+        return show(args.show)
     if args.regression:
         if args.regression not in VARIANTS or args.regression == "V0":
             parser.error(f"VARIANT must be one of {[v for v in VARIANTS if v != 'V0']}")
