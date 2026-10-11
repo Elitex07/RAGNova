@@ -20,6 +20,7 @@ import pytest
 from src.core.schemas import Chunk
 from src.pipelines.rag import answer as answer_module
 from src.pipelines.rag import retrieve as retrieve_module
+from src.pipelines.rag.answer import is_refusal
 from src.pipelines.rag.followup import is_follow_up, resolve
 from src.pipelines.rag.lexical import LexicalIndex, admit, correct_word, name_phrase_pairs, spelling_fix
 from src.pipelines.rag.prompt import build_prompt
@@ -240,3 +241,25 @@ def test_with_files_picked_it_means_the_files_so_only_a_wordless_question_is_a_f
     assert answer_module.search_question("summarise it", history, sources=["a.pdf"]) == "summarise it"
     assert answer_module.search_question("tell me more", history, sources=["a.pdf"]) == "who is raiden?"
     assert answer_module.search_question("summarise it", history) == "who is raiden? summarise"
+
+
+# --- a refusal as small models actually type it (nemotron-3-nano:4b, 2026-10-11) ---
+
+@pytest.mark.parametrize("text", [
+    "I don't have enough information in the indexed documents to answer that.",
+    "I don' have enough information in the indexed documents to answer that.",
+    "I don' t have enough information in the indexed documents to answer that.",
+    "I don’t have enough information in the indexed documents to answer that.",
+    "  I do not have enough information in the indexed documents to answer that.",
+])
+def test_a_mangled_refusal_is_still_a_refusal(text):
+    assert is_refusal(text)
+
+
+@pytest.mark.parametrize("text", [
+    "Alex Smith is an author of the paper [1].",
+    "Room 302 is the AI Research Lab. I don't have enough information in the indexed documents to say more.",
+    "",
+])
+def test_an_answer_is_not_a_refusal(text):
+    assert not is_refusal(text)

@@ -36,7 +36,7 @@ import streamlit as st
 from PIL import Image
 
 from src.core.config import settings
-from src.pipelines.rag.answer import NOT_ENOUGH_INFO, check_citations, extract_citation_numbers, search_question, stream_answer
+from src.pipelines.rag.answer import check_citations, extract_citation_numbers, is_refusal, search_question, stream_answer
 from src.pipelines.rag.attachments import image_attachment
 from src.ui.backend import (
     AUDIO_EXTS,
@@ -699,7 +699,7 @@ if user_prompt:
     if len(past) >= 2 and past[-1]["role"] == "assistant" and past[-2]["role"] == "user":
         last_answer = past[-1]
         if last_answer.get("engine") == "live" and not last_answer.get("error") \
-                and not last_answer["content"].strip().startswith(NOT_ENOUGH_INFO):
+                and not is_refusal(last_answer["content"]):
             history = [(past[-2].get("search") or past[-2]["content"], last_answer["content"])]
 
     st.session_state.messages.append(new_message(
@@ -743,7 +743,7 @@ if user_prompt:
                         # as if the refusal were grounded in them.
                         # Otherwise only the sources the answer cites: a retrieved chunk the model did not use (an
                         # algorithms chapter under "tell me about internship fair") listed as [1] reads as a source.
-                        "views": None if answer_text.strip().startswith(NOT_ENOUGH_INFO) else cited_views(
+                        "views": None if is_refusal(answer_text) else cited_views(
                             citation_views(retrieved_chunks), extract_citation_numbers(answer_text)
                         ),
                         "warning": warning_msg,

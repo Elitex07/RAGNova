@@ -30,6 +30,14 @@ NOT_ENOUGH_INFO = (
     "I don't have enough information in the indexed documents to answer that."
 )
 
+
+def is_refusal(answer: str) -> bool:
+    """The answer opens with the refusal sentence, as the model actually types it: small models mangle the
+    apostrophe ("I don' have", "I don' t have", a curly ’) or write "do not". Letters only, so spacing and
+    punctuation do not matter; the words that follow "I do(n't)" must be the refusal's own."""
+    letters = re.sub(r"[^a-z]", "", answer.lower())
+    return letters.startswith("ido") and "haveenoughinformationintheindexeddocuments" in letters[:60]
+
 # Stands in for the question when the user attached only an image (no
 # typed words, no readable text in the picture) — Chapter 11's UI allows
 # that, and "Question: " followed by nothing gives the model no task.
