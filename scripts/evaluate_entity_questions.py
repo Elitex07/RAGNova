@@ -184,7 +184,9 @@ def stage2(winner: str) -> int:
     print(f"older negatives V0 refused that {winner} answers: {newly_answered or 'none'}")
     print(f"older positives V0 got that {winner} lost: {lost or 'none'}")
     vetoed = won["total"] <= base["total"] - REGRESSION_TOLERANCE or bool(newly_answered)
-    print("RESULT:", f"VETOED. {winner} is tested, not adopted." if vetoed else f"not vetoed. {winner} may be adopted (ADR + .env.example default).")
+    print("RESULT:", f"VETOED. {winner} is tested, not adopted." if vetoed else f"not vetoed.")
+    print("Only the variant that stage 1 named WINNER may be adopted (with an ADR and the .env.example line changed to a default). "
+          "For any other variant this run is information, not a decision.")
     return 0
 
 

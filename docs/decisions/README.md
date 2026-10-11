@@ -51,6 +51,7 @@ Never delete an ADR. A superseded decision plus its replacement tells a better s
 | [014](adr-014-image-text-channel.md) | Find images by their text too: built, measured, **not enabled** | Enabling it on the older rows that tuned the gate | ✅ |
 | [015](adr-015-cpu-only-latency.md) | CPU-only latency: one shared Ollama client on `127.0.0.1` for everyone, `TOP_K=3` as an opt-in CPU profile | Lowering the default `TOP_K`, or trimming each chunk (it returned bare citations) | ✅ |
 | [016](adr-016-answer-from-picked-files-and-attached-images.md) | Answer from the files you pick (no relevance floor inside a scope), and an attached image is context the model can read | Lowering the global relevance floor; gluing the picture's text onto the search; removing look-alike image search | ✅ |
+| [017](adr-017-name-lookups-lexical-admit.md) | Name and identifier lookups: a lexical admit and a who/what-is prompt rule, built and measured, **not enabled** | Switching them on by default (one near-miss negative answered wrongly); lowering the floors | ✅ |
 
 **All ten are now written.**
 
