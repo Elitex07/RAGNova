@@ -12,10 +12,11 @@ Ten minutes, once per machine.
 
 1. **Ollama.** Open Ollama's Settings and switch **Auto-download updates** and **Cloud** off. (On 2026-10-05 an update was left half applied and the model silently stopped starting until it was reinstalled; nothing in the app noticed until a question was asked.) Do not change any Ollama setting while a model is downloading: it restarts the server and ends the download.
 2. **The model.** `ollama list` shows `llama3.2:3b`. If not: `ollama pull llama3.2:3b` (about 2 GB).
-3. **Start the page from the project root**, so it reads `.streamlit/config.toml` (localhost only, no usage statistics, no email prompt):
+3. **Start the page from the project root**, so it reads `.streamlit/config.toml` (localhost only, no usage statistics, no email prompt). Use the module form, which runs through the Python interpreter instead of the `streamlit.exe` launcher:
    ```bash
-   streamlit run src/app.py
+   .venv\Scripts\python -m streamlit run src/app.py
    ```
+   **If Windows says "An Application Control policy has blocked this file"** (seen 2026-10-11 on `streamlit.exe`, and on native libraries such as scikit-learn's, scipy's, `av` and `pybase64`), that is Smart App Control (Windows Security, App & browser control; state 1 = on here). It blocked each unfamiliar file the first time it was loaded and allowed it on a later try (`import sentence_transformers` failed once and then imported cleanly four times in a row), so: use the module form above, and if an import is blocked, wait a minute and start again. **Do a full warm-up on the demo machine while it is online** (start the page, ask a text question, an image question, a voice question, upload one file) so every library has loaded once. Whether a cold start with the network off is blocked has not been tested; item 3 below is where to find out. Smart App Control has no allow-list: the only switch is Windows Security, and turning it off cannot be undone without resetting Windows, so that is your decision, not a script's.
    The browser does not open by itself; open the URL it prints (`http://127.0.0.1:8501`).
 4. **Press "Test the model" in the sidebar** and wait for `llama3.2:3b answered: 'OK'`. The first call after Ollama starts can take a full minute (measured 2026-10-07), so do this before anyone is watching. If it shows an error, fix that before anything else; the error text is Ollama's own.
 5. Check the sidebar's counts match the data folder (documents, images, audio) and the vector index line. If you added files, run `python scripts/build_index.py` first.
