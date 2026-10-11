@@ -65,7 +65,17 @@ A V0/V8 run with `OLLAMA_MODEL=nemotron-3-nano:4b`, `LLM_THINK=1` scored V0 20/2
 - **E15 "Who is Alex Smith?" answered.** The lexical admit let in a chunk holding "alex" and "smith" in two different
   names, and the model glued them. Two or more capitalised words in a row in the question are now a name phrase like
   a title: they must sit side by side in the chunk (`lexical._capitalised_name_pairs`). A question typed in lowercase
-  pins nothing, as before. Needs a llama3.2:3b re-run (stage 1 V0,V8 and stage 2 V8) before this addendum is final.
+  pins nothing, as before.
+
+Re-run with both changes (2026-10-11, `--variants V0,V8`):
+
+| model | V0 pos/neg/score | V8 pos/neg/score | stage 2 (V0 vs V8) |
+|---|---|---|---|
+| llama3.2:3b | 5/15, 13/13, 18/28 | 13/15, 13/13, **26/28** (+8, winner) | 67 vs 73, **not vetoed** |
+| nemotron-3-nano:4b (`LLM_THINK=1`) | 8/15, 13/13, 21/28 | 14/15, 13/13, **27/28** (+6, winner) | not run |
+
+E15 is refused by both models under V8, and no row was lost to the full-name rule (E4/E5 still cite the ID card).
+V8 stays adopted with both changes. The default model stays llama3.2:3b; switching it is a separate decision.
 
 ## Alternatives considered
 
