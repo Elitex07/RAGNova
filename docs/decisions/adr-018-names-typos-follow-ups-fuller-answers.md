@@ -1,4 +1,4 @@
-# ADR-018: Names, typos, follow-ups and fuller answers: switched on, pending the measurement run
+# ADR-018: Names, typos, follow-ups and fuller answers: switched on by default
 
 ## Status
 **Accepted** (2026-10-11). V8 passed both stages of ADR-017's rule, unchanged, on the second run (below). Builds on ADR-017.
