@@ -237,6 +237,36 @@ Questions the corpus genuinely cannot answer. These test whether the system **re
 
 ---
 
+### Entity lookups: "who / what is *a named thing*?" (held-out, added 2026-10-11)
+
+Questions that name a person, identifier, file or product that the corpus mentions literally. A separate section so that no earlier headline number (Recall@5, MRR, negatives refused) moves; scored by `scripts/evaluate_entity_questions.py`, which fixes its adoption rule in its header. Committed **before** any retrieval or model was run on them, except that E4 is the question that failed on the live page on 2026-10-11 and was written after seeing that failure.
+
+| ID | Question | Kind | Expected | Notes |
+|---|---|---|---|---|
+| E1 | What is SQuAD? | positive | `documents/acl_squad.pdf` | A document: a bare acronym question. |
+| E2 | What is Fusion-in-Decoder? | positive | `documents/acl_fusion_in_decoder.pdf` | A document: a method's name. |
+| E3 | What is Sentence-BERT? | positive | `documents/acl_sentence_bert.pdf` | A document: a method's name. |
+| E4 | Who is Alex Morgan? | positive | `images/photo_id_card_sample.png` | The question that failed on the live page on 2026-10-11 (the image gate dropped the ID card: CLIP 0.151, text agreement 0.16). Written after seeing that failure; the other rows were written to test a fix without being tuned to it. |
+| E5 | Tell me about Alex Morgan. | positive | `images/photo_id_card_sample.png` | The same card, another phrasing. |
+| E6 | What is LIB-884920? | positive | `images/photo_id_card_sample.png` | An identifier printed on the card. |
+| E7 | Who is Dr. S. Rao? | positive | `images/photo_lab_door_sign.png` | A name on the lab door sign. |
+| E8 | Who is Mr. V. Sharma? | positive | `images/photo_lab_door_sign.png` | A second name on the same sign. |
+| E9 | What is Room 302? | positive | `images/photo_lab_door_sign.png` / `images/photo_campus_building_plaque.png` | Either image names it. |
+| E10 | What is vpn.ragnova.edu? | positive | `images/screenshot_vpn_client.png` | A host name in a screenshot. |
+| E11 | What is final_synopsis_team12.pdf? | positive | `images/screenshot_synopsis_portal.png` | A file name in a screenshot. |
+| E12 | What is RStudio? | positive | `images/commons_screenshot_rstudio_ide.png` | A product name in a screenshot. |
+| E13 | What is matplotlib? | positive | `images/commons_screenshot_matplotlib_figures_code.png` / `images/commons_screenshot_python_matplotlib_code.jpg` | Either screenshot names it. |
+| E14 | Who is Jordan Blake? | negative | Refuses | Far-miss: no such person anywhere in the corpus. |
+| E15 | Who is Alex Smith? | negative | Refuses | Near-miss: the ID card names Alex Morgan; only the first name matches. |
+| E16 | Who is Morgan Freeman? | negative | Refuses | Near-miss: the ID card names Alex Morgan; only the surname matches. |
+| E17 | Who is Dr. S. Sharma? | negative | Refuses | Near-miss: the lab sign names Dr. S. Rao and, separately, Mr. V. Sharma; no Dr. S. Sharma exists. |
+| E18 | What is Room 999? | negative | Refuses | Near-miss: rooms 302 and 104 appear in the corpus; 999 does not. |
+| E19 | What is vpn.example.org? | negative | Refuses | Near-miss: the VPN gateway in the corpus is vpn.ragnova.edu. |
+| E20 | Who is the hostel warden? | negative | Refuses | Far-miss: hostels are mentioned, no warden is named. |
+| E21 | What is Alex Morgan's blood group? | negative | Refuses | Near-miss: the ID card lists Alex Morgan's details but no blood group. |
+| E22 | What is the capital of Australia? | negative | Refuses | Far-miss: not in the corpus. |
+| E23 | Who is the head of the library? | negative | Refuses | Far-miss: the library's desks and hours appear, no head is named. |
+
 ## Results log
 
 Fill in as each chapter's evaluation runs. Numbers, not adjectives (Chapter 1 §1.10 rule).

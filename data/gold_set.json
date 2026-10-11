@@ -98,5 +98,30 @@
     {"id": "N18", "question": "Which team won the cricket world cup in 2011?", "tier": "heldout-text-2026-10-07"},
     {"id": "N19", "question": "What is the registration fee for the course on governing AI in scientific publishing?", "tier": "heldout-text-2026-10-07"},
     {"id": "N20", "question": "How many layers does the T5 model used as the generative reader have?", "tier": "heldout-text-2026-10-07"}
+  ],
+  "entity": [
+    {"id": "E1", "question": "What is SQuAD?", "kind": "positive", "expected_sources": ["data/documents/acl_squad.pdf"], "answer_keywords": ["dataset", "question", "reading comprehension", "wikipedia"], "tier": "heldout-entity-2026-10-11"},
+    {"id": "E2", "question": "What is Fusion-in-Decoder?", "kind": "positive", "expected_sources": ["data/documents/acl_fusion_in_decoder.pdf"], "answer_keywords": ["reader", "passages", "decoder", "retrieval", "retrieved"], "tier": "heldout-entity-2026-10-11"},
+    {"id": "E3", "question": "What is Sentence-BERT?", "kind": "positive", "expected_sources": ["data/documents/acl_sentence_bert.pdf"], "answer_keywords": ["sentence", "embedding", "siamese", "bert"], "tier": "heldout-entity-2026-10-11"},
+    {"id": "E4", "question": "Who is Alex Morgan?", "kind": "positive", "expected_sources": ["data/images/photo_id_card_sample.png"], "answer_keywords": ["student", "23aiml042", "b.tech"], "tier": "heldout-entity-2026-10-11"},
+    {"id": "E5", "question": "Tell me about Alex Morgan.", "kind": "positive", "expected_sources": ["data/images/photo_id_card_sample.png"], "answer_keywords": ["student", "23aiml042", "b.tech"], "tier": "heldout-entity-2026-10-11"},
+    {"id": "E6", "question": "What is LIB-884920?", "kind": "positive", "expected_sources": ["data/images/photo_id_card_sample.png"], "answer_keywords": ["barcode", "library"], "tier": "heldout-entity-2026-10-11"},
+    {"id": "E7", "question": "Who is Dr. S. Rao?", "kind": "positive", "expected_sources": ["data/images/photo_lab_door_sign.png"], "answer_keywords": ["faculty", "associate professor", "in-charge", "in charge"], "tier": "heldout-entity-2026-10-11"},
+    {"id": "E8", "question": "Who is Mr. V. Sharma?", "kind": "positive", "expected_sources": ["data/images/photo_lab_door_sign.png"], "answer_keywords": ["superintendent"], "tier": "heldout-entity-2026-10-11"},
+    {"id": "E9", "question": "What is Room 302?", "kind": "positive", "expected_sources": ["data/images/photo_lab_door_sign.png", "data/images/photo_campus_building_plaque.png"], "answer_keywords": ["research", "lab"], "tier": "heldout-entity-2026-10-11"},
+    {"id": "E10", "question": "What is vpn.ragnova.edu?", "kind": "positive", "expected_sources": ["data/images/screenshot_vpn_client.png"], "answer_keywords": ["gateway", "vpn", "library"], "tier": "heldout-entity-2026-10-11"},
+    {"id": "E11", "question": "What is final_synopsis_team12.pdf?", "kind": "positive", "expected_sources": ["data/images/screenshot_synopsis_portal.png"], "answer_keywords": ["synopsis", "file", "submi", "pdf"], "tier": "heldout-entity-2026-10-11"},
+    {"id": "E12", "question": "What is RStudio?", "kind": "positive", "expected_sources": ["data/images/commons_screenshot_rstudio_ide.png"], "answer_keywords": ["ide", "environment", "flights", "r "], "tier": "heldout-entity-2026-10-11"},
+    {"id": "E13", "question": "What is matplotlib?", "kind": "positive", "expected_sources": ["data/images/commons_screenshot_matplotlib_figures_code.png", "data/images/commons_screenshot_python_matplotlib_code.jpg"], "answer_keywords": ["plot", "figure", "python", "library"], "tier": "heldout-entity-2026-10-11"},
+    {"id": "E14", "question": "Who is Jordan Blake?", "kind": "negative", "tier": "heldout-entity-2026-10-11"},
+    {"id": "E15", "question": "Who is Alex Smith?", "kind": "negative", "tier": "heldout-entity-2026-10-11"},
+    {"id": "E16", "question": "Who is Morgan Freeman?", "kind": "negative", "tier": "heldout-entity-2026-10-11"},
+    {"id": "E17", "question": "Who is Dr. S. Sharma?", "kind": "negative", "tier": "heldout-entity-2026-10-11"},
+    {"id": "E18", "question": "What is Room 999?", "kind": "negative", "tier": "heldout-entity-2026-10-11"},
+    {"id": "E19", "question": "What is vpn.example.org?", "kind": "negative", "tier": "heldout-entity-2026-10-11"},
+    {"id": "E20", "question": "Who is the hostel warden?", "kind": "negative", "tier": "heldout-entity-2026-10-11"},
+    {"id": "E21", "question": "What is Alex Morgan's blood group?", "kind": "negative", "tier": "heldout-entity-2026-10-11"},
+    {"id": "E22", "question": "What is the capital of Australia?", "kind": "negative", "tier": "heldout-entity-2026-10-11"},
+    {"id": "E23", "question": "Who is the head of the library?", "kind": "negative", "tier": "heldout-entity-2026-10-11"}
   ]
 }
