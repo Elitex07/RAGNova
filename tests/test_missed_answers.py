@@ -257,6 +257,26 @@ def test_with_files_picked_it_means_the_files_so_only_a_wordless_question_is_a_f
     assert answer_module.search_question("summarise it", history) == "who is raiden? summarise"
 
 
+def _prompt_for(monkeypatch, question, sources):
+    seen = {}
+    monkeypatch.setattr(answer_module, "retrieve", lambda q, **kw: [_chunk()])
+    monkeypatch.setattr(answer_module, "generate", lambda prompt: seen.setdefault("prompt", prompt) and "ok [1]")
+    answer_module.answer_query(question, sources=sources)
+    return seen["prompt"]
+
+
+@pytest.mark.parametrize("question", ["explain", "Explain.", "summarize", "tell me more", "brief overview"])
+def test_a_question_with_no_subject_asks_about_the_picked_files(monkeypatch, question):
+    # 2026-10-11: "explain" with algorithms_ch04_greedy.pdf picked was refused; "Give me a short summary" was not.
+    prompt = _prompt_for(monkeypatch, question, ["data/documents/greedy.pdf"])
+    assert f'The user wrote "{question}" about the files they chose' in prompt
+
+
+@pytest.mark.parametrize("question, sources", [("explain greedy choice", ["a.pdf"]), ("explain", None)])
+def test_a_question_with_a_subject_or_without_picked_files_is_asked_as_typed(monkeypatch, question, sources):
+    assert "about the files they chose" not in _prompt_for(monkeypatch, question, sources)
+
+
 # --- a refusal as small models actually type it (nemotron-3-nano:4b, 2026-10-11) ---
 
 @pytest.mark.parametrize("text", [

@@ -47,6 +47,16 @@ IMAGE_ONLY_QUESTION = (
 )
 
 
+# Stands in for a question with no subject of its own ("explain", "summarize?") when files are picked under "Answer
+# from": the files are the subject, but "Question: explain" alone gave the model no task and it refused (2026-10-11).
+SCOPED_BARE_QUESTION = (
+    'The user wrote "{query}" about the files they chose. Explain what the context from those files covers: '
+    "give its key points."
+)
+# Words that ask for a kind of answer and name no subject, on top of lexical's filler ("explain", "tell", "more").
+_ASK_ONLY_WORDS = frozenset("summarize summarise summary overview brief briefly elaborate simplify simply short".split())
+
+
 @dataclass
 class RagAnswer:
     """The result of one end-to-end question. `citations` is the retrieved
@@ -154,8 +164,11 @@ def _follow_up(query, history, attachments, sources=None) -> tuple[str, list[tup
 
 
 def _prompt(query: str, relevant: list[Chunk], history, sources: list[str] | None = None) -> str:
+    question = query or IMAGE_ONLY_QUESTION
+    if sources and not history and query.strip() and set(content_tokens(query)) <= _ASK_ONLY_WORDS:
+        question = SCOPED_BARE_QUESTION.format(query=query.strip())
     return build_prompt(
-        query or IMAGE_ONLY_QUESTION, _for_prompt(relevant, query),
+        question, _for_prompt(relevant, query),
         settings.PROMPT_WHO_WHAT_RULE, settings.PROMPT_DETAIL_RULE, history, sources,
     )
 
