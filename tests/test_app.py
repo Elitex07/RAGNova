@@ -89,9 +89,11 @@ def _live_answer(text: str, calls: list | None = None):
         text="The working prototype will carry forty percent.", page=2, embedding_model="test",
     )
 
-    def fake(query, top_k=None, client=None, include_images=False, query_image=None, sources=None, attachments=None):
+    def fake(query, top_k=None, client=None, include_images=False, query_image=None, sources=None, attachments=None,
+             history=None):
         if calls is not None:
-            calls.append({"query": query, "sources": sources, "attachments": attachments, "query_image": query_image})
+            calls.append({"query": query, "sources": sources, "attachments": attachments, "query_image": query_image,
+                          "history": history})
         return [chunk], iter([word + " " for word in text.split(" ")])
 
     return fake
@@ -294,3 +296,42 @@ def test_an_answer_that_merely_mentions_the_refusal_phrase_midway_keeps_its_sour
     reply = page.ask(CANNED_QUESTION)
 
     assert [v.number for v in reply["views"]] == [1]
+
+
+def test_a_follow_up_is_sent_with_the_previous_exchange_and_a_fresh_question_with_it_too(page, monkeypatch):
+    """"tell me more" was refused on 2026-10-11: the page asked every question on its own (ADR-018)."""
+    calls: list = []
+    monkeypatch.setattr(answer_module, "stream_answer", _live_answer("Forty percent [1].", calls))
+    page.ask("who is raiden?")
+    assert calls[-1]["history"] is None                                    # nothing before it
+
+    page.ask("tell me more")
+    [(question, answer)] = calls[-1]["history"]
+    assert question == "who is raiden?" and answer.strip() == "Forty percent [1]."
+    assert page.at.session_state["messages"][-2]["search"] == "who is raiden?"
+
+    page.ask("and more")                                                   # chains on what the last turn searched
+    assert calls[-1]["history"][0][0] == "who is raiden?"
+
+
+def test_a_refused_answer_gives_the_next_question_no_history(page, monkeypatch):
+    from src.pipelines.rag.answer import NOT_ENOUGH_INFO
+
+    calls: list = []
+    monkeypatch.setattr(answer_module, "stream_answer", _live_answer(NOT_ENOUGH_INFO, calls))
+    page.ask("who is nobody?")
+    page.ask("tell me more")
+    assert calls[-1]["history"] is None
+
+
+def test_only_the_sources_the_answer_cites_are_listed(page, monkeypatch):
+    two = [
+        Chunk(chunk_id="g", source="data/documents/greedy.pdf", modality="pdf", text="Boston Pool interns.", page=14,
+              embedding_model="test"),
+        Chunk(chunk_id="f", source="data/images/fair.png", modality="image", text="Internship Fair 3 December",
+              embedding_model="test"),
+    ]
+    monkeypatch.setattr(answer_module, "stream_answer",
+                        lambda query, **kw: (two, iter(["The fair is on 3 December [2]."])))
+    reply = page.ask("tell me about internship fair")
+    assert [v.title for v in reply["views"]] == ["[2] fair.png (image)"]

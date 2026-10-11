@@ -1,0 +1,43 @@
+# ADR-018: Names, typos, follow-ups and fuller answers: switched on, pending the measurement run
+
+## Status
+**Proposed, switched on in code, not yet measured with the real model** (2026-10-11). The code, the rows (E24-E28) and the variant (V8 in `scripts/evaluate_entity_questions.py`) were written in a container with no Ollama and no model weights, so no answer was generated. Before this is called accepted, run stage 1 and stage 2 for V8 (commands below) and record the result here. If V8 is not a candidate, or stage 2 vetoes it, set the four settings below back to 0 in `.env` and record why. Builds on ADR-017.
+
+## Context
+
+On 2026-10-11 the live page, with every default as shipped:
+
+| question | what happened | cause |
+|---|---|---|
+| "who is alex morgan?" | refused | ADR-017: the image gate drops the ID card, and the prompt makes the 3B model refuse "who is X". Both fixes existed and were off because of one near-miss: "Who is Dr. S. Sharma?" was answered with Dr. S. Rao. |
+| "riffy" (in an uploaded CV) | refused | the same: one word scores far under the floor; dense search has no meaning to match in a name. |
+| "tell me lab rul no. 2" | refused; "tell me lab rules" answered | "rul" is in no file, so the question's vector is damaged and nothing clears the floor or the image gate. |
+| "tell me more" after "Raiden is a Discord app" | refused | every question was searched on its own; "tell me more" has nothing to search for. |
+| "what is greedy algorithm tell me in brief", "priyanshu jain" | one bare line, sometimes no citation | nothing in the prompt asks the model to use the context; "in brief" was read as one line. |
+| "tell me about internship fair" | an algorithms chapter listed as source [1], uncited | the page listed every retrieved chunk, cited or not. |
+
+## Decision
+
+1. **Name-phrase rule** in `lexical.py`: a title or initial in the question must sit next to the same word in the chunk ("dr s", "s sharma"). Stops E17 (the sign says "Dr. S. Rao" and "Mr. V. Sharma"), keeps E7/E8. With it, `LEXICAL_ADMIT` and `PROMPT_WHO_WHAT_RULE` are **on by default** (ADR-017's V5).
+2. **Spelling fix** (`QUERY_SPELLING_FIX=1`): a word no file contains is replaced, for the similarity searches only, by the common word (in 2+ files) it starts or is one keystroke from. The lexical admit keeps the typed words, so an unknown name still vetoes it.
+3. **Follow-ups** (`followup.py`, no extra model call): a question with no content words, a continuation opener ("what about", "and"), or a pronoun with at most two content words is searched together with the previous turn's search question, and the prompt shows the previous exchange (answer cut to 80 words, citation numbers removed). Other questions are handled exactly as before.
+4. **Detail rule** (`PROMPT_DETAIL_RULE=1`): answer in complete sentences with the details the context gives; "in brief" means two to four sentences; a bare name or term means "what does the context say about it".
+5. **Cited-only sources**: the page lists only the sources the answer cites, with their numbers; all of them when it cites none.
+
+## How to measure it (on the machine with Ollama and the index)
+
+    python scripts/evaluate_entity_questions.py                    # stage 1: V8 against V0 on E1-E28
+    python scripts/evaluate_entity_questions.py --regression V8    # stage 2: the older rows may veto it
+
+The rule is ADR-017's, unchanged: a candidate needs a score at least 3 above V0 and no fewer negatives refused; stage 2 vetoes a total 2 or more below V0's, or any older negative newly answered.
+
+## Alternatives considered
+
+- **Rewrite follow-ups with the model** into a standalone question: better on hard cases, but a second generation per follow-up, which is seconds on a CPU (ADR-015).
+- **Lower the floors**: rejected again for ADR-017's reason.
+
+## Consequences
+
+- Every setting can be switched off in `.env`; with all four off and no history, the prompt is byte-for-byte the old one (tested).
+- The spelling fix can turn an unknown word into a common one the user did not mean; it only changes what the similarity search sees, and the floors and the refusal rule still apply.
+- Follow-up detection is a word rule; "why does it fail?" after an unrelated answer is glued to that answer's question.

@@ -10,13 +10,14 @@ switched on is decided here, by a rule written before anything was run.
 
 DECLARED BEFORE RUNNING (committed before the first run)
 
-  Rows. The 23 entity rows of data/gold_set.json (section "entity": 13 positives, 10 negatives), committed
-  before any retrieval or model was run on them (E4 is the question that failed; it was written after seeing the
+  Rows. The entity rows of data/gold_set.json (section "entity"). E1-E23 (13 positives, 10 negatives) were committed
+  before the first run; E24-E28 were added with ADR-018's name-phrase rule and typo fix, before V8 was run. E1-E23 were
+  committed before any retrieval or model was run on them (E4 is the question that failed; it was written after seeing the
   failure, the rest were not). Each is asked through answer_query(include_images=True), as the page asks it.
 
   A positive is CORRECT when its answer is not a refusal, contains at least one of its answer_keywords
   (case-insensitive), AND at least one of its expected sources is among the numbered citations.
-  A negative is CORRECT when its answer is a refusal.   SCORE = correct positives + correct negatives (max 23).
+  A negative is CORRECT when its answer is a refusal.   SCORE = correct positives + correct negatives.
 
   Variants: retrieval in {off, L2 = lexical distinctive max_df 2, L4 = lexical distinctive max_df 4,
   LA = lexical all-known-words max_df 2} times prompt in {P0 = shipped, P1 = with the who/what-is rule}: eight.
@@ -71,6 +72,11 @@ VARIANTS = {}
 for _i, (_r, _p) in enumerate([(r, p) for p in (False, True) for r in RETRIEVAL]):
     VARIANTS[f"V{_i}"] = (_r, _p)
 # V0 = (off, P0)  V1 = (L2, P0)  V2 = (L4, P0)  V3 = (LA, P0)  V4 = (off, P1)  V5 = (L2, P1)  V6 = (L4, P1)  V7 = (LA, P1)
+# V8 (ADR-018, added 2026-10-11 after the first run): V5 with the name-phrase rule now inside the lexical admit, plus
+# the detail rule and the spelling fix: what ships since ADR-018. V0-V7 run with those two OFF so they reproduce the
+# first run's settings (the name-phrase rule cannot be switched off: it is part of the admit).
+VARIANTS["V8"] = ("L2", True)
+ADR018 = {"V8"}
 
 REQUIRED_GAIN = 3
 REGRESSION_TOLERANCE = 2
@@ -79,19 +85,23 @@ REGRESSION_TOLERANCE = 2
 def configure(variant: str) -> None:
     retrieval, rule = VARIANTS[variant]
     on, mode, max_df = RETRIEVAL[retrieval]
-    new = dataclasses.replace(BASE_SETTINGS, LEXICAL_ADMIT=on, LEXICAL_MODE=mode, LEXICAL_MAX_DF=max_df, PROMPT_WHO_WHAT_RULE=rule)
+    extras = variant in ADR018
+    new = dataclasses.replace(BASE_SETTINGS, LEXICAL_ADMIT=on, LEXICAL_MODE=mode, LEXICAL_MAX_DF=max_df, PROMPT_WHO_WHAT_RULE=rule,
+                              PROMPT_DETAIL_RULE=extras, QUERY_SPELLING_FIX=extras)
     retrieve_module.settings = new
     answer_module.settings = new
 
 
 def describe(variant: str) -> str:
     retrieval, rule = VARIANTS[variant]
+    if variant in ADR018:
+        return f"{variant} (ADR-018: L2 + who/what + detail rule + spelling fix)"
     return f"{variant} (retrieval {retrieval}, prompt {'P1 who/what-is rule' if rule else 'P0 shipped'})"
 
 
 def components(variant: str) -> int:
     retrieval, rule = VARIANTS[variant]
-    return (retrieval != "off") + bool(rule)
+    return (retrieval != "off") + bool(rule) + (2 if variant in ADR018 else 0)
 
 
 def refused(result) -> bool:

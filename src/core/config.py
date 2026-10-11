@@ -155,15 +155,24 @@ class Settings:
     # LEXICAL_ADMIT adds a second way in: a chunk is admitted when every DISTINCTIVE word of the question
     # (one that occurs in at most LEXICAL_MAX_DF indexed files) is literally in it. Off by default; see
     # src/pipelines/rag/lexical.py and scripts/evaluate_entity_questions.py for the rule that decides whether
-    # it is ever switched on.
-    LEXICAL_ADMIT: bool = _get_bool("LEXICAL_ADMIT", False)
+    # it is ever switched on. ON by default since 2026-10-11 (ADR-018): the near-miss that kept it off ("Who is
+    # Dr. S. Sharma?" admitting Mr. V. Sharma's sign) is now stopped by the name-phrase rule in lexical.py.
+    LEXICAL_ADMIT: bool = _get_bool("LEXICAL_ADMIT", True)
     LEXICAL_MAX_DF: int = _get_int("LEXICAL_MAX_DF", 2)
     # "distinctive": the chunk must hold every rare word of the question; "all": every word the corpus knows.
     LEXICAL_MODE: str = os.environ.get("LEXICAL_MODE", "distinctive")
     # PROMPT_WHO_WHAT_RULE adds a rule to the prompt: for a "who / what is X" question, say what the context
     # states about X. With the shipped prompt the 3B model refused "who is X" even when the one source in
-    # scope was X's ID card (3 of 5 such questions). Off by default; same evidence rule.
-    PROMPT_WHO_WHAT_RULE: bool = _get_bool("PROMPT_WHO_WHAT_RULE", False)
+    # scope was X's ID card (3 of 5 such questions). ON by default since 2026-10-11 (ADR-018), together with
+    # LEXICAL_ADMIT: ADR-017 measured that neither fixes name lookups alone.
+    PROMPT_WHO_WHAT_RULE: bool = _get_bool("PROMPT_WHO_WHAT_RULE", True)
+    # PROMPT_DETAIL_RULE asks for complete answers that use the context ("in brief" = a short paragraph, a bare
+    # name or term = "what does the context say about it"). Without it the 3B model answered "what is greedy
+    # algorithm, tell me in brief" and "priyanshu jain" with one bare line (2026-10-11, ADR-018).
+    PROMPT_DETAIL_RULE: bool = _get_bool("PROMPT_DETAIL_RULE", True)
+    # QUERY_SPELLING_FIX: the similarity searches get the question with words the corpus does not know swapped for
+    # the common corpus word they start or are one keystroke from ("lab rul no. 2" -> "lab rule no. 2"); lexical.py.
+    QUERY_SPELLING_FIX: bool = _get_bool("QUERY_SPELLING_FIX", True)
 
     # Reciprocal Rank Fusion constant for merging text_index and
     # image_index results by rank (ADR-007): score = sum(1 / (RRF_K + rank)).

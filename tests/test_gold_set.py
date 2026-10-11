@@ -148,7 +148,7 @@ def test_entity_rows_do_not_leak_into_the_sections_other_scripts_score(gold):
     entity_ids = {r["id"] for r in gold["entity"]}
     other_ids = {r["id"] for sec in ("text", "text_to_image", "image_to_doc", "audio_topic", "negatives") for r in gold[sec]}
     assert not entity_ids & other_ids
-    assert len(gold["entity"]) == 23 and sum(r["kind"] == "positive" for r in gold["entity"]) == 13
+    assert len(gold["entity"]) == 28 and sum(r["kind"] == "positive" for r in gold["entity"]) == 15
 
 
 def test_loader_requires_the_entity_section_and_its_keys(tmp_path):

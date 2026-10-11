@@ -17,6 +17,7 @@ from src.core.config import settings
 from src.core.llm import generate, generate_stream
 from src.core.schemas import Chunk
 from src.pipelines.rag.context import trim_chunks
+from src.pipelines.rag.followup import resolve as resolve_follow_up
 from src.pipelines.rag.prompt import build_prompt
 from src.pipelines.rag.retrieve import filter_by_floor, retrieve
 
@@ -108,6 +109,7 @@ def _gather(
     query_image: Image.Image | None,
     sources: list[str] | None,
     attachments: list[Chunk] | None,
+    search_query: str | None = None,
 ) -> list[Chunk]:
     """Everything the model may be shown, in citation order: the user's
     attachments first (they put them there; nothing filters them), then what
@@ -117,10 +119,32 @@ def _gather(
     gluing it on brought in unrelated corpus chunks and gave 0 usable answers
     against 2 without (one run each of a stochastic model; ADR-016)."""
     found = retrieve(
-        query, top_k=top_k, client=client,
+        search_query or query, top_k=top_k, client=client,
         include_images=include_images, query_image=query_image, sources=sources,
     )
     return [*(attachments or []), *found]
+
+
+def search_question(query: str, history: list[tuple[str, str]] | None, attachments: list[Chunk] | None = None) -> str:
+    """What `query` is searched with: itself, or, for a follow-up, followup.resolve()'s question. The page stores it
+    with the turn so the next follow-up builds on it ("tell me more", then "more")."""
+    return _follow_up(query, history, attachments)[0]
+
+
+def _follow_up(query, history, attachments) -> tuple[str, list[tuple[str, str]] | None]:
+    """(question to search with, earlier exchange for the prompt or None). An attached image is what "this" means,
+    so a question with an attachment is never treated as a follow-up."""
+    if not history or attachments or not query.strip():
+        return query, None
+    search = resolve_follow_up(query, history[-1][0])
+    return search, (history[-1:] if search != query else None)
+
+
+def _prompt(query: str, relevant: list[Chunk], history) -> str:
+    return build_prompt(
+        query or IMAGE_ONLY_QUESTION, _for_prompt(relevant, query),
+        settings.PROMPT_WHO_WHAT_RULE, settings.PROMPT_DETAIL_RULE, history,
+    )
 
 
 def answer_query(
@@ -131,6 +155,7 @@ def answer_query(
     query_image: Image.Image | None = None,
     sources: list[str] | None = None,
     attachments: list[Chunk] | None = None,
+    history: list[tuple[str, str]] | None = None,
 ) -> RagAnswer:
     """Answer `query` using only relevant retrieved chunks.
 
@@ -151,15 +176,21 @@ def answer_query(
     what that changes). `attachments` are items the user attached to this
     question (attachments.py): shown to the model first, cited like any chunk,
     never filtered, so an answer can come from them alone.
+
+    `history` is the earlier conversation, [(search question, answer)] oldest first (the page passes the last
+    exchange). Only a follow-up ("tell me more", "who made it?") uses it: followup.py builds the question to
+    search with, and the prompt shows the exchange so the model knows what "it" is. A question that stands on its
+    own is handled exactly as without it.
     """
-    relevant = _gather(query, top_k, client, include_images, query_image, sources, attachments)
+    search_query, prompt_history = _follow_up(query, history, attachments)
+    relevant = _gather(query, top_k, client, include_images, query_image, sources, attachments, search_query)
 
     if not relevant:
         return RagAnswer(
             query=query, answer=NOT_ENOUGH_INFO, citations=[], model=settings.OLLAMA_MODEL
         )
 
-    prompt = build_prompt(query or IMAGE_ONLY_QUESTION, _for_prompt(relevant, query), settings.PROMPT_WHO_WHAT_RULE)
+    prompt = _prompt(query, relevant, prompt_history)
     check_prompt_fits(prompt)
     answer_text = generate(prompt)
     check_citations(answer_text, relevant, query)
@@ -177,6 +208,7 @@ def stream_answer(
     query_image: Image.Image | None = None,
     sources: list[str] | None = None,
     attachments: list[Chunk] | None = None,
+    history: list[tuple[str, str]] | None = None,
 ) -> tuple[list[Chunk], Iterator[str]]:
     """answer_query(), split in two for the Chapter 11 UI: retrieval runs
     now and its chunks come back straight away (so sources can be drawn
@@ -188,10 +220,11 @@ def stream_answer(
     check_citations() on the joined text when the stream ends — it can't
     run here, because the full answer doesn't exist yet.
     """
-    relevant = _gather(query, top_k, client, include_images, query_image, sources, attachments)
+    search_query, prompt_history = _follow_up(query, history, attachments)
+    relevant = _gather(query, top_k, client, include_images, query_image, sources, attachments, search_query)
     if not relevant:
         return [], iter([NOT_ENOUGH_INFO])
-    prompt = build_prompt(query or IMAGE_ONLY_QUESTION, _for_prompt(relevant, query), settings.PROMPT_WHO_WHAT_RULE)
+    prompt = _prompt(query, relevant, prompt_history)
     check_prompt_fits(prompt)
     return relevant, generate_stream(prompt)
 
