@@ -184,6 +184,7 @@ def test_the_earlier_answer_is_shortened_and_loses_its_citation_numbers():
 def test_the_detail_rule_asks_for_a_paragraph_for_brief_and_treats_a_bare_term_as_tell_me_about_it():
     prompt = build_prompt("riffy", [_chunk()], detail_rule=True)
     assert "two to four sentences" in prompt and "only a name or a term" in prompt
+    assert "reply with the refusal sentence of the last rule, word for word" in prompt
     assert "I don't have enough information in the indexed documents to answer that." in prompt
     assert "detail" not in build_prompt("riffy", [_chunk()])          # off: the prompt every earlier run used
 

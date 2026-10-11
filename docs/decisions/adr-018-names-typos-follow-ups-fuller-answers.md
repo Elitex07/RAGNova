@@ -31,6 +31,16 @@ On 2026-10-11 the live page, with every default as shipped:
 
 The rule is ADR-017's, unchanged: a candidate needs a score at least 3 above V0 and no fewer negatives refused; stage 2 vetoes a total 2 or more below V0's, or any older negative newly answered.
 
+## First measurement (2026-10-11, on the author's machine)
+
+Stage 1: V8 27/28 against V0 18/28 (positives 14/15 against 5/15, negatives refused 13/13 both), the winner.
+Stage 2: V8 total 74 against V0 67, no older positive lost, but **vetoed**: N20 ("How many layers does the T5 model
+used as the generative reader have?") counted as answered. `--show N20` showed the answer was a refusal in the model's
+own words ("The context does not mention the number of layers ..."), caused by the detail rule alone (V8 minus the
+detail rule refused with the fixed sentence). The detail rule now ends with "reply with the refusal sentence of the
+last rule, word for word". The adoption rule, the refusal check and the rows are unchanged; both stages are to be
+re-run on this prompt.
+
 ## Alternatives considered
 
 - **Rewrite follow-ups with the model** into a standalone question: better on hard cases, but a second generation per follow-up, which is seconds on a CPU (ADR-015).

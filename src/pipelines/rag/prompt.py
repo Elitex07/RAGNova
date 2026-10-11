@@ -37,13 +37,17 @@ _RULE_WHO_WHAT = (
     "them), and nothing more."
 )
 # PROMPT_DETAIL_RULE (2026-10-11): with only rules 1-3 the 3B model answered "what is greedy algorithm, tell me in
-# brief" and "who is Raiden" with one bare sentence and no citation, though five sources were retrieved.
+# brief" and "who is Raiden" with one bare sentence and no citation, though five sources were retrieved. Its last
+# sentence was added after the first V8 run: asked for detail, the model refused N20 in its own words ("The context
+# does not mention the number of layers ...") instead of the fixed sentence, so neither the page nor the evaluation
+# could tell it was a refusal, and the page listed sources under it.
 _RULE_DETAIL = (
     "Use the context fully: answer in complete sentences with the relevant details "
     "it gives (definitions, key points, steps, numbers, names). When the user asks "
     "for a brief answer, give a short paragraph of two to four sentences with the key "
     "points, not a single line. A question that is only a name or a term means: what "
-    "does the context say about it?"
+    "does the context say about it? When the context does not hold the answer, do not "
+    "explain what is missing: reply with the refusal sentence of the last rule, word for word."
 )
 # Only when there is an earlier exchange (follow-ups, 2026-10-11): "tell me more" means nothing on its own.
 _RULE_HISTORY = (
