@@ -30,6 +30,26 @@ _SYSTEM_INSTRUCTIONS = (
 
 _NO_CONTEXT_NOTICE = "(No relevant context was found for this question.)"
 
+# The shipped instructions plus one rule (PROMPT_WHO_WHAT_RULE, off by default): for a "who / what is X" question
+# the model says what the context states about X. Rule 3 of the shipped text becomes rule 4, and gains "or does
+# not contain the specific fact asked for" so that the new rule cannot be read as permission to guess.
+_SYSTEM_INSTRUCTIONS_WHO_WHAT = (
+    "You answer questions using ONLY the numbered context below, taken from "
+    "the user's own indexed files. Follow these rules exactly:\n"
+    "1. Base your answer only on the context given. Never use outside "
+    "knowledge, even if you happen to know the answer.\n"
+    "2. Cite every claim with the matching bracketed number, e.g. [1] or "
+    "[2], right after the sentence it supports.\n"
+    "3. If the question asks who or what someone or something is, answer with "
+    "what the context says about it (for a person, what the context states about "
+    "them), and nothing more.\n"
+    "4. If the context does not mention what the question asks about, or does not "
+    "contain the specific fact asked for, say plainly: "
+    '"I don\'t have enough information in the indexed documents to answer '
+    'that." Do not guess, and do not cite a number if you are not using it.'
+)
+
+
 
 def format_provenance(chunk: Chunk) -> str:
     """One-line "where this came from" description for a chunk — used both
@@ -94,7 +114,7 @@ def _context_text(chunk: Chunk) -> str:
     return chunk.text
 
 
-def build_prompt(query: str, chunks: list[Chunk]) -> str:
+def build_prompt(query: str, chunks: list[Chunk], who_what_rule: bool = False) -> str:
     """Build the full prompt sent to the LLM: system instructions, numbered
     context blocks (best match first, matching `chunks`' own order), then
     the question.
@@ -112,8 +132,9 @@ def build_prompt(query: str, chunks: list[Chunk]) -> str:
     else:
         context_section = _NO_CONTEXT_NOTICE
 
+    instructions = _SYSTEM_INSTRUCTIONS_WHO_WHAT if who_what_rule else _SYSTEM_INSTRUCTIONS
     return (
-        f"{_SYSTEM_INSTRUCTIONS}\n\n"
+        f"{instructions}\n\n"
         f"Context:\n{context_section}\n\n"
         f"{_attachment_note(chunks)}"
         f"Question: {query}\n\n"

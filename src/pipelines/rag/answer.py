@@ -159,7 +159,7 @@ def answer_query(
             query=query, answer=NOT_ENOUGH_INFO, citations=[], model=settings.OLLAMA_MODEL
         )
 
-    prompt = build_prompt(query or IMAGE_ONLY_QUESTION, _for_prompt(relevant, query))
+    prompt = build_prompt(query or IMAGE_ONLY_QUESTION, _for_prompt(relevant, query), settings.PROMPT_WHO_WHAT_RULE)
     check_prompt_fits(prompt)
     answer_text = generate(prompt)
     check_citations(answer_text, relevant, query)
@@ -191,7 +191,7 @@ def stream_answer(
     relevant = _gather(query, top_k, client, include_images, query_image, sources, attachments)
     if not relevant:
         return [], iter([NOT_ENOUGH_INFO])
-    prompt = build_prompt(query or IMAGE_ONLY_QUESTION, _for_prompt(relevant, query))
+    prompt = build_prompt(query or IMAGE_ONLY_QUESTION, _for_prompt(relevant, query), settings.PROMPT_WHO_WHAT_RULE)
     check_prompt_fits(prompt)
     return relevant, generate_stream(prompt)
 

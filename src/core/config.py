@@ -149,6 +149,22 @@ class Settings:
     IMAGE_OCR_ONLY_MIN_AGREEMENT: float | None = _get_optional_float("IMAGE_OCR_ONLY_MIN_AGREEMENT")
     IMAGE_OCR_ONLY_NEEDS_SHARED_WORD: bool = _get_bool("IMAGE_OCR_ONLY_NEEDS_SHARED_WORD", False)
 
+    # Name and identifier lookups ("who is Alex Morgan?", "what is vpn.ragnova.edu?"), 2026-10-11.
+    # The relevance floor and the image gate score a name against a whole chunk, and a name alone scores low
+    # (the ID card for Alex Morgan: CLIP 0.151, text agreement 0.16, against floors of 0.2 and 0.30).
+    # LEXICAL_ADMIT adds a second way in: a chunk is admitted when every DISTINCTIVE word of the question
+    # (one that occurs in at most LEXICAL_MAX_DF indexed files) is literally in it. Off by default; see
+    # src/pipelines/rag/lexical.py and scripts/evaluate_entity_questions.py for the rule that decides whether
+    # it is ever switched on.
+    LEXICAL_ADMIT: bool = _get_bool("LEXICAL_ADMIT", False)
+    LEXICAL_MAX_DF: int = _get_int("LEXICAL_MAX_DF", 2)
+    # "distinctive": the chunk must hold every rare word of the question; "all": every word the corpus knows.
+    LEXICAL_MODE: str = os.environ.get("LEXICAL_MODE", "distinctive")
+    # PROMPT_WHO_WHAT_RULE adds a rule to the prompt: for a "who / what is X" question, say what the context
+    # states about X. With the shipped prompt the 3B model refused "who is X" even when the one source in
+    # scope was X's ID card (3 of 5 such questions). Off by default; same evidence rule.
+    PROMPT_WHO_WHAT_RULE: bool = _get_bool("PROMPT_WHO_WHAT_RULE", False)
+
     # Reciprocal Rank Fusion constant for merging text_index and
     # image_index results by rank (ADR-007): score = sum(1 / (RRF_K + rank)).
     # 60 is the value from Cormack et al.'s original RRF paper, used as-is.

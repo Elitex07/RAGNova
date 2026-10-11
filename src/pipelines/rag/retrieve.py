@@ -180,6 +180,14 @@ def gate_image_channels(
     return kept
 
 
+def _lexical_first(lexical: list[Chunk], ranked: list[Chunk]) -> list[Chunk]:
+    """`lexical` chunks first, then `ranked` without any of them (a chunk found both ways appears once)."""
+    if not lexical:
+        return ranked
+    taken = {c.chunk_id for c in lexical}
+    return [*lexical, *(c for c in ranked if c.chunk_id not in taken)]
+
+
 def retrieve(
     query: str,
     top_k: int | None = None,
@@ -190,6 +198,7 @@ def retrieve(
     image_agreement=None,
     image_text_search=None,
     sources: list[str] | None = None,
+    lexical_search=None,
 ) -> list[Chunk]:
     """The one retrieval call the RAG core makes: relevant chunks from
     every enabled collection, merged into one ranked list of at most
@@ -223,6 +232,12 @@ def retrieve(
     what Chapter 10's answer_query() used to compute inline, so the CLI
     and every existing test behave identically.
 
+    With settings.LEXICAL_ADMIT on (off by default) and no `sources` scope, chunks whose text holds every
+    distinctive word of the question (lexical.py) are put FIRST in their modality's list, ahead of the
+    similarity-ranked hits and whether or not those cleared the floors: a name has no meaning for dense
+    search to match, and an exact word is the right tool for it. `lexical_search(query, client=, max_df=)`
+    returns (text chunks, image chunks) and is injected by tests (settings.LEXICAL_MODE, LEXICAL_MAX_DF).
+
     `image_search` defaults to search_images() and `image_agreement` to the
     MiniLM OCR-agreement scorer; tests inject fakes so they don't need
     CLIP's or MiniLM's weights.
@@ -232,6 +247,15 @@ def retrieve(
     # photo with no text in it and types nothing. Embedding "" and
     # searching text_index with it would return 5 arbitrary chunks, so
     # there is simply no text search in that case — only the image one.
+    lexical_text: list[Chunk] = []
+    lexical_image: list[Chunk] = []
+    if settings.LEXICAL_ADMIT and sources is None and query.strip():
+        if lexical_search is None:
+            from src.pipelines.rag.lexical import lexical_hits as lexical_search
+        lexical_text, lexical_image = lexical_search(
+            query, client=client, max_df=settings.LEXICAL_MAX_DF, mode=settings.LEXICAL_MODE
+        )
+
     text_hits = []
     if query.strip():
         if sources is None:
@@ -253,7 +277,8 @@ def retrieve(
     # meaningful action for images).
     search_images_too = include_images or query_image is not None
     if not search_images_too:
-        return text_hits
+        return _lexical_first(lexical_text, text_hits)[:top_k]
+    text_hits = _lexical_first(lexical_text, text_hits)
 
     if image_search is None:
         from src.pipelines.images.search import search_images as image_search
@@ -286,4 +311,5 @@ def retrieve(
         else:
             image_hits = filter_images(raw_image_hits, query, image_agreement)
 
+    image_hits = _lexical_first(lexical_image, image_hits)
     return rrf_merge([text_hits, image_hits])[:top_k]
