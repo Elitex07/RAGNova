@@ -35,6 +35,10 @@ in no indexed file, so dense search gets a damaged question and nothing clears t
 the corpus does not know for a COMMON corpus word it is one keystroke away from (or the start of). It is used for the
 similarity searches only; the lexical admit above still sees the question as typed, so an unknown NAME still vetoes.
 
+FULL NAMES (2026-10-11): with nemotron-3-nano:4b, "Who is Alex Smith?" (E15, a negative) was answered: a chunk held
+"alex" and "smith" in two different names and the model glued them into one. Two or more capitalised words in a row in
+the question ("Alex Smith") are a name the same way a title is, so they must sit side by side in the chunk too.
+
 What it does NOT do: it does not judge whether the chunk ANSWERS the question. An admitted chunk is context,
 and the model's own refusal rule still decides, as for every image the gate lets through (ADR-011).
 """
@@ -117,6 +121,30 @@ def name_phrase_pairs(query: str) -> list[tuple[str, str]]:
         if len(phrase) >= 2:
             pairs += list(zip(phrase, phrase[1:]))
         i = j if j > i + 1 else i + 1
+    return pairs + [p for p in _capitalised_name_pairs(query) if p not in pairs]
+
+
+_NAME_WORD = re.compile(r"[A-Z][a-z]+")
+_EDGE_PUNCT = ".,;:!?\"'()[]“”‘’"
+
+
+def _capitalised_name_pairs(query: str) -> list[tuple[str, str]]:
+    """Runs of two or more capitalised words, as typed: "Who is Alex Smith?" -> [("alex", "smith")]. A word with other
+    punctuation inside it, a common word ("Who", "Tell", "About") or anything else ends a run, so "What is
+    Fusion-in-Decoder?" and an all-lowercase question give []."""
+    pairs: list[tuple[str, str]] = []
+    run: list[str] = []
+    for raw in query.split() + [""]:
+        bare = _POSSESSIVE.sub("", raw)
+        word = bare.strip(_EDGE_PUNCT)
+        lower = word.lower()
+        if _NAME_WORD.fullmatch(word) and lower not in _GENERIC_WORDS and lower not in _FILLER and lower not in _TITLES:
+            run.append(lower)
+            if bare.rstrip(_EDGE_PUNCT) == bare:
+                continue        # nothing between this word and the next but a space: the name may go on
+        if len(run) >= 2:
+            pairs += list(zip(run, run[1:]))
+        run = []
     return pairs
 
 

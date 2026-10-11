@@ -54,6 +54,19 @@ images 21); no older negative newly answered, no older positive lost: **not veto
 about Alex Morgan.") and, in this run, E4 ("Who is Alex Morgan?", answered in the first run): the card is cited in
 both, the 3B model refuses. One run each of a stochastic model; a one-question difference is noise.
 
+## Addendum: full names and mangled refusals (2026-10-11, nemotron-3-nano:4b)
+
+A V0/V8 run with `OLLAMA_MODEL=nemotron-3-nano:4b`, `LLM_THINK=1` scored V0 20/28, V8 23/28. Two findings:
+
+- **Mangled refusals.** E18, E19 and E23 were refused as "I don' have ..." / "I don' t have ...", which the exact-prefix
+  check scored as answers (and the app would have listed sources under and used as follow-up history).
+  `answer.is_refusal()` now compares letters only; the app and the evaluation scripts share it. Rescored, V8 is 26/28.
+  This changes how an answer is judged, not what is answered; the llama3.2:3b runs above typed the sentence exactly.
+- **E15 "Who is Alex Smith?" answered.** The lexical admit let in a chunk holding "alex" and "smith" in two different
+  names, and the model glued them. Two or more capitalised words in a row in the question are now a name phrase like
+  a title: they must sit side by side in the chunk (`lexical._capitalised_name_pairs`). A question typed in lowercase
+  pins nothing, as before. Needs a llama3.2:3b re-run (stage 1 V0,V8 and stage 2 V8) before this addendum is final.
+
 ## Alternatives considered
 
 - **Rewrite follow-ups with the model** into a standalone question: better on hard cases, but a second generation per follow-up, which is seconds on a CPU (ADR-015).

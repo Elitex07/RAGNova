@@ -50,7 +50,10 @@ def test_a_title_and_initials_become_the_word_pairs_they_pin_down():
     assert name_phrase_pairs("Who is Dr. S. Sharma?") == [("dr", "s"), ("s", "sharma")]
     assert name_phrase_pairs("who is mr sharma") == [("mr", "sharma")]
     assert name_phrase_pairs("Who is Dr S Rao") == [("dr", "s"), ("s", "rao")]       # an initial after a title, no dot
-    assert name_phrase_pairs("Who is Alex Morgan?") == []
+    assert name_phrase_pairs("Who is Alex Morgan?") == [("alex", "morgan")]           # a capitalised full name
+    assert name_phrase_pairs("who is alex morgan") == []                              # typed lowercase: nothing pinned
+    assert name_phrase_pairs("Who is Alex, Smith?") == []
+    assert name_phrase_pairs("What is Fusion-in-Decoder?") == []
     assert name_phrase_pairs("Can I see the lab rules?") == []                       # the pronoun I is not an initial
 
 
@@ -64,6 +67,17 @@ def test_the_people_the_sign_does_name_are_still_admitted(index):
     assert [e.chunk_id for e in admit("Who is Dr. S. Rao?", index)] == ["lab1"]
     assert [e.chunk_id for e in admit("Who is Mr. V. Sharma?", index)] == ["lab1"]
     assert [e.chunk_id for e in admit("who is sharma", index)] == ["lab1"]          # no title asked, none required
+
+
+def test_a_full_name_split_across_two_people_is_not_admitted():
+    # E15 with nemotron-3-nano:4b: a reference list held "alex" and "smith" in two names, and the model glued them.
+    names = LexicalIndex([
+        ("refs", "data/documents/paper.pdf", "text", "References. Alex Wang, Noah A. Smith and others. Dense retrieval."),
+        ("card", "data/images/card.png", "image", "Student ID card. Name: Alex Morgan. Roll No: 23AIML042."),
+    ])
+    assert admit("Who is Alex Smith?", names) == []
+    assert [e.chunk_id for e in admit("Who is Alex Morgan?", names)] == ["card"]
+    assert [e.chunk_id for e in admit("who is alex smith", names)] == ["refs"]   # lowercase: as before ADR-018's rule
 
 
 def test_a_bare_word_the_corpus_holds_once_is_looked_up(index):
