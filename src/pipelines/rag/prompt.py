@@ -163,12 +163,27 @@ def _context_text(chunk: Chunk) -> str:
     return chunk.text
 
 
+def _scope_note(scope: list[str] | None) -> str:
+    """When the user picked files under "Answer from", which files "it" / "this file" means. Without this the model
+    never learns that a scope exists: on 2026-10-11, with it_onboarding.docx picked, "List the names, dates and numbers
+    it mentions." was refused though the blocks held a two-week suspension and other numbers (ADR-018)."""
+    if not scope:
+        return ""
+    names = ", ".join(name.replace("\\", "/").rsplit("/", 1)[-1] for name in scope)
+    return (
+        f"The user chose to answer from these files only: {names}. When the question says \"it\", \"this file\", "
+        f"\"the document\" or \"these files\", it means them, and the numbered context is taken from them. A request "
+        f"to summarise them, give their key points, or list what they mention is answered from that context.\n\n"
+    )
+
+
 def build_prompt(
     query: str,
     chunks: list[Chunk],
     who_what_rule: bool = False,
     detail_rule: bool = False,
     history: list[tuple[str, str]] | None = None,
+    scope: list[str] | None = None,
 ) -> str:
     """Build the full prompt sent to the LLM: system instructions, numbered
     context blocks (best match first, matching `chunks`' own order), then
@@ -192,6 +207,7 @@ def build_prompt(
         f"{instructions}\n\n"
         f"Context:\n{context_section}\n\n"
         f"{_history_section(history)}"
+        f"{_scope_note(scope)}"
         f"{_attachment_note(chunks)}"
         f"Question: {query}\n\n"
         f"Answer:"

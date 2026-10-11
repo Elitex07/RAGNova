@@ -18,6 +18,7 @@ from src.core.llm import generate, generate_stream
 from src.core.schemas import Chunk
 from src.pipelines.rag.context import trim_chunks
 from src.pipelines.rag.followup import resolve as resolve_follow_up
+from src.pipelines.rag.lexical import content_tokens
 from src.pipelines.rag.prompt import build_prompt
 from src.pipelines.rag.retrieve import filter_by_floor, retrieve
 
@@ -125,25 +126,29 @@ def _gather(
     return [*(attachments or []), *found]
 
 
-def search_question(query: str, history: list[tuple[str, str]] | None, attachments: list[Chunk] | None = None) -> str:
+def search_question(query: str, history: list[tuple[str, str]] | None, attachments: list[Chunk] | None = None,
+                    sources: list[str] | None = None) -> str:
     """What `query` is searched with: itself, or, for a follow-up, followup.resolve()'s question. The page stores it
     with the turn so the next follow-up builds on it ("tell me more", then "more")."""
-    return _follow_up(query, history, attachments)[0]
+    return _follow_up(query, history, attachments, sources)[0]
 
 
-def _follow_up(query, history, attachments) -> tuple[str, list[tuple[str, str]] | None]:
+def _follow_up(query, history, attachments, sources=None) -> tuple[str, list[tuple[str, str]] | None]:
     """(question to search with, earlier exchange for the prompt or None). An attached image is what "this" means,
-    so a question with an attachment is never treated as a follow-up."""
+    so a question with an attachment is never treated as a follow-up; with files picked under "Answer from", "it" means
+    those files, so only a question with no words of its own ("tell me more") is one."""
     if not history or attachments or not query.strip():
+        return query, None
+    if sources and content_tokens(query):
         return query, None
     search = resolve_follow_up(query, history[-1][0])
     return search, (history[-1:] if search != query else None)
 
 
-def _prompt(query: str, relevant: list[Chunk], history) -> str:
+def _prompt(query: str, relevant: list[Chunk], history, sources: list[str] | None = None) -> str:
     return build_prompt(
         query or IMAGE_ONLY_QUESTION, _for_prompt(relevant, query),
-        settings.PROMPT_WHO_WHAT_RULE, settings.PROMPT_DETAIL_RULE, history,
+        settings.PROMPT_WHO_WHAT_RULE, settings.PROMPT_DETAIL_RULE, history, sources,
     )
 
 
@@ -182,7 +187,7 @@ def answer_query(
     search with, and the prompt shows the exchange so the model knows what "it" is. A question that stands on its
     own is handled exactly as without it.
     """
-    search_query, prompt_history = _follow_up(query, history, attachments)
+    search_query, prompt_history = _follow_up(query, history, attachments, sources)
     relevant = _gather(query, top_k, client, include_images, query_image, sources, attachments, search_query)
 
     if not relevant:
@@ -190,7 +195,7 @@ def answer_query(
             query=query, answer=NOT_ENOUGH_INFO, citations=[], model=settings.OLLAMA_MODEL
         )
 
-    prompt = _prompt(query, relevant, prompt_history)
+    prompt = _prompt(query, relevant, prompt_history, sources)
     check_prompt_fits(prompt)
     answer_text = generate(prompt)
     check_citations(answer_text, relevant, query)
@@ -220,11 +225,11 @@ def stream_answer(
     check_citations() on the joined text when the stream ends — it can't
     run here, because the full answer doesn't exist yet.
     """
-    search_query, prompt_history = _follow_up(query, history, attachments)
+    search_query, prompt_history = _follow_up(query, history, attachments, sources)
     relevant = _gather(query, top_k, client, include_images, query_image, sources, attachments, search_query)
     if not relevant:
         return [], iter([NOT_ENOUGH_INFO])
-    prompt = _prompt(query, relevant, prompt_history)
+    prompt = _prompt(query, relevant, prompt_history, sources)
     check_prompt_fits(prompt)
     return relevant, generate_stream(prompt)
 

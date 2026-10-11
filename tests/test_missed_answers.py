@@ -212,3 +212,30 @@ def test_only_the_cited_sources_are_listed_and_they_keep_their_numbers():
     assert cited_views(views, {2})[0].title.startswith("[2] ")
     assert [v.number for v in cited_views(views, set())] == [1, 2]       # nothing cited: show them all
     assert [v.number for v in cited_views(views, {9})] == [1, 2]         # only out-of-range numbers: the same
+
+
+# ---------------------------------------------------------------------------
+# Whole-file questions under "Answer from"
+# ---------------------------------------------------------------------------
+
+def test_with_files_picked_the_model_is_told_what_it_and_this_file_mean():
+    prompt = build_prompt("List the names, dates and numbers it mentions.", [_chunk()],
+                          scope=["data/documents/it_onboarding.docx"])
+    assert "The user chose to answer from these files only: it_onboarding.docx." in prompt
+    assert "list what they mention is answered from that context" in prompt
+    assert "chose to answer from" not in build_prompt("q", [_chunk()])
+
+
+def test_the_picked_files_reach_the_prompt(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(answer_module, "retrieve", lambda q, **kw: [_chunk()])
+    monkeypatch.setattr(answer_module, "generate", lambda prompt: seen.setdefault("prompt", prompt) and "ok [1]")
+    answer_module.answer_query("Give me a short summary of this file.", sources=["data/documents/resume.pdf"])
+    assert "answer from these files only: resume.pdf" in seen["prompt"]
+
+
+def test_with_files_picked_it_means_the_files_so_only_a_wordless_question_is_a_follow_up():
+    history = [("who is raiden?", "x")]
+    assert answer_module.search_question("summarise it", history, sources=["a.pdf"]) == "summarise it"
+    assert answer_module.search_question("tell me more", history, sources=["a.pdf"]) == "who is raiden?"
+    assert answer_module.search_question("summarise it", history) == "who is raiden? summarise"

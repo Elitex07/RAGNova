@@ -656,7 +656,8 @@ if focus:
     suggestions = [
         f"Give me a short summary of {these}.",
         "What are the key points?",
-        "List the names, dates and numbers it mentions.",
+        "List the names, dates and numbers it mentions." if len(focus) == 1
+        else "List the names, dates and numbers they mention.",
     ]
     for column, suggestion in zip(st.columns(len(suggestions)), suggestions):
         if column.button(suggestion, key=f"suggest_{suggestion}"):
@@ -703,7 +704,7 @@ if user_prompt:
 
     st.session_state.messages.append(new_message(
         "user", content=user_prompt, image_note=image_note,
-        search=search_question(user_prompt, history, attachments),
+        search=search_question(user_prompt, history, attachments, focus or None),
     ))
     with st.chat_message("user"):
         st.markdown(user_prompt)
