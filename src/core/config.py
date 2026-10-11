@@ -77,6 +77,17 @@ class Settings:
     # degenerate completion can't hang the CLI/UI indefinitely (Chapter 10).
     LLM_MAX_TOKENS: int = _get_int("LLM_MAX_TOKENS", 512)
 
+    # Thinking models (gemma4, qwen3, deepseek-r1, ...) reason silently before answering. Unset (the default):
+    # nothing is sent, the model does what it does by default, which for llama3.2 is no thinking. 1: thinking on,
+    # and LLM_THINK_TOKENS more tokens are allowed (in num_predict AND num_ctx) so the reasoning cannot use up the
+    # answer's budget. 0: thinking off, for speed. Found 2026-10-11: gemma4:12b thinks by default, and with the
+    # 512-token cap its reasoning used the whole budget and the answer came back EMPTY ('' on 3 of 3 questions).
+    # Set it only for a model that supports thinking: Ollama rejects `think` for one that does not.
+    LLM_THINK: bool | None = (
+        None if os.environ.get("LLM_THINK", "").strip() == "" else _get_bool("LLM_THINK", False)
+    )
+    LLM_THINK_TOKENS: int = _get_int("LLM_THINK_TOKENS", 1536)
+
     # Bounds Ollama's num_ctx — the context window, in tokens, the model is
     # actually allowed to see. Ollama's own default (2048) is tight once
     # TOP_K (5) retrieved chunks are stuffed into the prompt: each chunk is
