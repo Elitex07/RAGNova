@@ -10,7 +10,8 @@ What this does, without an extra model call (on a CPU every call costs seconds, 
     ("tell me more", "why?"), it opens like a continuation ("what about ...", "and ..."), or it has a pronoun
     ("it", "they", "she") and at most two content words.
   * resolve() gives the question to SEARCH with: the previous turn's search question, plus this question's own content
-    words when it has any ("what about rule 3?" after "lab rules" searches "lab rules rule 3"). The prompt still
+    words when it has any ("what about rule 3?" after "lab rules" searches "lab rules rule 3"). A new number or name
+    replaces the earlier one ("what about rule 3?" after "lab rule 2" searches "lab rule rule 3"). The prompt still
     shows the question as typed, with the earlier exchange above it (prompt.py) so the model knows what "it" is.
 
 A question that stands on its own is searched exactly as before, and gets no earlier conversation in its prompt.
@@ -20,7 +21,7 @@ from __future__ import annotations
 
 import re
 
-from src.pipelines.rag.lexical import content_tokens
+from src.pipelines.rag.lexical import content_tokens, name_phrases
 
 _PRONOUNS = frozenset("it its they them their theirs he him his she her hers this that these those one".split())
 _CONTINUATION = re.compile(
@@ -49,4 +50,21 @@ def resolve(question: str, previous_search: str | None) -> str:
     if not previous_search or not is_follow_up(question):
         return question
     own = content_tokens(question)
-    return f"{previous_search} {' '.join(own)}".strip() if own else previous_search
+    if not own:
+        return previous_search
+    # A follow-up that names a new detail asks about it INSTEAD of the old one: "what about rule 3?" after "lab rule 2"
+    # searches rule 3, not rules 2 and 3; "what about Mr. V. Sharma?" after "who is Dr. S. Rao?" drops Rao. Numbers
+    # replace numbers and a name replaces a name; every other earlier word stays, as the topic.
+    names = name_phrases(question)
+    drop: set[str] = set()
+    if any(any(ch.isdigit() for ch in t) for t in own):
+        drop |= {t for t in content_tokens(previous_search) if any(ch.isdigit() for ch in t)}
+    if names:
+        drop |= {w for phrase in name_phrases(previous_search) for w in phrase}
+    kept = previous_search
+    for word in drop:
+        kept = re.sub(rf"(?<![a-z0-9]){re.escape(word)}(?![a-z0-9])", " ", kept, flags=re.IGNORECASE)
+    kept = re.sub(r"(?:^|\s)[.,;:]+(?=\s|$)", " ", kept)       # the dots of a dropped "Dr. S."
+    added = [" ".join(phrase) for phrase in names]
+    added += [t for t in own if not any(t in phrase for phrase in names)]
+    return re.sub(r"\s+", " ", f"{kept} {' '.join(added)}").strip()

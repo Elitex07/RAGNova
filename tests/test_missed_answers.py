@@ -22,7 +22,7 @@ from src.pipelines.rag import answer as answer_module
 from src.pipelines.rag import retrieve as retrieve_module
 from src.pipelines.rag.answer import is_refusal
 from src.pipelines.rag.followup import is_follow_up, resolve
-from src.pipelines.rag.lexical import LexicalIndex, admit, correct_word, name_phrase_pairs, spelling_fix
+from src.pipelines.rag.lexical import LexicalIndex, admit, correct_word, name_phrase_pairs, name_phrases, spelling_fix
 from src.pipelines.rag.prompt import build_prompt
 from src.ui.citations import citation_views, cited_views
 
@@ -61,6 +61,14 @@ def test_the_near_miss_that_kept_the_lexical_admit_off_is_not_admitted(index):
     assert admit("Who is Dr. S. Sharma?", index) == []
     assert admit("Who is Dr. Sharma?", index) == []
     assert admit("Who is Mr. S. Rao?", index) == []
+
+
+def test_a_name_is_matched_as_a_whole_phrase_not_pair_by_pair():
+    # Greptile on PR #11: "Dr. S. Rao and Mr. S. Sharma" holds ("dr", "s") and ("s", "sharma"), but not Dr. S. Sharma.
+    staff = LexicalIndex([("staff", "data/images/staff.png", "image", "Faculty: Dr. S. Rao and Mr. S. Sharma.")])
+    assert admit("Who is Dr. S. Sharma?", staff, max_df=4) == []
+    assert [e.chunk_id for e in admit("Who is Mr. S. Sharma?", staff, max_df=4)] == ["staff"]
+    assert name_phrases("Who is Dr. S. Sharma?") == [("dr", "s", "sharma")]
 
 
 def test_the_people_the_sign_does_name_are_still_admitted(index):
@@ -150,6 +158,15 @@ def test_a_follow_up_is_searched_with_the_previous_question_and_its_own_words():
     assert resolve("what about rule 3?", "tell me lab rules") == "tell me lab rules rule 3"
     assert resolve("tell me lab rules", "who is raiden?") == "tell me lab rules"
     assert resolve("tell me more", None) == "tell me more"
+
+
+def test_a_follow_up_with_a_new_number_or_name_replaces_the_old_one():
+    # Greptile on PR #11: "what about rule 3?" after "lab rule 2" searched rules 2 AND 3.
+    search = resolve("what about rule 3?", "tell me lab rule no. 2")
+    assert "3" in search.split() and "2" not in search.split() and "lab" in search
+    search = resolve("what about Mr. V. Sharma?", "Who is Dr. S. Rao?")
+    assert "rao" not in search.lower() and "mr v sharma" in search
+    assert resolve("what about rule 3?", "tell me lab rules") == "tell me lab rules rule 3"     # nothing to replace
 
 
 def _chunk():
@@ -277,6 +294,46 @@ def test_a_question_with_a_subject_or_without_picked_files_is_asked_as_typed(mon
     assert "about the files they chose" not in _prompt_for(monkeypatch, question, sources)
 
 
+def _attachment():
+    return Chunk(chunk_id="attachment-1", source="attached image (shot.png)", modality="image",
+                 text="Wi-Fi password: ragnova-guest-2026", embedding_model="none")
+
+
+def test_a_follow_up_is_answered_from_the_earlier_turns_attachment(monkeypatch):
+    # Greptile on PR #11: after "What does this image say?" about an unindexed screenshot, "tell me more" lost it.
+    seen = {}
+    monkeypatch.setattr(answer_module, "retrieve", lambda q, **kw: [])
+    monkeypatch.setattr(answer_module, "generate", lambda prompt: seen.setdefault("prompt", prompt) and "ok [1]")
+    history = [("What does this image say?", "It gives the guest Wi-Fi password [1].")]
+    result = answer_module.answer_query("tell me more", history=history, earlier_attachments=[_attachment()])
+    assert result.citations[0].chunk_id == "attachment-1" and "ragnova-guest-2026" in seen["prompt"]
+
+
+def test_a_question_that_stands_on_its_own_does_not_get_the_earlier_attachment(monkeypatch):
+    monkeypatch.setattr(answer_module, "retrieve", lambda q, **kw: [])
+    history = [("What does this image say?", "It gives the guest Wi-Fi password [1].")]
+    result = answer_module.answer_query("What time does the library open?", history=history,
+                                        earlier_attachments=[_attachment()])
+    assert result.citations == [] and is_refusal(result.answer)
+
+
+def test_a_follow_ups_context_is_trimmed_against_the_question_it_searched_with(monkeypatch):
+    # Greptile on PR #11: with CONTEXT_WORDS_PER_CHUNK on, "tell me more" trimmed chunks against "tell me more".
+    seen = {}
+    monkeypatch.setattr(answer_module, "retrieve", lambda q, **kw: [_chunk()])
+    monkeypatch.setattr(answer_module, "generate", lambda prompt: "ok [1]")
+    monkeypatch.setattr(answer_module, "trim_chunks", lambda chunks, query, words: seen.setdefault("q", query) and chunks)
+    answer_module.answer_query("tell me more", history=[("who is raiden?", "A Discord bot [1].")])
+    assert seen["q"] == "who is raiden?"
+
+
+def test_the_word_index_is_built_once_per_database_not_once_per_client(tmp_path):
+    # Greptile on PR #11: lexical_hits() and fix_spelling() each made a client, and the cache was keyed by id(client).
+    from src.core.vector_store import get_client
+    from src.pipelines.rag.lexical import _index_for
+    assert _index_for(get_client(tmp_path)) is _index_for(get_client(tmp_path))
+
+
 # --- a refusal as small models actually type it (nemotron-3-nano:4b, 2026-10-11) ---
 
 @pytest.mark.parametrize("text", [
@@ -292,6 +349,7 @@ def test_a_mangled_refusal_is_still_a_refusal(text):
 
 @pytest.mark.parametrize("text", [
     "Alex Smith is an author of the paper [1].",
+    "I do have enough information in the indexed documents to answer that: rule 2 forbids sharing [1].",
     "Room 302 is the AI Research Lab. I don't have enough information in the indexed documents to say more.",
     "",
 ])
