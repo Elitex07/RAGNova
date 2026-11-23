@@ -32,6 +32,8 @@ from pathlib import Path
 
 from docx import Document
 from docx.oxml.ns import qn
+from docx.table import Table
+from docx.text.paragraph import Paragraph
 
 
 def _run_has_manual_page_break(run) -> bool:
@@ -60,15 +62,27 @@ def extract_docx_pages(path: str | Path) -> list[tuple[int, str]]:
     first detected break are page 1 by construction; a document with zero
     manual breaks anywhere comes back as a single page 1.
 
-    Only top-level body paragraphs are read — text inside tables, headers,
-    and footers is out of scope for this chapter (noted in Chapter 6 §2.6,
-    not silently dropped without comment).
+    Top-level body paragraphs and tables are read, in document order; each
+    table row becomes one "cell | cell" line. Headers and footers are still
+    out of scope (Chapter 6 §2.6).
     """
     document = Document(Path(path))
     pages: list[list[str]] = [[]]
     page_num = 1
 
-    for paragraph in document.paragraphs:
+    # Walk the body in document order, paragraphs AND tables, so a table's
+    # text lands on the page it actually sits on (a citation to a table fact
+    # must point at the right page), not lumped onto the last page.
+    for block in document.element.body.iterchildren():
+        if block.tag == qn("w:tbl"):
+            table_text = _table_text(Table(block, document))
+            if table_text:
+                pages[page_num - 1].append(table_text)
+            continue
+        if block.tag != qn("w:p"):
+            continue
+        paragraph = Paragraph(block, document)
+
         # Checked first: a heading styled "page break before" starts a new
         # page even if it's otherwise a perfectly ordinary paragraph.
         if paragraph.paragraph_format.page_break_before:
@@ -87,26 +101,6 @@ def extract_docx_pages(path: str | Path) -> list[tuple[int, str]]:
             page_num += 1
             pages.append([])
 
-    # Extract text from tables — previously out of scope, but tables in
-    # DOCX files often contain critical data (schedules, grades, specs).
-    # Table text is appended to the last page it follows, since tables
-    # don't have page break information.
-    for table in document.tables:
-        table_text_parts = []
-        for row in table.rows:
-            row_cells = []
-            for cell in row.cells:
-                cell_text = cell.text.strip()
-                if cell_text:
-                    row_cells.append(cell_text)
-            if row_cells:
-                table_text_parts.append(" | ".join(row_cells))
-        if table_text_parts:
-            table_text = "\n".join(table_text_parts)
-            # Append to the last page
-            if pages:
-                pages[-1].append(table_text)
-
     return [(i + 1, "\n".join(p)) for i, p in enumerate(pages)]
 
 
@@ -119,3 +113,23 @@ if __name__ == "__main__":
         sys.exit(1)
     for page_num, text in extract_docx_pages(sys.argv[1]):
         print(f"page {page_num}: {len(text.split())} words")
+
+
+def _table_text(table: Table) -> str:
+    """One "cell | cell" line per row. python-docx returns a merged cell once
+    per grid column it spans, so a cell already seen in this row is skipped
+    instead of repeating its text."""
+    lines = []
+    for row in table.rows:
+        seen = []          # the XML cells kept alive, so `is` is a safe identity test
+        cells = []
+        for cell in row.cells:
+            if any(cell._tc is tc for tc in seen):
+                continue
+            seen.append(cell._tc)
+            text = cell.text.strip()
+            if text:
+                cells.append(text)
+        if cells:
+            lines.append(" | ".join(cells))
+    return "\n".join(lines)

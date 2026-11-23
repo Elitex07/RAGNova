@@ -289,3 +289,28 @@ def test_hybrid_blend_alpha_1_is_dense_order_and_alpha_0_is_bm25_order():
     # "library rules" here; both share none actually, uniform -> tie keep order).
     blend = _apply_hybrid_blend(list(chunks), "library rules", alpha=0.0)
     assert [c.chunk_id for c in blend] == ["a", "b"]
+
+
+def test_hybrid_flag_alone_turns_the_blend_on(monkeypatch):
+    # Regression: the blend used to need a bm25_index argument no caller passed, so the flag did nothing.
+    import src.pipelines.documents.search as search_mod
+
+    called = {}
+    from dataclasses import replace as _replace
+
+    monkeypatch.setattr(search_mod, "settings", _replace(search_mod.settings, HYBRID_BM25_DENSE=True))
+    monkeypatch.setattr(search_mod, "_apply_hybrid_blend", lambda chunks, q, a: called.setdefault("yes", chunks))
+
+    class _Coll:
+        def count(self):
+            return 1
+
+        def query(self, **kwargs):
+            return {"ids": [["a"]], "documents": [["library rules"]], "metadatas": [[{
+                "source": "data/documents/a.pdf", "modality": "pdf", "embedding_model": "test", "page": 1,
+            }]], "distances": [[0.2]]}
+
+    monkeypatch.setattr(search_mod, "get_text_collection", lambda client: _Coll())
+    monkeypatch.setattr(search_mod, "embed_text", lambda q: [0.0] * 384)
+    search_mod.search_text("library rules", client=object())
+    assert "yes" in called

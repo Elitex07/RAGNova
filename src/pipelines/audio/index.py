@@ -103,6 +103,6 @@ def index_audio_directory(directory: str | Path, client=None, ingestor=None) -> 
 def _relative_to_cwd(path: Path) -> Path:
     """Same portability fix as src/pipelines/documents/index.py's."""
     try:
-        return path.relative_to(Path.cwd())
+        return path.resolve().relative_to(Path.cwd())
     except ValueError:
         return path

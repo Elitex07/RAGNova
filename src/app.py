@@ -36,7 +36,7 @@ import streamlit as st
 from PIL import Image
 
 from src.core.config import settings
-from src.pipelines.rag.answer import check_citations, extract_citation_numbers, is_refusal, search_question, stream_answer
+from src.pipelines.rag.answer import check_citations, clean_citations, extract_citation_numbers, is_refusal, search_question, stream_answer
 from src.pipelines.rag.attachments import image_attachment
 from src.ui.backend import (
     AUDIO_EXTS,
@@ -743,6 +743,9 @@ if user_prompt:
                     warning_msg = None
                     if out_of_range:
                         warning_msg = f"⚠️ Citation Alert: The model referenced source index {sorted(out_of_range)}, which was not in the retrieved context."
+                    # Same post-processing answer_query() does: the saved reply (what the page shows after the
+                    # rerun below) keeps only [n] markers that point at a retrieved source.
+                    answer_text = clean_citations(answer_text, len(retrieved_chunks))
                     reply = {
                         "content": answer_text,
                         # A refusal lists no sources: with a scope or an attachment chunks are retrieved even

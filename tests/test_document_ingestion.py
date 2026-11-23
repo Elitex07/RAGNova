@@ -339,3 +339,22 @@ def test_real_chunks_round_trip_through_chromadb(tmp_path):
     got = text_col.get(ids=[c.chunk_id for c in chunks], include=["documents", "metadatas"])
     assert set(got["documents"]) == {c.text for c in chunks}
     assert all(m["source"] == "data/documents/notice.pdf" for m in got["metadatas"])
+
+
+def test_extract_docx_pages_puts_a_table_on_the_page_it_sits_on(tmp_path):
+    docx = pytest.importorskip("docx", reason="python-docx not installed")
+    doc = docx.Document()
+    doc.add_paragraph("Page one")
+    first = doc.add_table(rows=1, cols=3)
+    first.cell(0, 0).merge(first.cell(0, 1))
+    first.cell(0, 0).text = "Merged"
+    first.cell(0, 2).text = "Right"
+    doc.add_page_break()
+    doc.add_paragraph("Page two")
+    doc.add_table(rows=1, cols=1).cell(0, 0).text = "Second table"
+    path = tmp_path / "two_tables.docx"
+    doc.save(path)
+
+    pages = dict(extract_docx_pages(path))
+    assert "Merged | Right" in pages[1]          # merged cell once, not "Merged | Merged | Right"
+    assert "Second table" in pages[2] and "Second table" not in pages[1]

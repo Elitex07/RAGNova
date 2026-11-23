@@ -32,7 +32,7 @@ import os
 from pathlib import Path
 from typing import Any, BinaryIO, Dict, List, Optional, Union
 
-from PIL import Image
+from PIL import Image, ImageOps
 
 from src.core.schemas import Chunk
 from src.pipelines.images.embedding import OpenCLIPEmbedder
@@ -318,14 +318,20 @@ class ImageIngestionPipeline:
         # Extract EXIF data when available (JPEG / TIFF)
         exif: Dict[str, Any] = {}
         try:
-            # Apply EXIF orientation
             raw_exif = pil_img.getexif()
-            if raw_exif:
-                pil_img = ImageOps.exif_transpose(pil_img)
             if raw_exif:
                 exif = {str(k): str(v) for k, v in raw_exif.items()}
         except Exception:
-            pass
+            raw_exif = None
+
+        # Turn a phone photo the right way up (EXIF orientation tag) before
+        # OCR and CLIP see it. Done after reading the EXIF above, and in its
+        # own try, so a transpose failure can never wipe the metadata.
+        if raw_exif:
+            try:
+                pil_img = ImageOps.exif_transpose(pil_img)
+            except Exception:
+                pass
 
         metadata = ImageMetadata(
             source_path=source_path,

@@ -120,8 +120,8 @@ page window diagram
 
 def _content_words(text: str) -> set[str]:
     """Lower-cased alphanumeric words of 3+ letters, minus _GENERIC_WORDS, with a
-    trailing plural "s" removed only for true plurals (avoiding words like "class",
-    "process", "address", etc. which end in 's' but are not plurals).
+    trailing plural "s" removed ("books" matches "book", "classes" matches
+    "class"), but not from a word ending in "ss" ("class", "process").
 
     Deliberately crude: it is a veto against answers that share no word at all,
     not a ranking signal."""
@@ -129,19 +129,10 @@ def _content_words(text: str) -> set[str]:
     for raw in re.findall(r"[a-z0-9]+", text.lower()):
         if len(raw) < 3 or raw in _GENERIC_WORDS:
             continue
-        # Only strip trailing 's' for true plurals, not for words ending in 's'
-        # that are singular forms like "class", "process", "address", etc.
-        # A word is considered a plural if it ends in 's' and the stem (without 's')
-        # is at least 3 characters long, helping avoid stripping 's' from
-        # 4-letter words like "loss", "boss", "miss", etc.
-        if len(raw) > 3 and raw.endswith("s") and len(raw) - 1 >= 3:
-            stem = raw[:-1]
-            # Check if the stem is likely a valid singular form (not ending in 's'
-            # which would indicate words like "class", "process", "address")
-            if not stem.endswith("s"):
-                words.add(stem)
-            else:
-                words.add(raw)
+        if raw.endswith("sses"):            # "classes" -> "class", "addresses" -> "address"
+            words.add(raw[:-2])
+        elif len(raw) > 3 and raw.endswith("s") and not raw.endswith("ss"):   # "books" -> "book"; "class" stays
+            words.add(raw[:-1])
         else:
             words.add(raw)
     return words

@@ -163,11 +163,13 @@ def test_a_follow_up_is_searched_with_the_previous_question_and_its_own_words():
 def test_a_follow_up_with_a_new_number_or_name_replaces_the_old_one():
     # Greptile on PR #11: "what about rule 3?" after "lab rule 2" searched rules 2 AND 3.
     search = resolve("what about rule 3?", "tell me lab rule no. 2")
-    assert "rule 3" in search and "rule no. 2" not in search and "lab" in search
-
-    # Additional test case for multi-digit numbers
-    search = resolve("what about rule 5?", "tell me lab rule no. 2")
-    assert "rule 5" in search and "rule no. 2" not in search and "lab" in search
+    assert "3" in search.split() and "2" not in search.split() and "lab" in search
+    assert search == "tell me lab rule 3"          # "no. 2" folds into the new number, not left as "no."
+    search = resolve("what about rule 12?", "tell me lab rule no. 2")
+    assert "12" in search.split() and "2" not in search.split()
+    # A number AND a name in one follow-up: both are replaced, neither branch skips the other.
+    search = resolve("and Mr. V. Sharma in room 12?", "where is Dr. S. Rao in room 10")
+    assert "rao" not in search.lower() and "mr v sharma" in search and "12" in search.split() and "10" not in search.split()
     search = resolve("what about Mr. V. Sharma?", "Who is Dr. S. Rao?")
     assert "rao" not in search.lower() and "mr v sharma" in search
     assert resolve("what about rule 3?", "tell me lab rules") == "tell me lab rules rule 3"     # nothing to replace

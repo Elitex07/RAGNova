@@ -234,8 +234,8 @@ class Settings:
     # alpha=1.0 = pure dense, alpha=0.0 = pure BM25, 0.5 = equal weight.
     # OFF by default; evaluation in data/eval/bm25_baseline_2026-10-05.txt
     # showed dense alone was stronger on this corpus, so hybrid is an opt-in
-    # experiment, not a default replacement. If turned on, requires building
-    # a BM25 index over the corpus (see scripts/build_index.py).
+    # experiment, not a default replacement. BM25 is scored over the
+    # retrieved top-k chunks themselves, so no extra index is needed.
     HYBRID_BM25_DENSE: bool = _get_bool("HYBRID_BM25_DENSE", False)
     HYBRID_ALPHA: float = _get_float("HYBRID_ALPHA", 0.5)
 
