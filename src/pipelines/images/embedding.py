@@ -190,9 +190,9 @@ class OpenCLIPEmbedder:
 
             if self.config.normalize_embeddings:
                 # L2-normalize so cosine similarity == dot product
-                image_features = image_features / image_features.norm(
-                    dim=-1, keepdim=True
-                )
+                # Add epsilon to avoid division by zero
+                epsilon = 1e-8
+                image_features = image_features / (image_features.norm(dim=-1, keepdim=True) + epsilon)
 
         return image_features.cpu().tolist()
 

@@ -318,7 +318,10 @@ class ImageIngestionPipeline:
         # Extract EXIF data when available (JPEG / TIFF)
         exif: Dict[str, Any] = {}
         try:
+            # Apply EXIF orientation
             raw_exif = pil_img.getexif()
+            if raw_exif:
+                pil_img = ImageOps.exif_transpose(pil_img)
             if raw_exif:
                 exif = {str(k): str(v) for k, v in raw_exif.items()}
         except Exception:

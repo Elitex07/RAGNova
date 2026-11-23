@@ -56,15 +56,53 @@ def resolve(question: str, previous_search: str | None) -> str:
     # searches rule 3, not rules 2 and 3; "what about Mr. V. Sharma?" after "who is Dr. S. Rao?" drops Rao. Numbers
     # replace numbers and a name replaces a name; every other earlier word stays, as the topic.
     names = name_phrases(question)
-    drop: set[str] = set()
-    if any(any(ch.isdigit() for ch in t) for t in own):
-        drop |= {t for t in content_tokens(previous_search) if any(ch.isdigit() for ch in t)}
+    previous_tokens = content_tokens(previous_search)
+    new_numbers = [token for token in own if token.isdigit()]
+    old_numbers = [token for token in previous_tokens if token.isdigit()]
+
+    # Case 1: Numeric replacement - "what about rule 3?" after "tell me lab rule no. 2"
+    # Replace the old number(s) with the new number in the previous search
+    if new_numbers and old_numbers:
+        replacement = new_numbers[0]
+        kept = previous_search
+        for old_number in old_numbers:
+            # Canonicalize "rule no. 2" to "rule 3" as part of the
+            # replacement, so the historical reference cannot dilute lexical
+            # matching with the old wording.
+            kept = re.sub(
+                rf"\bno\.\s*{re.escape(old_number)}(?![a-z0-9])",
+                replacement,
+                kept,
+                flags=re.IGNORECASE,
+            )
+            kept = re.sub(
+                rf"(?<![a-z0-9]){re.escape(old_number)}(?![a-z0-9])",
+                replacement,
+                kept,
+                flags=re.IGNORECASE,
+            )
+        # Also add any non-numeric content from the follow-up question
+        kept_tokens = set(content_tokens(kept))
+        added = [token for token in own if not token.isdigit() and token not in kept_tokens]
+        return re.sub(r"\s+", " ", f"{kept} {' '.join(added)}").strip()
+
+    # Case 2: Name phrase replacement - "what about Mr. V. Sharma?" after "Who is Dr. S. Rao?"
     if names:
-        drop |= {w for phrase in name_phrases(previous_search) for w in phrase}
-    kept = previous_search
-    for word in drop:
-        kept = re.sub(rf"(?<![a-z0-9]){re.escape(word)}(?![a-z0-9])", " ", kept, flags=re.IGNORECASE)
-    kept = re.sub(r"(?:^|\s)[.,;:]+(?=\s|$)", " ", kept)       # the dots of a dropped "Dr. S."
-    added = [" ".join(phrase) for phrase in names]
-    added += [t for t in own if not any(t in phrase for phrase in names)]
-    return re.sub(r"\s+", " ", f"{kept} {' '.join(added)}").strip()
+        drop: set[str] = set()
+        for phrase in name_phrases(previous_search):
+            drop.update(phrase)
+
+        kept = previous_search
+        for word in drop:
+            kept = re.sub(rf"(?<![a-z0-9]){re.escape(word)}(?![a-z0-9])", " ", kept, flags=re.IGNORECASE)
+        kept = re.sub(r"(?:^|\s)[.,;:]+(?=\s|$)", " ", kept)
+        added = [" ".join(phrase) for phrase in names]
+        # Add non-name tokens from the follow-up question
+        added += [t for t in own if not any(t in phrase for phrase in names)]
+        return re.sub(r"\s+", " ", f"{kept} {' '.join(added)}").strip()
+
+    # Case 3: No numbers or names to replace - just append new content words
+    # e.g., "what about rule 3?" after "tell me lab rules" -> "tell me lab rules rule 3"
+    kept_tokens = set(content_tokens(previous_search))
+    added = [token for token in own if token not in kept_tokens]
+    return re.sub(r"\s+", " ", f"{previous_search} {' '.join(added)}").strip()

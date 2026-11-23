@@ -28,7 +28,9 @@ _RULE_ONLY_CONTEXT = (
 )
 _RULE_CITE = (
     "Cite every claim with the matching bracketed number, e.g. [1] or "
-    "[2], right after the sentence it supports."
+    "[2], right after the sentence it supports. When quoting numbers, "
+    "dates, percentages, or measurements from the context, copy them "
+    "exactly as written. Do not round, convert, or paraphrase numerical values."
 )
 # PROMPT_WHO_WHAT_RULE (ADR-017): for a "who / what is X" question the model says what the context states about X.
 _RULE_WHO_WHAT = (

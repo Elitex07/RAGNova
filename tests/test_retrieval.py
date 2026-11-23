@@ -27,7 +27,7 @@ from src.core.gold import load_gold_set
 from src.core.schemas import Chunk, validate_chunk
 from src.core.vector_store import add_chunks, get_client, get_text_collection
 from src.pipelines.documents.index import index_documents_directory
-from src.pipelines.documents.search import search_text
+from src.pipelines.documents.search import search_text, _apply_hybrid_blend
 
 DOCS_DIR = Path(__file__).resolve().parent.parent / "data" / "documents"
 
@@ -224,3 +224,68 @@ def test_approximate_search_returns_the_same_top_five_as_exact_search(indexed_cl
 def test_client_does_not_send_anonymous_telemetry(tmp_path):
     # The project is offline by design (Objective O6): it must not report usage to a third party.
     assert get_client(persist_dir=tmp_path / "chroma_telemetry").get_settings().anonymized_telemetry is False
+
+
+# ---------------------------------------------------------------------------
+# Hybrid BM25 + dense reranking (src/pipelines/documents/search.py)
+# ---------------------------------------------------------------------------
+
+def _hybrid_chunk(chunk_id: str, text: str, score: float) -> Chunk:
+    return Chunk(
+        chunk_id=chunk_id,
+        source=f"data/documents/{chunk_id}.pdf",
+        modality="pdf",
+        text=text,
+        embedding_model="test",
+        page=1,
+        score=score,
+    )
+
+
+def test_hybrid_blend_scores_only_the_retrieved_chunks_not_by_position():
+    # Regression: the old implementation looked up BM25 scores by list
+    # position against a corpus-wide index, so a dense hit at position 1
+    # could inherit an unrelated corpus document's BM25 score. The blend
+    # must score exactly the chunks it receives.
+    chunks = [
+        _hybrid_chunk("a", "library borrowing rules", 0.60),
+        _hybrid_chunk("b", "unrelated physics notation", 0.55),
+        _hybrid_chunk("c", "library hours and overdue fines", 0.50),
+    ]
+
+    blend = _apply_hybrid_blend(chunks, "library rules", alpha=0.5)
+    # The top chunk is the one whose own text matches the query's BM25 terms,
+    # not whichever dense hit happened to sit at corpus index 1.
+    assert blend[0].chunk_id == "a"
+    # The blend never invents a score for a chunk it was not given.
+    assert {c.chunk_id for c in blend} == {"a", "b", "c"}
+    # BM25 terms are scored from the chunks' own text, not from a corpus index:
+    # "unrelated physics notation" scores 0 on BM25, so it cannot outrank
+    # "library hours and overdue fines" on BM25 alone.
+    bm25_only = _apply_hybrid_blend(list(chunks), "library rules", alpha=0.0)
+    assert bm25_only[0].chunk_id == "a"
+    assert bm25_only[1].chunk_id == "c"
+
+
+def test_hybrid_blend_handles_uniform_scores_gracefully():
+    chunks = [
+        _hybrid_chunk("a", "foo bar", 0.5),
+        _hybrid_chunk("b", "foo bar", 0.5),
+    ]
+    blend = _apply_hybrid_blend(chunks, "qux", alpha=0.5)
+    assert [c.chunk_id for c in blend] == ["a", "b"]
+
+
+def test_hybrid_blend_alpha_1_is_dense_order_and_alpha_0_is_bm25_order():
+    chunks = [
+        _hybrid_chunk("a", "library rules", 0.90),
+        _hybrid_chunk("b", "physics quantum", 0.10),
+    ]
+    # alpha=1.0 => pure dense order.
+    blend = _apply_hybrid_blend(list(chunks), "library rules", alpha=1.0)
+    assert [c.chunk_id for c in blend] == ["a", "b"]
+
+    # alpha=0.0 => pure BM25 order (physics has fewer/no shared terms with
+    # "library rules" here; both share none actually, uniform -> tie keep order).
+    blend = _apply_hybrid_blend(list(chunks), "library rules", alpha=0.0)
+    assert [c.chunk_id for c in blend] == ["a", "b"]

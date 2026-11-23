@@ -209,6 +209,58 @@ def test_without_an_attachment_the_prompt_has_no_note_and_is_exactly_what_it_was
     assert "Context:\n[1] data/documents/notice.pdf, page 2\n" in prompt
 
 
+# ---------------------------------------------------------------------------
+# Streaming path: deduplication runs BEFORE the prompt is numbered
+# ---------------------------------------------------------------------------
+
+def test_stream_answer_deduplicates_before_prompt_numbering(monkeypatch):
+    """Regression: stream_answer previously built the prompt then deduplicated,
+    so the model saw duplicate contexts but the returned citation list was
+    shorter. The fix moves deduplication before _prompt() so citation numbers
+    match the context the model actually sees."""
+    from src.pipelines.rag import answer as answer_module
+    from src.pipelines.rag.attachments import image_attachment
+    import dataclasses
+    monkeypatch.setattr(
+        answer_module,
+        "settings",
+        dataclasses.replace(answer_module.settings, DUPLICATE_CONTEXT_REMOVAL=True),
+    )
+
+    # Two near-identical chunks returned by retrieval
+    dup_text = "The working prototype carries forty percent of the total marks."
+    attachment_text = "Attached image text."
+
+    seen = {}
+
+    def fake_generate_stream(prompt):
+        seen["prompt"] = prompt
+        return iter(["Forty percent [1]."])
+
+    monkeypatch.setattr(answer_module, "generate_stream", fake_generate_stream)
+    monkeypatch.setattr(answer_module, "retrieve",
+                        lambda q, **kw: [
+                            answer_module.Chunk(chunk_id="1", source="s1", modality="pdf",
+                                               text=dup_text, embedding_model="m", page=1, score=0.9),
+                            answer_module.Chunk(chunk_id="2", source="s2", modality="pdf",
+                                               text=dup_text, embedding_model="m", page=2, score=0.8),
+                        ])
+
+    attachment = image_attachment("shot.png", attachment_text)
+
+    chunks, stream = answer_module.stream_answer("what about the prototype",
+                                   attachments=[attachment],
+                                   sources=["data/documents/cv.pdf"])
+    _ = "".join(stream)
+
+    # The prompt should only contain ONE instance of the duplicate text
+    assert seen["prompt"].count(dup_text) == 1
+    # The returned citation list should match the prompt numbering
+    assert len(chunks) == 2  # attachment + one deduped chunk
+    assert chunks[0].text == attachment_text
+    assert chunks[1].text == dup_text
+
+
 def test_the_note_is_in_the_prompt_the_model_actually_gets(pipeline):
     answer_module.answer_query("What does this image say?", attachments=[image_attachment("shot.png", SHOT_TEXT)])
     assert "The user attached an image to this question: [1]." in pipeline["prompts"][0]

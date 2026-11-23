@@ -34,3 +34,6 @@ feedback/
 
 # Local corpus files (documents, audio) stay on each machine
 data/
+
+# Node tooling is not part of this Python project
+node_modules/

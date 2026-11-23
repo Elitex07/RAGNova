@@ -94,9 +94,9 @@ def check_prompt_fits(prompt: str) -> bool:
     choose to lose. Measured 2026-10-05 (data/eval/ablations_2026-10-05.txt):
     at the shipped 4096 tokens, 600-word chunks or TOP_K=10 produced prompts
     of about 4100 tokens, and 2 of 25 prompts overflowed with no error. This
-    makes that visible. The size is ESTIMATED at 1.3 tokens per word, the same
-    ratio src/core/config.py's comment uses, so the 90% threshold leaves room
-    for the estimate being off. Returns True if the prompt looks safe.
+    makes that visible. The size is ESTIMATED at 1.3 tokens per word, so the
+    90% threshold leaves room for the estimate being off. Returns True if the
+    prompt looks safe.
     """
     estimated = int(len(prompt.split()) * 1.3)
     limit = settings.LLM_NUM_CTX
@@ -232,10 +232,16 @@ def answer_query(
             query=query, answer=NOT_ENOUGH_INFO, citations=[], model=settings.OLLAMA_MODEL
         )
 
+    # Remove duplicate contexts before generating the prompt if the setting is enabled
+    if settings.DUPLICATE_CONTEXT_REMOVAL:
+        from src.pipelines.rag.context import remove_duplicate_contexts
+        relevant = remove_duplicate_contexts(relevant)
+
     prompt = _prompt(query, relevant, prompt_history, sources, search_query)
     check_prompt_fits(prompt)
     answer_text = generate(prompt)
     check_citations(answer_text, relevant, query)
+    answer_text = clean_citations(answer_text, len(relevant))
 
     return RagAnswer(
         query=query, answer=answer_text, citations=relevant, model=settings.OLLAMA_MODEL
@@ -260,13 +266,21 @@ def stream_answer(
 
     Same ADR-009 short-circuit: nothing relevant -> no LLM call, and the
     iterator yields NOT_ENOUGH_INFO once. The caller should run
-    check_citations() on the joined text when the stream ends — it can't
-    run here, because the full answer doesn't exist yet.
+    check_citations() and clean_citations() on the joined text when the
+    stream ends — it can't run here, because the full answer doesn't
+    exist yet.
     """
     search_query, prompt_history, attachments = _plan(query, history, attachments, earlier_attachments, sources)
     relevant = _gather(query, top_k, client, include_images, query_image, sources, attachments, search_query)
     if not relevant:
         return [], iter([NOT_ENOUGH_INFO])
+    # Keep the streaming and blocking paths on the same citation numbering and
+    # context selection path. Deduplication must happen before the prompt is
+    # numbered, otherwise the model sees different source numbers than the UI.
+    if settings.DUPLICATE_CONTEXT_REMOVAL:
+        from src.pipelines.rag.context import remove_duplicate_contexts
+        relevant = remove_duplicate_contexts(relevant)
+
     prompt = _prompt(query, relevant, prompt_history, sources, search_query)
     check_prompt_fits(prompt)
     return relevant, generate_stream(prompt)
@@ -285,3 +299,17 @@ def check_citations(answer_text: str, chunks: list[Chunk], query: str) -> set[in
             sorted(out_of_range), len(chunks), query,
         )
     return out_of_range
+
+
+def clean_citations(answer_text: str, num_chunks: int) -> str:
+    """Remove citation markers [n] where n is outside 1..num_chunks.
+    Preserves valid citation markers. This is a post-processing step
+    that prevents the UI from displaying invalid source references."""
+    if num_chunks <= 0:
+        return answer_text
+    def _replace(match):
+        n = int(match.group(1))
+        if 1 <= n <= num_chunks:
+            return match.group(0)  # keep valid citations
+        return ""  # remove invalid ones
+    return _CITATION_RE.sub(_replace, answer_text)

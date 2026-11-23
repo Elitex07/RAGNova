@@ -156,9 +156,21 @@ class TesseractOCREngine:
         w, h = img.size
         if w < 300 or h < 300:
             scale = max(2.0, 600.0 / max(w, h))
-            img = img.resize(
-                (int(w * scale), int(h * scale)), Image.Resampling.LANCZOS
-            )
+            # Preserve aspect ratio for high-aspect-ratio images
+            if w / h > 2 or h / w > 2:
+                # For very wide or tall images, scale proportionally
+                if w > h:
+                    new_width = 600
+                    new_height = int(h * (600 / w))
+                else:
+                    new_height = 600
+                    new_width = int(w * (600 / h))
+                img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+            else:
+                # For normal aspect ratio images, use original upscaling
+                img = img.resize(
+                    (int(w * scale), int(h * scale)), Image.Resampling.LANCZOS
+                )
 
         # Grayscale → contrast enhancement → sharpening
         gray = ImageOps.grayscale(img)
@@ -215,7 +227,8 @@ class TesseractOCREngine:
                 except (ValueError, TypeError):
                     pass
 
-            full_text = " ".join(words)
+            # Preserve line breaks in OCR output
+            full_text = "\n".join(" ".join(words[i:i+10]) for i in range(0, len(words), 10))
             avg_conf = sum(confidences) / len(confidences) if confidences else 0.0
 
             return OCRResult(

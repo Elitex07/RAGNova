@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.core.config import settings
 from src.core.schemas import TEXT_COLLECTION, validate_chunk
-from src.core.text_normalize import normalize_text
+from src.core.text_normalize import normalize_text, normalize_text_preserve_paragraphs
 from src.pipelines.documents.chunker import chunk_page_text
 from src.pipelines.documents.docx_parser import extract_docx_pages
 from src.pipelines.documents.ingest import ingest_document
@@ -55,6 +55,19 @@ def test_normalize_text_strips_control_characters():
 def test_normalize_text_handles_empty_and_whitespace_only_input():
     assert normalize_text("") == ""
     assert normalize_text("   \n\t  ") == ""
+
+def test_normalize_text_preserve_paragraphs_preserves_paragraph_breaks():
+    assert normalize_text_preserve_paragraphs("Hello\n\nworld") == "Hello\nworld"
+
+def test_normalize_text_preserve_paragraphs_collapses_whitespace():
+    assert normalize_text_preserve_paragraphs("Hello  \t\tworld") == "Hello world"
+
+def test_normalize_text_preserve_paragraphs_strips_control_characters():
+    assert normalize_text_preserve_paragraphs("Hello \x00world \x1fagain\x7f") == "Hello world again"
+
+def test_normalize_text_preserve_paragraphs_handles_empty_and_whitespace_only_input():
+    assert normalize_text_preserve_paragraphs("") == ""
+    assert normalize_text_preserve_paragraphs("   \n\t  ") == ""
 
 
 # ---------------------------------------------------------------------------
@@ -271,7 +284,38 @@ def test_blank_pdf_page_produces_zero_chunks_and_warns(tmp_path, capsys):
 
     warning = capsys.readouterr().err
     assert "no extractable text" in warning
-    assert "—" in warning  # confirms the em-dash survived, not "?" or "�"
+    assert "—" in warning  # confirms the em-dash survived, not "?" or ""
+
+
+def test_extract_docx_pages_extracts_tables(tmp_path):
+    docx = pytest.importorskip("docx", reason="python-docx not installed")
+    doc = docx.Document()
+    doc.add_paragraph("Paragraph text")
+    table = doc.add_table(rows=2, cols=2)
+    table.cell(0, 0).text = "Header A"
+    table.cell(0, 1).text = "Header B"
+    table.cell(1, 0).text = "Value 1"
+    table.cell(1, 1).text = "Value 2"
+    path = tmp_path / "table_test.docx"
+    doc.save(path)
+
+    pages = extract_docx_pages(path)
+    assert len(pages) == 1
+    page_num, text = pages[0]
+    assert page_num == 1
+    assert "Paragraph text" in text
+    assert "Header A | Header B" in text
+    assert "Value 1 | Value 2" in text
+
+
+def test_extract_pdf_pages_corrupted_file_raises_value_error(tmp_path):
+    from src.pipelines.documents.pdf_parser import extract_pdf_pages
+
+    corrupt = tmp_path / "corrupt.pdf"
+    corrupt.write_bytes(b"Not a real PDF file content")
+
+    with pytest.raises(ValueError, match="Could not read PDF file"):
+        extract_pdf_pages(corrupt)
 
 
 # ---------------------------------------------------------------------------

@@ -175,3 +175,39 @@ def test_with_the_setting_off_the_prompt_holds_the_whole_chunk(pipeline, monkeyp
     _set(monkeypatch, 0)
     answer_module.answer_query("how many marks does the working prototype carry")
     assert LONG in seen["prompt"]
+
+
+# --------------------------------------------------------------------------
+# Duplicate-context removal regression (src/pipelines/rag/context.py)
+# --------------------------------------------------------------------------
+
+def test_remove_duplicate_contexts_preserves_order_and_drops_near_duplicates():
+    from src.core.schemas import Chunk
+    from src.pipelines.rag.context import remove_duplicate_contexts
+
+    # A near-identical pair (the sliding-window overlap case: the same
+    # sentence re-retrieved as a separate hit) and one genuinely distinct chunk.
+    text = "The working prototype carries forty percent of the total marks."
+    chunks = [
+        Chunk(chunk_id="1", source="s1", modality="pdf", text=text, embedding_model="m", page=1, score=0.9),
+        Chunk(chunk_id="2", source="s2", modality="pdf", text=text, embedding_model="m", page=2, score=0.8),
+        Chunk(chunk_id="3", source="s3", modality="pdf", text="Different content about evaluation.", embedding_model="m", page=3, score=0.7),
+    ]
+
+    deduped = remove_duplicate_contexts(chunks, min_overlap=0.8)
+    # The exact repeat is dropped, the distinct chunk survives, and the
+    # surviving order follows the original retrieval order.
+    assert [c.chunk_id for c in deduped] == ["1", "3"]
+
+
+def test_remove_duplicate_contexts_empty_and_whitespace_chunks_are_skipped():
+    from src.core.schemas import Chunk
+    from src.pipelines.rag.context import remove_duplicate_contexts
+
+    chunks = [
+        Chunk(chunk_id="1", source="s1", modality="pdf", text="", embedding_model="m", page=1, score=0.5),
+        Chunk(chunk_id="2", source="s2", modality="pdf", text="   \n\t  ", embedding_model="m", page=2, score=0.5),
+        Chunk(chunk_id="3", source="s3", modality="pdf", text="Real content here.", embedding_model="m", page=3, score=0.5),
+    ]
+    deduped = remove_duplicate_contexts(chunks)
+    assert [c.chunk_id for c in deduped] == ["3"]
