@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "faster": "^3.5.1",
+    "whisper": "^0.3.3"
+  }
+}
