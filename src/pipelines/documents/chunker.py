@@ -17,27 +17,11 @@ ends on another.
 from __future__ import annotations
 
 
-def chunk_page_text(text: str, size_words: int, overlap_words: int) -> list[str]:
-    """Split one page's text into fixed-size, overlapping word windows.
-
-    ADR-006's numbers (300 words, 50-word overlap) come in as parameters,
-    not hardcoded defaults — Chapter 12's ablation (150/300/600 words) needs
-    to call this same function with different numbers, not a modified copy
-    of it.
-
-    Tail-merge rule: if the final window's NEW (non-overlapping) content
-    would be smaller than `overlap_words`, it is folded into the previous
-    chunk instead of becoming its own near-duplicate sliver. Worked example
-    (Chapter 6 §3.3): a 305-word page with size=300/overlap=50 would
-    naively produce a second chunk of just 5 new words sitting on top of
-    50 duplicated ones — almost pure redundancy. Merging it into chunk one
-    instead means a chunk is at most `size_words` + (a short tail) words
-    long, and there is no minimum-length threshold to separately tune.
-
-    A page with fewer words than `size_words` needs no special case at
-    all: the loop below emits exactly one chunk, because `end == n` on its
-    very first pass.
-    """
+def chunk_page_ranges(text: str, size_words: int, overlap_words: int) -> list[tuple[int, int]]:
+    """The window boundaries `chunk_page_text` uses, as [start, end) word
+    index pairs. Split out so a caller that wants to know WHERE each chunk
+    begins (to attach the section heading above it) can ask, without a second
+    copy of the window arithmetic drifting out of step with this one."""
     if overlap_words >= size_words:
         raise ValueError(
             f"CHUNK_OVERLAP_WORDS ({overlap_words}) must be smaller than "
@@ -68,4 +52,61 @@ def chunk_page_text(text: str, size_words: int, overlap_words: int) -> list[str]
             break
         start += step
 
-    return [" ".join(words[s:e]) for s, e in ranges]
+    return [(s, e) for s, e in ranges]
+
+
+def chunk_page_text(text: str, size_words: int, overlap_words: int) -> list[str]:
+    """Split one page's text into fixed-size, overlapping word windows.
+
+    ADR-006's numbers (300 words, 50-word overlap) come in as parameters,
+    not hardcoded defaults — Chapter 12's ablation (150/300/600 words) needs
+    to call this same function with different numbers, not a modified copy
+    of it.
+
+    Tail-merge rule: if the final window's NEW (non-overlapping) content
+    would be smaller than `overlap_words`, it is folded into the previous
+    chunk instead of becoming its own near-duplicate sliver. Worked example
+    (Chapter 6 §3.3): a 305-word page with size=300/overlap=50 would
+    naively produce a second chunk of just 5 new words sitting on top of
+    50 duplicated ones — almost pure redundancy. Merging it into chunk one
+    instead means a chunk is at most `size_words` + (a short tail) words
+    long, and there is no minimum-length threshold to separately tune.
+
+    A page with fewer words than `size_words` needs no special case at
+    all: the loop below emits exactly one chunk, because `end == n` on its
+    very first pass.
+    """
+    words = text.split()
+    return [" ".join(words[s:e]) for s, e in chunk_page_ranges(text, size_words, overlap_words)]
+
+
+def chunk_page_text_structured(text: str, size_words: int, overlap_words: int) -> list[str]:
+    """Split one page's text into structured chunks: paragraphs, then sentences, then word windows.
+
+    This function preserves paragraph breaks and splits text into paragraphs, then sentences, and finally
+    applies the existing word window with overlap. Each chunk is guaranteed not to cross a page boundary.
+
+    Args:
+        text: The text to chunk.
+        size_words: The size of each word window.
+        overlap_words: The overlap between consecutive word windows.
+
+    Returns:
+        A list of structured chunks.
+    """
+    from src.core.text_normalize import normalize_text_preserve_paragraphs
+
+    # Normalize text while preserving paragraph breaks
+    normalized_text = normalize_text_preserve_paragraphs(text)
+
+    # Split into paragraphs
+    paragraphs = [p.strip() for p in normalized_text.split("\n") if p.strip()]
+
+    chunks = []
+
+    for paragraph in paragraphs:
+        # Chunk each paragraph with the existing word window
+        para_chunks = chunk_page_text(paragraph, size_words, overlap_words)
+        chunks.extend(para_chunks)
+
+    return chunks

@@ -28,7 +28,8 @@ def only_sources(sources: list[str] | None) -> dict | None:
 
 
 def search_text(
-    query: str, top_k: int | None = None, client=None, sources: list[str] | None = None
+    query: str, top_k: int | None = None, client=None, sources: list[str] | None = None,
+    bm25_index=None,
 ) -> list[Chunk]:
     """Return the `top_k` chunks in text_index most similar to `query`,
     best match first.
@@ -50,6 +51,13 @@ def search_text(
     coherent. Always embedding the query ourselves is what keeps every
     vector in this comparison coming from the same model (Chapter 7 §2.3's
     misconception check works through this failure mode concretely).
+
+    When `bm25_index` is supplied and settings.HYBRID_BM25_DENSE is True, the
+    dense results are re-scored with a blend of MiniLM cosine and BM25
+    (settings.HYBRID_ALPHA controls the mix). The BM25 index is built once by
+    scripts/build_index.py and passed in; it must have been built over the
+    same corpus the ChromaDB collection holds, otherwise the blend mixes
+    vectors from two different worlds.
     """
     top_k = top_k or settings.TOP_K
     client = client or get_client()
@@ -73,7 +81,61 @@ def search_text(
     distances = results["distances"][0]
     for chunk_id, text, metadata, distance in zip(ids, documents, metadatas, distances):
         chunks.append(_chunk_from_result(chunk_id, text, metadata, distance))
+
+    if bm25_index is not None and settings.HYBRID_BM25_DENSE and chunks:
+        chunks = _apply_hybrid_blend(chunks, query, settings.HYBRID_ALPHA)
+
     return chunks
+
+
+def _apply_hybrid_blend(
+    chunks: list[Chunk], query: str, alpha: float, bm25_index=None
+) -> list[Chunk]:
+    """Re-score `chunks` by `alpha * dense + (1 - alpha) * bm25_normalized`,
+    best first. Both scores are normalized to [0, 1] across the result set
+    before blending, so the two scales (cosine similarity vs raw BM25) are
+    comparable; a raw BM25 of 12.4 and a cosine of 0.62 would otherwise mean
+    the BM25 term always wins. Pure over the list it is given — the stored
+    vectors are untouched, only the ordering and the returned `.score` change.
+
+    BM25 is scored over the retrieved chunks themselves, never by position
+    against a separately built corpus index. ChromaDB's result order is not
+    corpus order, so matching a corpus-wide BM25 index by result position
+    would score the wrong document and silently re-rank chunks against the
+    wrong evidence. If a `bm25_index` is supplied it is ignored for scoring;
+    build the blend over exactly these chunks instead.
+    """
+    from src.core.bm25 import BM25, tokenize
+    from dataclasses import replace
+
+    query_tokens = tokenize(query)
+    bm25 = BM25([tokenize(chunk.text) for chunk in chunks])
+    bm25_scores = bm25.scores(query_tokens)
+
+    # Handle empty or uniform scores gracefully
+    dense_scores = [c.score or 0.0 for c in chunks]
+
+    def _norm(vals: list[float]) -> list[float]:
+        lo, hi = min(vals), max(vals)
+        if hi == lo:
+            return [0.5] * len(vals)
+        # Add epsilon to denominator to avoid division by zero
+        eps = 1e-8
+        return [(v - lo) / (hi - lo + eps) for v in vals]
+
+    dense_n = _norm(dense_scores)
+    bm25_n = _norm(bm25_scores)
+    blended = [
+        alpha * d + (1 - alpha) * b
+        for d, b in zip(dense_n, bm25_n)
+    ]
+
+    reranked = [
+        replace(chunk, score=round(score, 6))
+        for chunk, score in zip(chunks, blended)
+    ]
+    reranked.sort(key=lambda c: c.score or 0.0, reverse=True)
+    return reranked
 
 
 def _chunk_from_result(chunk_id: str, text: str, metadata: dict, distance: float) -> Chunk:

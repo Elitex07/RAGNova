@@ -217,6 +217,34 @@ class Settings:
     CHUNK_OVERLAP_WORDS: int = _get_int("CHUNK_OVERLAP_WORDS", 50)
     TOP_K: int = _get_int("TOP_K", 5)
 
+    # Scanned-PDF OCR (Phase 2). A PDF page with no embedded text layer (a
+    # scan, a photo of a page) normally comes back empty and is skipped by
+    # ingest.py. With PDF_OCR_FALLBACK on, such a page is rendered at
+    # PDF_OCR_DPI and read with the image pipeline's Tesseract engine, so its
+    # text is indexed like any other page. OFF by default: it needs the
+    # Tesseract binary installed and it makes ingestion of a scanned file
+    # much slower (one render + OCR pass per empty page), so it is a
+    # deliberate opt-in, not a silent cost. Text-layer pages are never OCR'd.
+    PDF_OCR_FALLBACK: bool = _get_bool("PDF_OCR_FALLBACK", False)
+    PDF_OCR_DPI: int = _get_int("PDF_OCR_DPI", 200)
+
+    # Hybrid BM25 + dense retrieval (Phase 2). When enabled, the top-k dense
+    # results are re-ranked by a convex combination of normalized dense cosine
+    # similarity and BM25 score. The alpha weight controls the blend:
+    # alpha=1.0 = pure dense, alpha=0.0 = pure BM25, 0.5 = equal weight.
+    # OFF by default; evaluation in data/eval/bm25_baseline_2026-10-05.txt
+    # showed dense alone was stronger on this corpus, so hybrid is an opt-in
+    # experiment, not a default replacement. If turned on, requires building
+    # a BM25 index over the corpus (see scripts/build_index.py).
+    HYBRID_BM25_DENSE: bool = _get_bool("HYBRID_BM25_DENSE", False)
+    HYBRID_ALPHA: float = _get_float("HYBRID_ALPHA", 0.5)
+
+    # Structure-aware chunking (Phase 2). When enabled, the chunker will split on paragraphs, then sentences, and finally use the existing word window with overlap.
+    STRUCTURE_AWARE_CHUNKING: bool = _get_bool("STRUCTURE_AWARE_CHUNKING", False)
+
+    # Duplicate-context removal (Phase 2). When enabled, duplicate contexts are removed before the prompt is generated.
+    DUPLICATE_CONTEXT_REMOVAL: bool = _get_bool("DUPLICATE_CONTEXT_REMOVAL", False)
+
 
 # A single shared instance — import this, don't instantiate Settings()
 # yourself, so every track genuinely reads the same values.

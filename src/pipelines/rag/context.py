@@ -97,3 +97,41 @@ def trim_chunks(chunks: list[Chunk], query: str, max_words: int, embed=None) -> 
         out.append(replace(chunk, text=_choose(pieces, similarities[offset:offset + len(pieces)], max_words)))
         offset += len(pieces)
     return out
+
+
+def remove_duplicate_contexts(chunks: list[Chunk], min_overlap: float = 0.8) -> list[Chunk]:
+    """Remove duplicate contexts from the list of chunks.
+
+    Args:
+        chunks: List of chunks to process.
+        min_overlap: Minimum overlap ratio to consider a chunk as a duplicate.
+
+    Returns:
+        List of chunks with duplicates removed.
+    """
+    unique_chunks = []
+    seen_word_sets: list[set[str]] = []
+
+    for chunk in chunks:
+        # Skip empty or whitespace-only chunks
+        if not chunk.text or not chunk.text.strip():
+            continue
+
+        chunk_words = set(chunk.text.split())
+        if not chunk_words:
+            continue
+
+        # Check if the current chunk's text is already in the set of seen texts
+        is_duplicate = False
+        for seen_words in seen_word_sets:
+            # Calculate the overlap ratio
+            overlap_ratio = len(chunk_words & seen_words) / len(chunk_words)
+            if overlap_ratio >= min_overlap:
+                is_duplicate = True
+                break
+
+        if not is_duplicate:
+            unique_chunks.append(chunk)
+            seen_word_sets.append(chunk_words)
+
+    return unique_chunks

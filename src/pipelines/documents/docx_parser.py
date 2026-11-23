@@ -87,6 +87,26 @@ def extract_docx_pages(path: str | Path) -> list[tuple[int, str]]:
             page_num += 1
             pages.append([])
 
+    # Extract text from tables — previously out of scope, but tables in
+    # DOCX files often contain critical data (schedules, grades, specs).
+    # Table text is appended to the last page it follows, since tables
+    # don't have page break information.
+    for table in document.tables:
+        table_text_parts = []
+        for row in table.rows:
+            row_cells = []
+            for cell in row.cells:
+                cell_text = cell.text.strip()
+                if cell_text:
+                    row_cells.append(cell_text)
+            if row_cells:
+                table_text_parts.append(" | ".join(row_cells))
+        if table_text_parts:
+            table_text = "\n".join(table_text_parts)
+            # Append to the last page
+            if pages:
+                pages[-1].append(table_text)
+
     return [(i + 1, "\n".join(p)) for i, p in enumerate(pages)]
 
 

@@ -58,11 +58,16 @@ def filter_by_floor(chunks: list[Chunk], floor: float) -> list[Chunk]:
     return [c for c in chunks if c.score is not None and c.score >= floor]
 
 
-def _ocr_agreement(query: str, chunk: Chunk) -> float:
+def _ocr_agreement(query: str, chunk: Chunk, query_vector: list[float] | None = None) -> float:
     """MiniLM cosine similarity between the question and the text read from
     an image (its OCR). Vectors are unit length, so a dot product is the
-    cosine. Only ever called for an image that CLIP alone did not convince."""
-    return sum(a * b for a, b in zip(embed_text(query), embed_text(chunk.text)))
+    cosine. Only ever called for an image that CLIP alone did not convince.
+
+    Optimized to accept a pre-computed query vector to avoid redundant embeddings."""
+    if query_vector is None:
+        query_vector = embed_text(query)
+    chunk_vector = embed_text(chunk.text)
+    return sum(a * b for a, b in zip(query_vector, chunk_vector))
 
 
 def filter_images(chunks: list[Chunk], query: str, agreement=None) -> list[Chunk]:
@@ -115,13 +120,30 @@ page window diagram
 
 def _content_words(text: str) -> set[str]:
     """Lower-cased alphanumeric words of 3+ letters, minus _GENERIC_WORDS, with a
-    trailing plural "s" removed ("books" matches "book"). Deliberately crude: it
-    is a veto against answers that share no word at all, not a ranking signal."""
+    trailing plural "s" removed only for true plurals (avoiding words like "class",
+    "process", "address", etc. which end in 's' but are not plurals).
+
+    Deliberately crude: it is a veto against answers that share no word at all,
+    not a ranking signal."""
     words = set()
     for raw in re.findall(r"[a-z0-9]+", text.lower()):
         if len(raw) < 3 or raw in _GENERIC_WORDS:
             continue
-        words.add(raw[:-1] if len(raw) > 3 and raw.endswith("s") else raw)
+        # Only strip trailing 's' for true plurals, not for words ending in 's'
+        # that are singular forms like "class", "process", "address", etc.
+        # A word is considered a plural if it ends in 's' and the stem (without 's')
+        # is at least 3 characters long, helping avoid stripping 's' from
+        # 4-letter words like "loss", "boss", "miss", etc.
+        if len(raw) > 3 and raw.endswith("s") and len(raw) - 1 >= 3:
+            stem = raw[:-1]
+            # Check if the stem is likely a valid singular form (not ending in 's'
+            # which would indicate words like "class", "process", "address")
+            if not stem.endswith("s"):
+                words.add(stem)
+            else:
+                words.add(raw)
+        else:
+            words.add(raw)
     return words
 
 

@@ -32,6 +32,14 @@ from src.core.config import settings
 # call, so the cost is paid at most once per process, not once per call.
 _model: SentenceTransformer | None = None
 
+from functools import lru_cache
+
+# Cache the last 256 unique single-text embeddings. This avoids re-encoding
+# the same query or OCR text when it passes through embed_text() from
+# multiple code paths (retrieval, context trimming, OCR agreement). The
+# memory cost is small (256 * 384 floats ≈ 400 KB for MiniLM).
+_EMBED_CACHE_SIZE = 256
+
 
 def _get_model() -> SentenceTransformer:
     global _model
@@ -62,7 +70,15 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
     return vectors.tolist()
 
 
+@lru_cache(maxsize=_EMBED_CACHE_SIZE)
+def _embed_text_cached(text: str) -> tuple:
+    """Cached version that returns a tuple (hashable for lru_cache)."""
+    model = _get_model()
+    vector = model.encode([text], normalize_embeddings=True)
+    return tuple(vector[0].tolist())
+
+
 def embed_text(text: str) -> list[float]:
     """Embed a single string. A thin convenience wrapper — see
     embed_texts()'s docstring before reaching for this in a loop."""
-    return embed_texts([text])[0]
+    return list(_embed_text_cached(text))

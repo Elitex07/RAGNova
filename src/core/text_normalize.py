@@ -47,3 +47,22 @@ def normalize_text(text: str) -> str:
     collapsed = _WHITESPACE_RUN.sub(" ", text)
     cleaned = _CONTROL_CHARS.sub("", collapsed)
     return cleaned.strip()
+
+
+def normalize_text_preserve_paragraphs(text: str) -> str:
+    """Collapse whitespace and strip stray control characters, preserving paragraph breaks.
+
+    Unlike normalize_text, paragraph breaks (e.g. from PDF page boundaries) are
+    kept so downstream structure-aware chunkers can use them as split points.
+
+    Safe to call on empty input — returns "" rather than raising, since a
+    zero-extractable-text page (Chapter 6 §1.4) is a normal, expected case
+    for callers of this function, not an error.
+    """
+    if not text:
+        return ""
+    # Collapse whitespace within lines but preserve paragraph breaks
+    lines = [line.strip() for line in text.splitlines()]
+    collapsed_lines = [_WHITESPACE_RUN.sub(" ", line) for line in lines]
+    cleaned_lines = [_CONTROL_CHARS.sub("", line) for line in collapsed_lines]
+    return "\n".join(line for line in cleaned_lines if line.strip()).strip()

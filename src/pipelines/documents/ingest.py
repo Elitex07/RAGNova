@@ -21,8 +21,8 @@ from pathlib import Path
 
 from src.core.config import settings
 from src.core.schemas import Chunk
-from src.core.text_normalize import normalize_text
-from src.pipelines.documents.chunker import chunk_page_text
+from src.core.text_normalize import normalize_text, normalize_text_preserve_paragraphs
+from src.pipelines.documents.chunker import chunk_page_text, chunk_page_text_structured
 from src.pipelines.documents.docx_parser import extract_docx_pages
 from src.pipelines.documents.pdf_parser import extract_pdf_pages
 
@@ -92,10 +92,21 @@ def ingest_document(path: str | Path) -> list[Chunk]:
     source = path.as_posix()  # forward slashes even on Windows, so `source`
                                # is identical across every team member's OS
     id_prefix = path.name.replace(".", "_")  # NOT Path.stem — see note below
+    # Scanned-page OCR fallback: only on for PDFs whose pages contain no
+    # extractable text. Controlled by settings.PDF_OCR_FALLBACK (off by
+    # default so plain text extraction is unchanged) and settings.PDF_OCR_DPI.
+    ocr_kwargs = {}
+    if modality == "pdf" and settings.PDF_OCR_FALLBACK:
+        ocr_kwargs["ocr_fallback"] = True
+        ocr_kwargs["ocr_dpi"] = settings.PDF_OCR_DPI
 
     chunks: list[Chunk] = []
-    for page_num, raw_text in extract_pages(path):
-        clean = normalize_text(raw_text)
+    for page_num, raw_text in extract_pages(path, **ocr_kwargs):
+        clean = (
+            normalize_text_preserve_paragraphs(raw_text)
+            if settings.STRUCTURE_AWARE_CHUNKING
+            else normalize_text(raw_text)
+        )
         if not clean:
             # A page can genuinely have nothing extractable (most often: a
             # scanned page with no text layer — see pdf_parser.py). Warn
@@ -108,9 +119,14 @@ def ingest_document(path: str | Path) -> list[Chunk]:
             )
             continue
 
-        windows = chunk_page_text(
-            clean, settings.CHUNK_SIZE_WORDS, settings.CHUNK_OVERLAP_WORDS
-        )
+        if settings.STRUCTURE_AWARE_CHUNKING:
+            windows = chunk_page_text_structured(
+                clean, settings.CHUNK_SIZE_WORDS, settings.CHUNK_OVERLAP_WORDS
+            )
+        else:
+            windows = chunk_page_text(
+                clean, settings.CHUNK_SIZE_WORDS, settings.CHUNK_OVERLAP_WORDS
+            )
         for seq, window in enumerate(windows, start=1):
             # chunk_id convention (Ch4 §4.3): "<file>__p<page>__c<seq>".
             # `path.name.replace(".", "_")`, not `path.stem`, because

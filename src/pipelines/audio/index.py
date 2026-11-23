@@ -72,20 +72,37 @@ def index_audio_file(path: str | Path, client=None, ingestor=None) -> int:
 
 
 def index_audio_directory(directory: str | Path, client=None, ingestor=None) -> int:
-    """Index every supported audio file directly under `directory`."""
+    """Index every supported audio file directly under `directory`.
+
+    Reuses a single AudioIngestor (and therefore a single loaded Whisper model)
+    across all files in the directory to avoid reloading the model from disk
+    for each file. If `ingestor` is provided, it is used as-is and NOT closed
+    after processing (caller manages lifecycle). If `ingestor` is None, a new
+    ingestor is created and closed after all files are processed.
+    """
     directory = Path(directory)
     if not directory.is_dir():
         return 0
-    total = 0
-    for path in sorted(directory.iterdir()):
-        if path.is_file() and path.suffix.lower() in SUPPORTED_EXTENSIONS:
-            total += index_audio_file(path, client=client, ingestor=ingestor)
-    return total
+
+    owns_ingestor = ingestor is None
+    if owns_ingestor:
+        from src.pipelines.audio.ingestion import AudioIngestor
+        ingestor = AudioIngestor()
+
+    try:
+        total = 0
+        for path in sorted(directory.iterdir()):
+            if path.is_file() and path.suffix.lower() in SUPPORTED_EXTENSIONS:
+                total += index_audio_file(path, client=client, ingestor=ingestor)
+        return total
+    finally:
+        if owns_ingestor:
+            ingestor.close()
 
 
 def _relative_to_cwd(path: Path) -> Path:
     """Same portability fix as src/pipelines/documents/index.py's."""
     try:
-        return path.resolve().relative_to(Path.cwd())
+        return path.relative_to(Path.cwd())
     except ValueError:
         return path

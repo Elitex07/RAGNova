@@ -102,7 +102,8 @@ def name_phrases(query: str) -> list[tuple[str, ...]]:
     """The names a title, initials or capitals pin down, each as the words that must stand together in a chunk:
     "Dr. S. Sharma" -> [("dr", "s", "sharma")], "Mr Sharma" -> [("mr", "sharma")], "Alex Smith" -> [("alex", "smith")].
     Checked as whole phrases, not pair by pair: "Dr. S. Rao and Mr. S. Sharma" holds both pairs of "Dr. S. Sharma"
-    but not the name. [] when the question has no title, no dotted initial and no capitalised full name."""
+    but not the name. [] when the question has no title, no dotted initial and no capitalised full name.
+    Now also detects multi-digit numbers as name phrases."""
     phrases: list[tuple[str, ...]] = []
     words = [(m.group(1), bool(m.group(2))) for m in _WORD_DOT.finditer(_POSSESSIVE.sub("", query.lower()))]
     i = 0
@@ -127,6 +128,10 @@ def name_phrases(query: str) -> list[tuple[str, ...]]:
         if len(phrase) >= 2:
             phrases.append(tuple(phrase))
         i = j if j > i + 1 else i + 1
+    # Add multi-digit numbers as name phrases
+    for word in query.lower().split():
+        if word.isdigit() and len(word) > 1:
+            phrases.append((word,))
     return phrases + [p for p in _capitalised_names(query) if not any(_contains(q, p) for q in phrases)]
 
 

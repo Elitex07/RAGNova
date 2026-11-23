@@ -30,6 +30,9 @@ def transcribe_query(path: str | Path, model=None) -> str:
         model = WhisperModel(settings.WHISPER_MODEL_SIZE, device="cpu", compute_type="int8")
     try:
         segments, _info = model.transcribe(str(path), vad_filter=True)
+        # Join segments with a single space to avoid losing semantic units
+        # while preserving content boundaries. A single space between spoken
+        # sentences maintains readability for the RAG system.
         return " ".join(seg.text.strip() for seg in segments if seg.text.strip())
     finally:
         if owns_model:

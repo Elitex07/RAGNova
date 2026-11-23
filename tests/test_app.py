@@ -252,8 +252,12 @@ def test_a_suggested_question_is_asked_over_the_picked_file(page, monkeypatch):
     assert calls[-1]["sources"] == [CV]
 
 
-def test_a_picked_file_that_is_no_longer_indexed_is_dropped_instead_of_crashing_the_page(page):
-    page.at.session_state["focus_sources"] = ["data/documents/gone.pdf"]
+def test_a_picked_file_that_is_no_longer_indexed_is_dropped_instead_of_crashing_the_page(page, monkeypatch):
+    page.at.session_state["focus_sources"] = [CV]
+    page.at.run()
+    assert CV in page.at.session_state["focus_sources"]
+
+    monkeypatch.setattr(backend, "list_sources", lambda client=None: [s for s in SOURCES if s != CV])
     page.at.run()
 
     assert not page.at.exception, [e.value for e in page.at.exception]
