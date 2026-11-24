@@ -25,10 +25,12 @@ from src.core.config import settings
 SCAFFOLD_MODEL_LABEL = "scaffold-mock"
 
 
-def model_label(engine: str | None) -> str:
+def model_label(engine: str | None, model: str | None = None) -> str:
     """The `model` value to log for an answer produced by `engine`
-    ("scaffold" for canned demo text, anything else for the real pipeline)."""
-    return SCAFFOLD_MODEL_LABEL if engine == "scaffold" else settings.OLLAMA_MODEL
+    ("scaffold" for canned demo text, anything else for the real pipeline).
+    `model` is the model that actually answered (the page's picker can choose
+    one other than settings.OLLAMA_MODEL); it defaults to the configured one."""
+    return SCAFFOLD_MODEL_LABEL if engine == "scaffold" else (model or settings.OLLAMA_MODEL)
 
 
 @dataclass

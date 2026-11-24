@@ -234,7 +234,18 @@ def _listed_model_names(listing) -> set[str]:
     return names
 
 
-def ollama_status() -> tuple[str, str]:
+def local_models() -> list[str]:
+    """The models Ollama has pulled, sorted; [] when Ollama cannot be reached.
+    For the page's model picker."""
+    from src.core.llm import ollama_client
+
+    try:
+        return sorted(_listed_model_names(ollama_client().list()))
+    except Exception:
+        return []
+
+
+def ollama_status(model: str | None = None) -> tuple[str, str]:
     """What can be known about the language model WITHOUT running it:
     ("ready" | "missing_model" | "unreachable", detail).
 
@@ -243,6 +254,8 @@ def ollama_status() -> tuple[str, str]:
     the server answering while every generate call failed with "llama-server
     binary not found". Only `check_model_generates()` or an actual answer
     proves that, so the page must not call "ready" "online".
+
+    `model` defaults to settings.OLLAMA_MODEL (the page passes its picker's choice).
     """
     from src.core.llm import ollama_client
 
@@ -251,7 +264,7 @@ def ollama_status() -> tuple[str, str]:
     except Exception as exc:
         return "unreachable", str(exc)
     names = _listed_model_names(listing)
-    wanted = settings.OLLAMA_MODEL
+    wanted = model or settings.OLLAMA_MODEL
     if wanted in names or f"{wanted}:latest" in names:
         return "ready", wanted
     return "missing_model", f"{wanted} is not among: {', '.join(sorted(names)) or 'no models'}"
@@ -263,18 +276,19 @@ def ollama_ready() -> bool:
     return ollama_status()[0] == "ready"
 
 
-def check_model_generates() -> tuple[bool, str]:
+def check_model_generates(model: str | None = None) -> tuple[bool, str]:
     """Ask the model for a few tokens: (worked, message). An on-demand check
     behind a button, not run on every page load, because it loads the model
     into memory. It is the one check that fails when the model cannot start."""
     from src.core.llm import generation_options, ollama_client
 
+    model = model or settings.OLLAMA_MODEL
     try:
         reply = ollama_client().generate(
-            model=settings.OLLAMA_MODEL,
+            model=model,
             prompt="Reply with the single word: OK",
             options={**generation_options(), "num_predict": 8},
         )
     except Exception as exc:
         return False, str(exc)
-    return True, f"{settings.OLLAMA_MODEL} answered: {str(reply['response']).strip()[:40]!r}"
+    return True, f"{model} answered: {str(reply['response']).strip()[:40]!r}"

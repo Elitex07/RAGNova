@@ -63,9 +63,9 @@ def think_kwargs() -> dict:
     return {} if settings.LLM_THINK is None else {"think": settings.LLM_THINK}
 
 
-def generate(prompt: str) -> str:
-    """Send `prompt` to the configured Ollama model and return its response
-    text.
+def generate(prompt: str, model: str | None = None) -> str:
+    """Send `prompt` to `model` (default: the configured settings.OLLAMA_MODEL)
+    and return its response text.
 
     Uses `ollama.Client(host=...).generate(...)`, the client's wrapper
     around `POST /api/generate` — the same endpoint ch05 §2.2 documents as
@@ -81,10 +81,11 @@ def generate(prompt: str) -> str:
     (2048) enough to hold TOP_K retrieved chunks plus prompt scaffolding
     (see settings.LLM_NUM_CTX's docstring for the arithmetic).
     """
+    model = model or settings.OLLAMA_MODEL
     client = ollama_client()
     try:
         response = client.generate(
-            model=settings.OLLAMA_MODEL,
+            model=model,
             prompt=prompt,
             stream=False,
             options=generation_options(),
@@ -93,15 +94,15 @@ def generate(prompt: str) -> str:
     except Exception as exc:
         raise RuntimeError(
             f"Could not reach Ollama at {settings.OLLAMA_HOST} — "
-            f"is `ollama serve` running, and is {settings.OLLAMA_MODEL!r} "
-            f"pulled (`ollama pull {settings.OLLAMA_MODEL}`)? "
+            f"is `ollama serve` running, and is {model!r} "
+            f"pulled (`ollama pull {model}`)? "
             f"Underlying error: {exc}"
         ) from exc
 
     return response["response"]
 
 
-def generate_stream(prompt: str) -> Iterator[str]:
+def generate_stream(prompt: str, model: str | None = None) -> Iterator[str]:
     """Same call as generate(), with `stream=True`: yields the answer a
     piece at a time as Ollama produces it, instead of one string at the end.
 
@@ -114,10 +115,11 @@ def generate_stream(prompt: str) -> Iterator[str]:
     connection error is raised from inside the loop, re-wrapped in the
     same RuntimeError message generate() uses.
     """
+    model = model or settings.OLLAMA_MODEL
     client = ollama_client()
     try:
         for part in client.generate(
-            model=settings.OLLAMA_MODEL,
+            model=model,
             prompt=prompt,
             stream=True,
             options=generation_options(),
@@ -128,7 +130,7 @@ def generate_stream(prompt: str) -> Iterator[str]:
     except Exception as exc:
         raise RuntimeError(
             f"Could not reach Ollama at {settings.OLLAMA_HOST} — "
-            f"is `ollama serve` running, and is {settings.OLLAMA_MODEL!r} "
-            f"pulled (`ollama pull {settings.OLLAMA_MODEL}`)? "
+            f"is `ollama serve` running, and is {model!r} "
+            f"pulled (`ollama pull {model}`)? "
             f"Underlying error: {exc}"
         ) from exc

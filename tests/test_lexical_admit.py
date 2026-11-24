@@ -261,7 +261,7 @@ def test_the_rule_adds_the_who_what_instruction_and_keeps_the_refusal_sentence_a
 def test_the_setting_reaches_the_prompt_the_model_is_given(monkeypatch):
     seen = {}
     monkeypatch.setattr(answer_module, "retrieve", lambda query, **kw: _chunks())
-    monkeypatch.setattr(answer_module, "generate", lambda prompt: seen.setdefault("prompt", prompt) and "ok [1]")
+    monkeypatch.setattr(answer_module, "generate", lambda prompt, model=None: seen.setdefault("prompt", prompt) and "ok [1]")
     for flag in (False, True):
         seen.clear()
         monkeypatch.setattr(answer_module, "settings", dataclasses.replace(answer_module.settings, PROMPT_WHO_WHAT_RULE=flag))

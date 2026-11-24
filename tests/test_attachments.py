@@ -109,11 +109,11 @@ def pipeline(monkeypatch):
         seen["retrieve"].append({"query": query, **kwargs})
         return list(seen.get("returns", [_found()]))
 
-    def fake_generate(prompt):
+    def fake_generate(prompt, model=None):
         seen["prompts"].append(prompt)
         return "It says October fourteenth [1]."
 
-    def fake_stream(prompt):
+    def fake_stream(prompt, model=None):
         seen["prompts"].append(prompt)
         return iter(["It says ", "October fourteenth [1]."])
 
@@ -233,7 +233,7 @@ def test_stream_answer_deduplicates_before_prompt_numbering(monkeypatch):
 
     seen = {}
 
-    def fake_generate_stream(prompt):
+    def fake_generate_stream(prompt, model=None):
         seen["prompt"] = prompt
         return iter(["Forty percent [1]."])
 

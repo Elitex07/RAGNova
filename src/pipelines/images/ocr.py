@@ -59,7 +59,8 @@ class TesseractOCREngine:
     def __init__(self, config: Optional[ImageIngestionConfig] = None) -> None:
         self.config = config or ImageIngestionConfig()
         self._pytesseract = None
-        self._is_available: bool = self._init_tesseract()
+        self._winocr = None
+        self._is_available: bool = self._init_tesseract() or self._init_winocr()
 
     # ------------------------------------------------------------------
     # Initialisation
@@ -112,19 +113,27 @@ class TesseractOCREngine:
             logger.info("Configured Tesseract binary at: %s", tess_cmd)
             return True
 
-        try:
-            import winocr
-            self._winocr = winocr
-            logger.info("Configured Windows native OCR engine (winocr)")
-            return True
-        except ImportError:
-            pass
-
         logger.warning(
             "Tesseract executable not found. "
             "Set 'tesseract_cmd' in ImageIngestionConfig or TESSERACT_CMD env var."
         )
         return False
+
+    def _init_winocr(self) -> bool:
+        """Fallback when Tesseract is not usable (binding or binary missing):
+        Windows' built-in OCR through the optional ``winocr`` package
+        (``pip install winocr``, Windows 10+ only; not in requirements.txt).
+
+        Note: the two engines do not read text identically, so an index built
+        with winocr can differ from one built with Tesseract on another machine.
+        """
+        try:
+            import winocr  # type: ignore
+        except ImportError:
+            return False
+        self._winocr = winocr
+        logger.info("Tesseract unavailable; using Windows native OCR (winocr) instead")
+        return True
 
     # ------------------------------------------------------------------
     # Public API
@@ -132,7 +141,7 @@ class TesseractOCREngine:
 
     @property
     def is_available(self) -> bool:
-        """``True`` when both pytesseract and the Tesseract binary are ready."""
+        """``True`` when Tesseract (binding and binary) or the winocr fallback is ready."""
         return self._is_available
 
     def preprocess_image(self, image: Image.Image) -> Image.Image:
@@ -198,6 +207,8 @@ class TesseractOCREngine:
             )
 
         if getattr(self, "_winocr", None) is not None:
+            # winocr reports no confidence, so none is invented: confidence stays 0.0 and the metadata says why
+            # (a fixed 90.0 made every winocr read look like a high-confidence Tesseract read).
             try:
                 processed = self.preprocess_image(image)
                 res = self._winocr.recognize_pil_sync(processed, "en")
@@ -205,13 +216,14 @@ class TesseractOCREngine:
                 words = text.split()
                 return OCRResult(
                     text=text,
-                    confidence=90.0,
+                    confidence=0.0,
                     words_count=len(words),
                     metadata={
                         "status": "success",
                         "engine": "winocr",
                         "total_tokens": len(words),
-                        "avg_confidence": 90.0,
+                        "avg_confidence": None,
+                        "confidence_note": "not reported by winocr",
                     },
                 )
             except Exception as exc:

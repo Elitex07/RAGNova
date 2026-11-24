@@ -249,7 +249,7 @@ def test_answer_query_refuses_without_calling_the_llm_when_only_uncorroborated_i
     images = lambda query_text=None, query_image=None, top_k=None, client=None: [_image("poster", 0.23)]
     monkeypatch.setattr(answer_module, "retrieve",
                         lambda q, **kw: retrieve(q, image_search=images, image_agreement=lambda qq, c: 0.1, **kw))
-    monkeypatch.setattr(answer_module, "generate", lambda p: pytest.fail("LLM must not be called"))
+    monkeypatch.setattr(answer_module, "generate", lambda p, model=None: pytest.fail("LLM must not be called"))
     result = answer_query("How do I apply for a refund on tuition fees?", include_images=True)
     assert result.answer == NOT_ENOUGH_INFO and result.citations == []
 
@@ -283,7 +283,7 @@ def test_answer_query_with_images_sends_merged_context_to_the_llm(monkeypatch, f
         lambda q, **kw: retrieve(q, image_search=image_search, **kw),
     )
     seen = {}
-    monkeypatch.setattr(answer_module, "generate", lambda p: seen.setdefault("prompt", p) and "Answer [1][2].")
+    monkeypatch.setattr(answer_module, "generate", lambda p, model=None: seen.setdefault("prompt", p) and "Answer [1][2].")
     result = answer_query("q", include_images=True)
     assert [c.chunk_id for c in result.citations] == ["t_hi", "i_hi"]
     assert "[2] data/images/a.png (image)" in seen["prompt"]
@@ -291,7 +291,7 @@ def test_answer_query_with_images_sends_merged_context_to_the_llm(monkeypatch, f
 
 def test_stream_answer_short_circuits_without_calling_the_llm(monkeypatch):
     monkeypatch.setattr(answer_module, "retrieve", lambda q, **kw: [])
-    monkeypatch.setattr(answer_module, "generate_stream", lambda p: pytest.fail("LLM must not be called"))
+    monkeypatch.setattr(answer_module, "generate_stream", lambda p, model=None: pytest.fail("LLM must not be called"))
     citations, pieces = stream_answer("What is the capital of France?")
     assert citations == []
     assert "".join(pieces) == NOT_ENOUGH_INFO
@@ -300,7 +300,7 @@ def test_stream_answer_short_circuits_without_calling_the_llm(monkeypatch):
 def test_stream_answer_streams_the_llm_output(monkeypatch):
     chunk = _chunk("t1")
     monkeypatch.setattr(answer_module, "retrieve", lambda q, **kw: [chunk])
-    monkeypatch.setattr(answer_module, "generate_stream", lambda p: iter(["Forty ", "percent [1]."]))
+    monkeypatch.setattr(answer_module, "generate_stream", lambda p, model=None: iter(["Forty ", "percent [1]."]))
     citations, pieces = stream_answer("q")
     assert citations == [chunk]
     assert "".join(pieces) == "Forty percent [1]."
@@ -309,7 +309,7 @@ def test_stream_answer_streams_the_llm_output(monkeypatch):
 def test_image_only_question_gets_a_real_question_in_the_prompt(monkeypatch):
     monkeypatch.setattr(answer_module, "retrieve", lambda q, **kw: [_chunk("i1", modality="image", source="x.png")])
     seen = {}
-    monkeypatch.setattr(answer_module, "generate", lambda p: seen.setdefault("prompt", p))
+    monkeypatch.setattr(answer_module, "generate", lambda p, model=None: seen.setdefault("prompt", p))
     answer_query("", include_images=True)
     assert "Question: The user attached an image without a written question" in seen["prompt"]
 

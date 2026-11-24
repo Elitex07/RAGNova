@@ -43,6 +43,7 @@ CANNED_QUESTION = "How many marks does the prototype carry?"
 CANNED_FRAGMENT = "40% of the total marks"
 SOURCES = ["data/documents/notice.pdf", "data/documents/cv.pdf", "data/images/notice_midterm_schedule.png"]
 RUNNER_ERROR = "llama-server binary not found"      # what the broken Ollama install said on 2026-10-07
+OTHER_MODEL = "gemma4:4b"                           # a second pulled model, for the sidebar's model picker
 
 
 class Page:
@@ -70,7 +71,8 @@ class Page:
 
 @pytest.fixture
 def page(monkeypatch) -> Page:
-    monkeypatch.setattr(backend, "ollama_status", lambda: ("ready", settings.OLLAMA_MODEL))
+    monkeypatch.setattr(backend, "ollama_status", lambda model=None: ("ready", model or settings.OLLAMA_MODEL))
+    monkeypatch.setattr(backend, "local_models", lambda: [settings.OLLAMA_MODEL, OTHER_MODEL])
     monkeypatch.setattr(backend, "index_counts", lambda client=None: {"text": 1, "image": 1})
     monkeypatch.setattr(backend, "list_sources", lambda client=None: SOURCES)
     logged: list = []
@@ -90,10 +92,10 @@ def _live_answer(text: str, calls: list | None = None):
     )
 
     def fake(query, top_k=None, client=None, include_images=False, query_image=None, sources=None, attachments=None,
-             history=None, earlier_attachments=None):
+             history=None, earlier_attachments=None, model=None):
         if calls is not None:
             calls.append({"query": query, "sources": sources, "attachments": attachments, "query_image": query_image,
-                          "history": history, "earlier_attachments": earlier_attachments})
+                          "history": history, "earlier_attachments": earlier_attachments, "model": model})
         return [chunk], iter([word + " " for word in text.split(" ")])
 
     return fake
@@ -151,7 +153,7 @@ def test_canned_mode_is_labelled_on_the_answer_and_logged_as_scaffold(page, monk
 
 
 def test_test_the_model_button_reports_a_model_that_cannot_start(page, monkeypatch):
-    monkeypatch.setattr(backend, "check_model_generates", lambda: (False, RUNNER_ERROR))
+    monkeypatch.setattr(backend, "check_model_generates", lambda model=None: (False, RUNNER_ERROR))
 
     [button] = [b for b in page.at.button if "Test the model" in b.label]
     button.click().run()
@@ -339,3 +341,47 @@ def test_only_the_sources_the_answer_cites_are_listed(page, monkeypatch):
                         lambda query, **kw: (two, iter(["The fair is on 3 December [2]."])))
     reply = page.ask("tell me about internship fair")
     assert [v.title for v in reply["views"]] == ["[2] fair.png (image)"]
+
+
+# --- PR #14 review (2026-11-24): the model picker and the file picker -------------------------------------------
+
+
+def test_picking_another_model_answers_and_logs_with_it_without_touching_settings(page, monkeypatch):
+    # Writing the pick into the frozen, process-wide `settings` crashed the page (FrozenInstanceError).
+    calls: list = []
+    monkeypatch.setattr(answer_module, "stream_answer", _live_answer("Forty percent [1].", calls))
+    configured = settings.OLLAMA_MODEL
+
+    page.at.sidebar.selectbox[0].set_value(OTHER_MODEL).run()
+    assert not page.at.exception, [e.value for e in page.at.exception]
+    assert settings.OLLAMA_MODEL == configured
+
+    reply = page.ask(CANNED_QUESTION)
+    assert calls[-1]["model"] == OTHER_MODEL and reply["model"] == OTHER_MODEL
+    page.rate_last_answer()
+    assert page.logged[-1].model == OTHER_MODEL
+
+
+def test_the_status_panel_says_live_only_after_the_model_has_generated(page, monkeypatch):
+    def panel() -> str:
+        return " ".join(m.value for m in page.at.sidebar.markdown if "status-panel" in m.value)
+
+    assert "Selected:" in panel() and "Live:" not in panel()
+    monkeypatch.setattr(backend, "check_model_generates", lambda model=None: (True, f"{model} answered: 'OK'"))
+    [button] = [b for b in page.at.button if b.label == "🔬 Test the model"]
+    button.click().run()
+    assert "Live:" in panel()
+
+
+def test_two_picks_in_a_row_are_both_kept(page):
+    # With default= instead of key=, the second pick made a new widget and was dropped.
+    page.at.sidebar.multiselect[0].select(SOURCES[0]).run()
+    page.at.sidebar.multiselect[0].select(SOURCES[1]).run()
+    page.at.sidebar.multiselect[0].select(SOURCES[2]).run()
+    assert not page.at.exception, [e.value for e in page.at.exception]
+    assert page.at.session_state["focus_sources"] == SOURCES
+
+
+def test_the_page_loads_no_web_fonts():
+    # An offline app must not fetch anything when the page loads.
+    assert "fonts.googleapis.com" not in Path(APP).read_text(encoding="utf-8")

@@ -147,7 +147,7 @@ def pipeline(monkeypatch):
     seen = {}
     monkeypatch.setattr(answer_module, "retrieve", lambda query, **kwargs: [chunk])
 
-    def fake_generate(prompt):
+    def fake_generate(prompt, model=None):
         seen["prompt"] = prompt
         return "Forty percent [1]."
 

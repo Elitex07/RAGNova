@@ -196,6 +196,7 @@ def answer_query(
     attachments: list[Chunk] | None = None,
     history: list[tuple[str, str]] | None = None,
     earlier_attachments: list[Chunk] | None = None,
+    model: str | None = None,
 ) -> RagAnswer:
     """Answer `query` using only relevant retrieved chunks.
 
@@ -223,13 +224,17 @@ def answer_query(
     own is handled exactly as without it. `earlier_attachments` are the attachments of that earlier turn: a
     follow-up with no attachment of its own ("tell me more" after "what does this screenshot say?") is answered
     from them again, since a screenshot that is not indexed cannot be found by searching.
+
+    `model` is the Ollama model to answer with (default settings.OLLAMA_MODEL); the page passes the one picked in
+    its sidebar. Settings are frozen and shared by every browser session, so the pick is passed, never written there.
     """
+    model = model or settings.OLLAMA_MODEL
     search_query, prompt_history, attachments = _plan(query, history, attachments, earlier_attachments, sources)
     relevant = _gather(query, top_k, client, include_images, query_image, sources, attachments, search_query)
 
     if not relevant:
         return RagAnswer(
-            query=query, answer=NOT_ENOUGH_INFO, citations=[], model=settings.OLLAMA_MODEL
+            query=query, answer=NOT_ENOUGH_INFO, citations=[], model=model
         )
 
     # Remove duplicate contexts before generating the prompt if the setting is enabled
@@ -239,12 +244,12 @@ def answer_query(
 
     prompt = _prompt(query, relevant, prompt_history, sources, search_query)
     check_prompt_fits(prompt)
-    answer_text = generate(prompt)
+    answer_text = generate(prompt, model=model)
     check_citations(answer_text, relevant, query)
     answer_text = clean_citations(answer_text, len(relevant))
 
     return RagAnswer(
-        query=query, answer=answer_text, citations=relevant, model=settings.OLLAMA_MODEL
+        query=query, answer=answer_text, citations=relevant, model=model
     )
 
 
@@ -258,6 +263,7 @@ def stream_answer(
     attachments: list[Chunk] | None = None,
     history: list[tuple[str, str]] | None = None,
     earlier_attachments: list[Chunk] | None = None,
+    model: str | None = None,
 ) -> tuple[list[Chunk], Iterator[str]]:
     """answer_query(), split in two for the Chapter 11 UI: retrieval runs
     now and its chunks come back straight away (so sources can be drawn
@@ -268,7 +274,7 @@ def stream_answer(
     iterator yields NOT_ENOUGH_INFO once. The caller should run
     check_citations() and clean_citations() on the joined text when the
     stream ends — it can't run here, because the full answer doesn't
-    exist yet.
+    exist yet. `model` as in answer_query().
     """
     search_query, prompt_history, attachments = _plan(query, history, attachments, earlier_attachments, sources)
     relevant = _gather(query, top_k, client, include_images, query_image, sources, attachments, search_query)
@@ -283,7 +289,7 @@ def stream_answer(
 
     prompt = _prompt(query, relevant, prompt_history, sources, search_query)
     check_prompt_fits(prompt)
-    return relevant, generate_stream(prompt)
+    return relevant, generate_stream(prompt, model=model)
 
 
 def check_citations(answer_text: str, chunks: list[Chunk], query: str) -> set[int]:

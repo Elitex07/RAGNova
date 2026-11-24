@@ -183,7 +183,7 @@ def _chunk():
 def test_a_follow_up_searches_with_the_earlier_question_and_shows_the_exchange_to_the_model(monkeypatch):
     seen = {}
     monkeypatch.setattr(answer_module, "retrieve", lambda q, **kw: seen.setdefault("search", q) and [_chunk()])
-    monkeypatch.setattr(answer_module, "generate", lambda prompt: seen.setdefault("prompt", prompt) and "ok [1]")
+    monkeypatch.setattr(answer_module, "generate", lambda prompt, model=None: seen.setdefault("prompt", prompt) and "ok [1]")
 
     answer_module.answer_query("tell me more", history=[("who is raiden?", "Raiden [1] is a Discord app.")])
 
@@ -195,7 +195,7 @@ def test_a_follow_up_searches_with_the_earlier_question_and_shows_the_exchange_t
 def test_a_question_that_stands_alone_ignores_the_history(monkeypatch):
     seen = {}
     monkeypatch.setattr(answer_module, "retrieve", lambda q, **kw: seen.setdefault("search", q) and [_chunk()])
-    monkeypatch.setattr(answer_module, "generate", lambda prompt: seen.setdefault("prompt", prompt) and "ok [1]")
+    monkeypatch.setattr(answer_module, "generate", lambda prompt, model=None: seen.setdefault("prompt", prompt) and "ok [1]")
 
     answer_module.answer_query("tell me lab rules", history=[("who is raiden?", "Raiden is a Discord app.")])
 
@@ -268,7 +268,7 @@ def test_with_files_picked_the_model_is_told_what_it_and_this_file_mean():
 def test_the_picked_files_reach_the_prompt(monkeypatch):
     seen = {}
     monkeypatch.setattr(answer_module, "retrieve", lambda q, **kw: [_chunk()])
-    monkeypatch.setattr(answer_module, "generate", lambda prompt: seen.setdefault("prompt", prompt) and "ok [1]")
+    monkeypatch.setattr(answer_module, "generate", lambda prompt, model=None: seen.setdefault("prompt", prompt) and "ok [1]")
     answer_module.answer_query("Give me a short summary of this file.", sources=["data/documents/resume.pdf"])
     assert "answer from these files only: resume.pdf" in seen["prompt"]
 
@@ -283,7 +283,7 @@ def test_with_files_picked_it_means_the_files_so_only_a_wordless_question_is_a_f
 def _prompt_for(monkeypatch, question, sources):
     seen = {}
     monkeypatch.setattr(answer_module, "retrieve", lambda q, **kw: [_chunk()])
-    monkeypatch.setattr(answer_module, "generate", lambda prompt: seen.setdefault("prompt", prompt) and "ok [1]")
+    monkeypatch.setattr(answer_module, "generate", lambda prompt, model=None: seen.setdefault("prompt", prompt) and "ok [1]")
     answer_module.answer_query(question, sources=sources)
     return seen["prompt"]
 
@@ -309,7 +309,7 @@ def test_a_follow_up_is_answered_from_the_earlier_turns_attachment(monkeypatch):
     # Greptile on PR #11: after "What does this image say?" about an unindexed screenshot, "tell me more" lost it.
     seen = {}
     monkeypatch.setattr(answer_module, "retrieve", lambda q, **kw: [])
-    monkeypatch.setattr(answer_module, "generate", lambda prompt: seen.setdefault("prompt", prompt) and "ok [1]")
+    monkeypatch.setattr(answer_module, "generate", lambda prompt, model=None: seen.setdefault("prompt", prompt) and "ok [1]")
     history = [("What does this image say?", "It gives the guest Wi-Fi password [1].")]
     result = answer_module.answer_query("tell me more", history=history, earlier_attachments=[_attachment()])
     assert result.citations[0].chunk_id == "attachment-1" and "ragnova-guest-2026" in seen["prompt"]
@@ -327,7 +327,7 @@ def test_a_follow_ups_context_is_trimmed_against_the_question_it_searched_with(m
     # Greptile on PR #11: with CONTEXT_WORDS_PER_CHUNK on, "tell me more" trimmed chunks against "tell me more".
     seen = {}
     monkeypatch.setattr(answer_module, "retrieve", lambda q, **kw: [_chunk()])
-    monkeypatch.setattr(answer_module, "generate", lambda prompt: "ok [1]")
+    monkeypatch.setattr(answer_module, "generate", lambda prompt, model=None: "ok [1]")
     monkeypatch.setattr(answer_module, "trim_chunks", lambda chunks, query, words: seen.setdefault("q", query) and chunks)
     answer_module.answer_query("tell me more", history=[("who is raiden?", "A Discord bot [1].")])
     assert seen["q"] == "who is raiden?"

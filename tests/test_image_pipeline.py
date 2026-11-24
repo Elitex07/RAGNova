@@ -130,3 +130,22 @@ def test_image_search_by_image(tmp_path, monkeypatch, image_pipeline):
         embedder=FakeClip(),
     )
     assert hits[0].source == "blue.png"
+
+
+def test_winocr_is_the_fallback_when_tesseract_is_missing_and_invents_no_confidence(monkeypatch):
+    # PR #14 review (2026-11-24): winocr was only tried when pytesseract was installed, and every winocr read was
+    # reported at a fixed 90% confidence.
+    import types
+
+    from src.pipelines.images import ocr as ocr_module
+
+    fake_winocr = types.SimpleNamespace(recognize_pil_sync=lambda image, lang: {"text": "Room 302 AIML Lab"})
+    monkeypatch.setitem(sys.modules, "pytesseract", None)          # binding not installed
+    monkeypatch.setitem(sys.modules, "winocr", fake_winocr)
+
+    engine = ocr_module.TesseractOCREngine()
+    assert engine.is_available
+    result = engine.extract_text(Image.new("RGB", (200, 60), "white"))
+    assert result.text == "Room 302 AIML Lab" and result.words_count == 4
+    assert result.confidence == 0.0 and result.metadata["avg_confidence"] is None
+    assert result.metadata["engine"] == "winocr"

@@ -1,12 +1,12 @@
 """
-RAGNova — Professional Multimodal AI Assistant UI
+RAGNova — Streamlit chat UI (Chapter 11)
 
 A unified multimodal Streamlit interface for the offline multimodal RAG system.
 Features:
   - Text, voice (faster-whisper), and image (CLIP + OCR) query processing
   - Live token streaming via stream_answer() and st.write_stream()
   - Expandable, rich citations adhering to ADR-003, ADR-007, and ADR-008
-  - Human feedback collection loop logging to feedback.jsonl
+  - Human feedback collection loop (Chapter 12) logging to feedback.jsonl
   - Live knowledge base upload and indexing for PDF, DOCX, Images, and Audio
   - Canned demo answers: opt-in only, always labelled, logged as "scaffold-mock"
   - System status and corpus overview in the sidebar
@@ -33,7 +33,6 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 import streamlit as st
-import ollama
 from PIL import Image
 
 from src.core.config import settings
@@ -49,6 +48,7 @@ from src.ui.backend import (
     index_counts,
     kind_of,
     list_sources,
+    local_models,
     ocr_available,
     ocr_image,
     ollama_status,
@@ -85,10 +85,9 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
-
+    /* System fonts only: a web-font @import would fetch from Google on every page load, in an offline app. */
     html, body, [class*="css"] {
-        font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         color: #1E293B;
     }
 
@@ -457,6 +456,7 @@ def new_message(role: str, **fields) -> dict:
         "warning": None,
         "error": None,
         "engine": None,
+        "model": None,          # the Ollama model that answered (the sidebar picker can change it per session)
         "image_note": None,
         **fields,
     }
@@ -533,79 +533,67 @@ with st.sidebar:
 
     st.markdown("### ⚙️ System Status")
 
-    # Fetch available models directly from local Ollama instance
-    try:
-        response = ollama.list()
-        raw_models = response.get("models", []) if isinstance(response, dict) else getattr(response, "models", [])
-        local_models = []
-        for m in raw_models:
-            name = m.get("model") or m.get("name") if isinstance(m, dict) else (getattr(m, "model", None) or getattr(m, "name", None))
-            if name:
-                local_models.append(str(name))
-        if not local_models:
-            local_models = [settings.OLLAMA_MODEL]
-    except Exception:
-        local_models = ["llama3.2:3b (Offline)"]
-
-    if settings.OLLAMA_MODEL not in local_models and f"{settings.OLLAMA_MODEL} (Offline)" not in local_models:
-        local_models.insert(0, settings.OLLAMA_MODEL)
-
-    # Dynamic dropdown styled for a dark UI
-    selected_idx = 0
-    for idx, opt in enumerate(local_models):
-        if settings.OLLAMA_MODEL in opt:
-            selected_idx = idx
-            break
-
-    selected_engine = st.selectbox(
+    # Model picker. The pick lives in this browser session's state and is passed to every call that needs it:
+    # `settings` is frozen and shared by every open session, so writing the pick there crashed the page
+    # (FrozenInstanceError) and, were it writable, would have switched the model for every other tab too.
+    pulled = local_models()
+    model_options = pulled if settings.OLLAMA_MODEL in pulled else [settings.OLLAMA_MODEL, *pulled]
+    if st.session_state.get("llm_model") not in model_options:
+        st.session_state["llm_model"] = settings.OLLAMA_MODEL
+    st.selectbox(
         "Active Engine",
-        options=local_models,
-        index=selected_idx,
-        help="Select the active local LLM model served by Ollama on the fly."
+        options=model_options,
+        key="llm_model",
+        help="The local Ollama model that answers in this browser tab. "
+             f"The default comes from OLLAMA_MODEL ({settings.OLLAMA_MODEL}).",
     )
-    if selected_engine:
-        clean_model_name = selected_engine.split(" ")[0]
-        if clean_model_name != settings.OLLAMA_MODEL:
-            settings.OLLAMA_MODEL = clean_model_name
-            st.session_state["selected_engine"] = clean_model_name
+    llm_model = st.session_state["llm_model"]
 
-    # Render the dynamic HTML component
+    ollama_state, ollama_detail = ollama_status(llm_model)
+    model_check = st.session_state.get("model_check")
+    # "Live" only once the model has actually generated: a reachable server with the model pulled does not
+    # prove it can start (see ollama_status()). Before that the panel says only which model is selected.
+    proven = bool(model_check and model_check[0] and model_check[3] == llm_model)
     st.markdown(f"""
         <div class="status-panel">
-            <div class="pulsing-dot"></div>
-            <span><strong>Live:</strong> {html.escape(selected_engine)}</span>
+            {'<div class="pulsing-dot"></div>' if proven else ''}
+            <span><strong>{'Live' if proven else 'Selected'}:</strong> {html.escape(llm_model)}</span>
         </div>
     """, unsafe_allow_html=True)
 
-    ollama_state, ollama_detail = ollama_status()
-    if ollama_state == "missing_model":
-        st.warning(f"⚠️ Ollama is running but `{settings.OLLAMA_MODEL}` is not pulled")
-        st.caption(f"Run `ollama pull {settings.OLLAMA_MODEL}`.")
-    elif ollama_state != "ready":
+    if ollama_state == "ready":
+        st.caption("Ollama is reachable and the model is pulled. That does not prove the model can start: "
+                   "**Test the model** below does.")
+    elif ollama_state == "missing_model":
+        st.warning(f"⚠️ Ollama is running but `{llm_model}` is not pulled")
+        st.caption(f"Run `ollama pull {llm_model}`.")
+    else:
         st.warning("⚠️ Ollama is not reachable")
-        st.caption("Run `ollama serve`. Answers require the local LLM daemon.")
+        st.caption("Run `ollama serve`. Answers need the model; questions the corpus cannot answer are still refused.")
 
-    with st.expander("🧩 Model Specs & Diagnostics", expanded=False):
+    if st.button("🔬 Test the model", key="btn_model_check", use_container_width=True):
+        with st.spinner(f"Asking {llm_model} for a few tokens..."):
+            worked, detail = check_model_generates(llm_model)
+        model_check = (worked, detail, datetime.now().strftime("%H:%M:%S"), llm_model)
+        st.session_state.model_check = model_check
+        st.rerun()      # redraw the status panel above with the result
+    if model_check and model_check[3] == llm_model:
+        worked, detail, when, _ = model_check
+        (st.success if worked else st.error)(f"{when}: {detail}")
+
+    with st.expander("🧩 Model Specs", expanded=False):
         st.markdown(
             f"""
             <div style="font-size: 0.82rem; line-height: 1.75; color: #334155; margin-bottom: 0.8rem;">
-                <div><strong>LLM Model:</strong> <code>{html.escape(settings.OLLAMA_MODEL)}</code></div>
+                <div><strong>LLM Model:</strong> <code>{html.escape(llm_model)}</code></div>
                 <div><strong>Text Embedder:</strong> <code>{html.escape(settings.TEXT_EMBEDDING_MODEL)}</code></div>
                 <div><strong>Vision Embedder:</strong> <code>{html.escape(settings.CLIP_MODEL)}</code></div>
                 <div><strong>Speech Engine:</strong> <code>faster-whisper ({html.escape(settings.WHISPER_MODEL_SIZE)})</code></div>
-                <div><strong>Vector DB:</strong> <code>ChromaDB (HNSW Cosine)</code></div>
+                <div><strong>Vector DB:</strong> <code>ChromaDB</code> at <code>{html.escape(settings.CHROMA_PERSIST_DIR)}</code></div>
             </div>
             """,
             unsafe_allow_html=True,
         )
-        if st.button("🔬 Test the model", key="btn_model_check", use_container_width=True):
-            with st.spinner(f"Verifying {settings.OLLAMA_MODEL} generation..."):
-                worked, detail = check_model_generates()
-            st.session_state.model_check = (worked, detail, datetime.now().strftime("%H:%M:%S"))
-        model_check = st.session_state.get("model_check")
-        if model_check:
-            worked, detail, when = model_check
-            (st.success if worked else st.error)(f"{when}: {detail}")
 
     st.divider()
     st.subheader("📁 Knowledge Base")
@@ -619,14 +607,15 @@ with st.sidebar:
 
     st.markdown("#### 🗄️ RAG Index Status")
 
-    # Fetch actual ChromaDB collection counts and connectivity
+    index_error = None
     try:
         counts = index_counts()
         doc_chunks = counts.get('text', 0) + counts.get('image', 0)
         db_status = "Connected"
-    except Exception:
+    except Exception as err:
         doc_chunks = 0
-        db_status = "Offline"
+        db_status = "Unreadable"
+        index_error = err
 
     if "initial_chunks" not in st.session_state:
         st.session_state["initial_chunks"] = doc_chunks
@@ -635,18 +624,15 @@ with st.sidebar:
 
     col1, col2 = st.columns(2)
     with col1:
-        st.metric(
-            label="ChromaDB Vector Space", 
-            value=db_status, 
-            delta="Local Storage", 
-            delta_color="normal"
-        )
+        st.metric(label="ChromaDB Vector Space", value=db_status)
     with col2:
         st.metric(
-            label="Indexed Chunks", 
-            value=f"{doc_chunks:,}", 
-            delta=f"+{delta_count} this session" if delta_count > 0 else "Synced"
+            label="Indexed Chunks",
+            value=f"{doc_chunks:,}",
+            delta=f"{delta_count:+} this session" if delta_count else None,
         )
+    if index_error is not None:
+        st.warning(f"⚠️ Could not read the vector index: {index_error}")
 
     st.markdown(
         f"""
@@ -670,6 +656,8 @@ with st.sidebar:
 
     st.divider()
     st.subheader("📥 Add Knowledge")
+    # The result is kept in session_state and shown on the next run: a message
+    # drawn right before st.rerun() is gone before anyone can read it.
     kb_flash = st.session_state.pop("kb_flash", None)
     if kb_flash:
         (st.success if kb_flash[0] else st.error)(kb_flash[1])
@@ -704,19 +692,25 @@ with st.sidebar:
         st.warning(f"⚠️ Could not list the indexed files: {err}")
     # A stored pick that is no longer in the index (a file removed, an index rebuilt) would crash the widget.
     st.session_state["focus_sources"] = [s for s in st.session_state.get("focus_sources", []) if s in listed_sources]
+    # key=, not default=: without a key Streamlit identifies the widget by its arguments, so a default that
+    # follows the last pick made it a new widget on every change and every other click was lost.
     picked_sources = st.multiselect(
         "Files to answer from",
         options=listed_sources,
-        default=st.session_state["focus_sources"],
+        key="focus_sources",
         format_func=lambda path: f"{SOURCE_ICONS.get(kind_of(path), '📄')} {Path(path).name}",
         placeholder="Search all indexed files",
         label_visibility="collapsed",
     )
-    st.session_state["focus_sources"] = picked_sources
     if picked_sources:
-        st.caption(f"🎯 Focused on **{len(picked_sources)}** selected file(s).")
+        st.caption(
+            f"🎯 Answering from **{len(picked_sources)}** picked file(s) only, with no relevance check; "
+            "the model still says when they do not contain the answer."
+        )
     else:
-        st.caption("🌐 Global Scope: Searching all indexed documents, images, and audio.")
+        st.caption(
+            "🌐 All indexed files, with the relevance checks that refuse questions the files cannot answer."
+        )
 
     st.divider()
     with st.expander("⚙️ Advanced Settings", expanded=False):
@@ -729,7 +723,7 @@ with st.sidebar:
             help="Live RAG queries ChromaDB and streams Ollama. Canned demo answers are hand-written text for demos with no model; every one is labelled.",
         )
         if engine_mode == ENGINE_CANNED:
-            st.warning("Canned mode: responses are pre-defined benchmarks. Visual queries disabled.")
+            st.warning("Canned mode: the answers are not produced by the system. Image queries are ignored.")
 
     st.divider()
     if st.button("Clear Conversation", use_container_width=True):
@@ -741,13 +735,13 @@ with st.sidebar:
 # Right-Side Main Output Window: Header & Overview
 # ---------------------------------------------------------------------------
 st.markdown(
-    """
+    f"""
     <div class="top-header-card">
         <div class="main-title">🌌 RAGNova Assistant</div>
         <div class="sub-title">Private offline multimodal intelligence across documents, visual images, and audio recordings — 100% local.</div>
         <div class="header-pill-row">
-            <span class="header-pill">🔒 100% Air-Gapped Local</span>
-            <span class="header-pill">🧠 Llama 3.2 3B Engine</span>
+            <span class="header-pill">🔒 Runs Locally</span>
+            <span class="header-pill">🧠 {html.escape(llm_model)}</span>
             <span class="header-pill">📑 PDF & DOCX Parser</span>
             <span class="header-pill">👁️ OpenCLIP Vision</span>
             <span class="header-pill">🎙️ Whisper Speech</span>
@@ -839,7 +833,7 @@ for msg_idx, msg in enumerate(st.session_state.messages):
         elif msg.get("citations"):
             render_canned_citations(msg["citations"])
 
-        # Human Feedback Form. Not offered for a failure: there is no answer to rate.
+        # Human Feedback Form (Chapter 12). Not offered for a failure: there is no answer to rate.
         if msg["role"] == "assistant" and msg_idx > 0 and not msg.get("error"):
             fb_key = f"fb_{msg_idx}"
             if fb_key not in st.session_state.feedback_submitted:
@@ -861,7 +855,7 @@ for msg_idx, msg in enumerate(st.session_state.messages):
                                 sources=sources,
                                 comment=comment,
                                 tester=tester,
-                                model=model_label(msg.get("engine")),
+                                model=model_label(msg.get("engine"), msg.get("model")),
                             )
                             record_feedback(entry)
                             st.session_state.feedback_submitted.add(fb_key)
@@ -884,7 +878,7 @@ def process_query(user_query: str) -> tuple[str, list[dict]]:
     """
     q = user_query.lower()
 
-    # Negative controls: explicitly refuse without hallucinating or claiming false grounding
+    # Negative controls (P2 fix): explicitly refuse without hallucinating or claiming false grounding
     if any(k in q for k in ["mess", "lunch", "dinner", "meal", "menu", "refund", "tuition fee", "fee refund"]):
         mock_answer = (
             "I could not find information about that in the provided offline sources (documents, images, or audio recordings). "
@@ -926,6 +920,7 @@ def process_query(user_query: str) -> tuple[str, list[dict]]:
         return mock_answer, fake_citations
 
     # 2. Campus Wi-Fi Configuration (Gold-standard T3, I1, M2)
+    # Avoid matching generic words like 'network' or 'connect' in isolation (e.g. 'neural network')
     is_wifi = (
         ("wifi" in q or "wi-fi" in q or "ssid" in q or "ragnova-student" in q)
         or ("wireless" in q and any(k in q for k in ["adapter", "network", "connect", "setup", "setting", "lan"]))
@@ -958,6 +953,7 @@ def process_query(user_query: str) -> tuple[str, list[dict]]:
         return mock_answer, fake_citations
 
     # 3. Library Borrowing, Quotas & Overdue Fines (Gold-standard T2, A2)
+    # Avoid matching 'book' alone (e.g. 'book the AI lab') or 'fine' alone (e.g. 'fine-tuning')
     is_library = (
         ("library" in q)
         or ("borrow" in q)
@@ -1027,6 +1023,7 @@ def process_query(user_query: str) -> tuple[str, list[dict]]:
         return mock_answer, fake_citations
 
     # 5. RAGNova Architecture & System Pipeline Overview
+    # Avoid matching 'system' in isolation (e.g. 'operating system', 'database system')
     is_architecture = (
         ("what is this project" in q)
         or ("what is ragnova" in q)
@@ -1061,6 +1058,7 @@ def process_query(user_query: str) -> tuple[str, list[dict]]:
         return mock_answer, fake_citations
 
     # 6. AIML Research Lab Location Plaque (Gold-standard I4)
+    # Asking about location / Room 302 / faculty in-charge. (Booking the lab is not supported and will fall through).
     is_lab_location = (
         ("room 302" in q)
         or (
@@ -1085,7 +1083,8 @@ def process_query(user_query: str) -> tuple[str, list[dict]]:
         ]
         return mock_answer, fake_citations
 
-    # Catch-all for unsupported queries
+    # Catch-all for unsupported / unindexed queries:
+    # Crucial fix for P2 (False Grounding): Do NOT claim false grounding or emit fake citations!
     mock_answer = (
         f"I could not find sufficient information in the indexed corpus to answer: \"{user_query}\".\n\n"
         "The offline knowledge base contains academic policies, library regulations, IT network setup, "
@@ -1128,9 +1127,11 @@ with col_img:
             key=f"query_img_uploader_{st.session_state.query_img_nonce}",
         )
     if query_img_file is not None:
-        st.info("📎 Query image attached. It will be analyzed with your next question.")
+        # Visible even with the expander closed, and cleared after one question:
+        # an image that quietly stays attached rewrites every later question.
+        st.info("📎 Query image attached. It is used for your next question only.")
 
-# Context-specific suggestions when a file is picked
+# One-click questions for the files picked above (the "what is in this?" first move).
 if focus:
     these = "this file" if len(focus) == 1 else "these files"
     suggestions = [
@@ -1174,6 +1175,7 @@ if user_prompt:
                 image_note = f"⚠️ Could not use the attached image ({exc}); the question was run without it."
 
     # The last answered exchange, for follow-ups ("tell me more"): (what that turn searched with, its answer).
+    # Read before this question is appended; a turn that failed or was refused gives no history.
     history = None
     earlier_attachments = None
     past = st.session_state.messages
@@ -1182,11 +1184,14 @@ if user_prompt:
         if last_answer.get("engine") == "live" and not last_answer.get("error") \
                 and not is_refusal(last_answer["content"]):
             history = [(past[-2].get("search") or past[-2]["content"], last_answer["content"])]
+            # A screenshot asked about last turn is not in the index: "tell me more" is answered from it again.
             earlier_attachments = past[-2].get("attachments") or None
 
     search = search_question(user_prompt, history, attachments, focus or None)
     st.session_state.messages.append(new_message(
         "user", content=user_prompt, image_note=image_note, search=search,
+        # What this turn is answered from besides the index, so a follow-up to it can be answered from it too: its
+        # own attachment, or the earlier one a follow-up ("tell me more") carries on with.
         attachments=attachments or (earlier_attachments if search != user_prompt else None),
     ))
     with st.chat_message("user"):
@@ -1212,10 +1217,11 @@ if user_prompt:
                         attachments=attachments,
                         history=history,
                         earlier_attachments=earlier_attachments,
+                        model=llm_model,
                     )
                     answer_text = st.write_stream(token_stream)
 
-                    # Check citations for hallucination
+                    # Check citations for hallucination (Chapter 11 §1.3)
                     out_of_range = check_citations(answer_text, retrieved_chunks, user_prompt)
                     warning_msg = None
                     if out_of_range:
@@ -1225,13 +1231,20 @@ if user_prompt:
                     answer_text = clean_citations(answer_text, len(retrieved_chunks))
                     reply = {
                         "content": answer_text,
+                        # A refusal lists no sources: with a scope or an attachment chunks are retrieved even
+                        # when the model finds the answer is not in them, and "Sources" under a refusal reads
+                        # as if the refusal were grounded in them.
+                        # Otherwise only the sources the answer cites: a retrieved chunk the model did not use (an
+                        # algorithms chapter under "tell me about internship fair") listed as [1] reads as a source.
                         "views": None if is_refusal(answer_text) else cited_views(
                             citation_views(retrieved_chunks), extract_citation_numbers(answer_text)
                         ),
                         "warning": warning_msg,
                         "engine": "live",
+                        "model": llm_model,
                     }
                 except Exception as exc:
+                    # No canned answer is substituted: it would be rated, logged and read as the system's.
                     reply = {
                         "content": "⚠️ The live system could not answer this question. No canned answer was substituted.",
                         "error": f"{type(exc).__name__}: {exc}",
@@ -1240,5 +1253,5 @@ if user_prompt:
 
     st.session_state.messages.append(new_message("assistant", **reply))
     if query_img_file is not None:
-        st.session_state.query_img_nonce += 1
+        st.session_state.query_img_nonce += 1       # the image is for this one question
     st.rerun()
