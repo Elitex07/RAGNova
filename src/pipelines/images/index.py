@@ -155,6 +155,12 @@ def _to_index_chunk(image_chunk: ImageChunk) -> Chunk:
 
 
 def _relative_to_cwd(source: str) -> str:
+    from src.core.config import PROJECT_ROOT
+
+    try:
+        return Path(source).resolve().relative_to(PROJECT_ROOT).as_posix()
+    except ValueError:
+        pass
     try:
         return Path(source).resolve().relative_to(Path.cwd()).as_posix()
     except ValueError:

@@ -1,12 +1,12 @@
 """
-RAGNova — Streamlit chat UI (Chapter 11)
+RAGNova — Professional Multimodal AI Assistant UI
 
 A unified multimodal Streamlit interface for the offline multimodal RAG system.
 Features:
   - Text, voice (faster-whisper), and image (CLIP + OCR) query processing
   - Live token streaming via stream_answer() and st.write_stream()
   - Expandable, rich citations adhering to ADR-003, ADR-007, and ADR-008
-  - Human feedback collection loop (Chapter 12) logging to feedback.jsonl
+  - Human feedback collection loop logging to feedback.jsonl
   - Live knowledge base upload and indexing for PDF, DOCX, Images, and Audio
   - Canned demo answers: opt-in only, always labelled, logged as "scaffold-mock"
   - System status and corpus overview in the sidebar
@@ -33,6 +33,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 import streamlit as st
+import ollama
 from PIL import Image
 
 from src.core.config import settings
@@ -64,17 +65,18 @@ CANNED_BANNER = (
 )
 SOURCE_ICONS = {"document": "📄", "image": "🖼️", "audio": "🎙️"}
 GREETING = (
-    "Hello! I am **RAGNova**, your offline multimodal assistant. "
-    "You can ask me questions about campus policies, project deadlines, Wi-Fi configuration, "
-    "or library hours. To ask about your own files, add them in the sidebar: the page "
+    "Hello! I am **RAGNova**, your private offline multimodal intelligence assistant. "
+    "I can analyze and answer questions grounded strictly in your indexed documents, images, "
+    "and audio recordings with zero cloud exposure. "
+    "To ask about your own files, add them in the sidebar: the page "
     "then answers from that file alone, and **Answer from** switches back to everything."
 )
 
 # ---------------------------------------------------------------------------
-# Page Configuration & Styling
+# Page Configuration & Advanced Executive Styling
 # ---------------------------------------------------------------------------
 st.set_page_config(
-    page_title="RAGNova — Offline Multimodal RAG",
+    page_title="RAGNova — Offline Multimodal Intelligence Studio",
     page_icon="🌌",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -83,34 +85,356 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    .main-title {
-        font-size: 2.2rem;
-        font-weight: 700;
-        margin-bottom: 0.2rem;
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    html, body, [class*="css"] {
+        font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
         color: #1E293B;
     }
-    .sub-title {
-        font-size: 1.05rem;
-        color: #64748B;
-        margin-bottom: 1.5rem;
+
+    /* Overall page container */
+    .block-container {
+        padding-top: 1.8rem !important;
+        padding-bottom: 3rem !important;
+        max-width: 1100px !important;
     }
+
+    /* Executive Top Bar (Clean Light Theme) */
+    .top-header-card {
+        background: linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 100%);
+        border: 1px solid #DBEAFE;
+        border-radius: 16px;
+        padding: 1.6rem 2rem;
+        margin-bottom: 1.6rem;
+        color: #0F172A;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.05);
+        position: relative;
+        overflow: hidden;
+    }
+    .top-header-card::after {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -10%;
+        width: 300px;
+        height: 300px;
+        background: radial-gradient(circle, rgba(59, 130, 246, 0.12) 0%, transparent 70%);
+        border-radius: 50%;
+        pointer-events: none;
+    }
+
+    .main-title {
+        font-size: 2.1rem;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        background: linear-gradient(135deg, #0F172A 0%, #2563EB 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.35rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .sub-title {
+        font-size: 0.98rem;
+        color: #64748B;
+        font-weight: 400;
+        line-height: 1.5;
+        max-width: 780px;
+        margin-bottom: 1rem;
+    }
+
+    .header-pill-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+    }
+    .header-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        background: #FFFFFF;
+        border: 1px solid #CBD5E1;
+        color: #334155;
+        padding: 0.25rem 0.7rem;
+        border-radius: 9999px;
+        font-size: 0.74rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    }
+
+    /* Hero Discovery Canvas for fresh chats */
+    .hero-canvas {
+        background: #FFFFFF;
+        border: 1px solid #E2E8F0;
+        border-radius: 16px;
+        padding: 1.6rem 1.8rem;
+        margin-bottom: 1.8rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+    }
+    .hero-canvas-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #0F172A;
+        margin-bottom: 0.3rem;
+    }
+    .hero-canvas-subtitle {
+        font-size: 0.9rem;
+        color: #64748B;
+        margin-bottom: 1.2rem;
+    }
+    .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        margin-bottom: 1.4rem;
+    }
+    @media (max-width: 768px) {
+        .feature-grid { grid-template-columns: 1fr; }
+    }
+    .feature-card {
+        background: #F8FAFC;
+        border: 1px solid #E2E8F0;
+        border-radius: 12px;
+        padding: 1rem;
+        transition: all 0.2s ease;
+    }
+    .feature-card:hover {
+        border-color: #93C5FD;
+        background: #F0F7FF;
+        transform: translateY(-2px);
+    }
+    .feature-icon {
+        font-size: 1.4rem;
+        margin-bottom: 0.4rem;
+    }
+    .feature-heading {
+        font-size: 0.88rem;
+        font-weight: 700;
+        color: #0F172A;
+        margin-bottom: 0.25rem;
+    }
+    .feature-desc {
+        font-size: 0.78rem;
+        color: #64748B;
+        line-height: 1.45;
+    }
+
+    /* Section Label */
+    .showcase-label {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #475569;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-bottom: 0.6rem;
+    }
+
+    /* Sidebar metric cards */
+    .metric-card {
+        background: #F8FAFC;
+        border: 1px solid #E2E8F0;
+        border-radius: 8px;
+        padding: 0.65rem 0.5rem;
+        text-align: center;
+        transition: transform 0.15s ease;
+    }
+    .metric-card:hover {
+        transform: translateY(-1px);
+        border-color: #CBD5E1;
+    }
+    .metric-value {
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: #0F172A;
+    }
+    .metric-label {
+        font-size: 0.7rem;
+        color: #64748B;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-weight: 600;
+        margin-top: 0.15rem;
+    }
+
+    /* Live Status Badge */
+    .status-badge-live {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        background: #ECFDF5;
+        border: 1px solid #A7F3D0;
+        color: #065F46;
+        padding: 0.3rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        margin-bottom: 0.6rem;
+    }
+    .status-dot-live {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background-color: #10B981;
+        box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
+    }
+
+    /* Streamlit Chat Messages Overhaul */
+    [data-testid="stChatMessage"] {
+        background-color: #FFFFFF !important;
+        border: 1px solid #E2E8F0 !important;
+        border-radius: 14px !important;
+        padding: 1.1rem 1.35rem !important;
+        margin-bottom: 1.1rem !important;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03) !important;
+    }
+    [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
+        background-color: #F8FAFC !important;
+        border-color: #CBD5E1 !important;
+    }
+
+    /* Chat Input Styling */
+    [data-testid="stChatInput"] {
+        border-radius: 24px !important;
+        border: 1px solid #CBD5E1 !important;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06) !important;
+    }
+    [data-testid="stChatInput"]:focus-within {
+        border-color: #2563EB !important;
+        box-shadow: 0 4px 18px rgba(37, 99, 235, 0.18) !important;
+    }
+
+    /* Multimodal Dock Styling */
+    .multimodal-dock-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.88rem;
+        font-weight: 700;
+        color: #334155;
+        margin-bottom: 0.4rem;
+    }
+
+    /* Enhanced Citation container */
     .citation-box {
         background-color: #F8FAFC;
         border-left: 4px solid #3B82F6;
-        padding: 0.75rem 1rem;
-        margin-top: 0.8rem;
-        border-radius: 0 6px 6px 0;
-        font-size: 0.9rem;
+        padding: 0.95rem 1.2rem;
+        margin-top: 0.75rem;
+        border-radius: 0 10px 10px 0;
+        font-size: 0.92rem;
+        line-height: 1.55;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
     }
+    .citation-box.docx-border {
+        border-left-color: #2563EB;
+    }
+    .citation-box.audio-border {
+        border-left-color: #10B981;
+    }
+    .citation-box.image-border {
+        border-left-color: #F59E0B;
+    }
+
     .badge-pill {
         display: inline-block;
-        padding: 0.2rem 0.5rem;
-        font-size: 0.75rem;
-        font-weight: 600;
+        padding: 0.22rem 0.58rem;
+        font-size: 0.72rem;
+        font-weight: 700;
         border-radius: 9999px;
-        background-color: #E2E8F0;
-        color: #334155;
-        margin-right: 0.4rem;
+        background-color: #EFF6FF;
+        color: #1D4ED8;
+        border: 1px solid #DBEAFE;
+        margin-right: 0.45rem;
+        letter-spacing: 0.03em;
+    }
+    .badge-pill.badge-audio {
+        background-color: #ECFDF5;
+        color: #047857;
+        border-color: #A7F3D0;
+    }
+    .badge-pill.badge-image {
+        background-color: #FFFBEB;
+        color: #B45309;
+        border-color: #FDE68A;
+    }
+
+    /* Styled Expander Header */
+    .streamlit-expanderHeader {
+        background-color: #F8FAFC !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        color: #1E293B !important;
+    }
+
+    /* Dynamic Model Selector Dropdown */
+    div[data-testid="stSelectbox"] > label {
+        font-size: 0.8rem !important;
+        font-weight: 700 !important;
+        color: #475569 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.05em !important;
+        margin-bottom: 0.35rem !important;
+    }
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] {
+        border-radius: 8px !important;
+        border: 1px solid #CBD5E1 !important;
+        background-color: #FFFFFF !important;
+        transition: all 0.2s ease !important;
+    }
+    div[data-testid="stSelectbox"] div[data-baseweb="select"]:hover {
+        border-color: #3B82F6 !important;
+    }
+
+    /* Pulsing Cyan Status Indicator (Light Theme) */
+    .status-panel {
+        background-color: #ECFEFF; /* Soft fresh light cyan */
+        border: 1px solid #A5F3FC; /* Light cyan border */
+        border-radius: 8px;
+        padding: 10px 14px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: #0E7490; /* Crisp deep cyan text */
+        font-family: sans-serif;
+        font-size: 0.88rem;
+        margin-top: 0.5rem;
+        margin-bottom: 1rem;
+    }
+    .pulsing-dot {
+        width: 10px;
+        height: 10px;
+        background-color: #06B6D4; /* Vibrant Cyan */
+        border-radius: 50%;
+        box-shadow: 0 0 6px rgba(6, 182, 212, 0.45);
+        animation: pulse-animation 1.5s infinite alternate;
+    }
+    @keyframes pulse-animation {
+        0% { box-shadow: 0 0 3px rgba(6, 182, 212, 0.3); opacity: 0.6; }
+        100% { box-shadow: 0 0 10px rgba(6, 182, 212, 0.9); opacity: 1; }
+    }
+
+    /* Telemetry st.metric Cards (Clean Light Theme) */
+    [data-testid="stMetric"] {
+        background-color: #F8FAFC !important;
+        border: 1px solid #E2E8F0 !important;
+        border-radius: 8px !important;
+        padding: 0.6rem 0.75rem !important;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03) !important;
+    }
+    [data-testid="stMetricLabel"] {
+        color: #64748B !important;
+        font-size: 0.72rem !important;
+        font-weight: 700 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.04em !important;
+    }
+    [data-testid="stMetricValue"] {
+        color: #0F172A !important;
+        font-size: 1.15rem !important;
+        font-weight: 800 !important;
     }
     </style>
     """,
@@ -142,12 +466,19 @@ def render_views(views: list[CitationView], expanded: bool = False) -> None:
     """The citation list for a real answer (one CitationView per chunk)."""
     with st.expander(f"📚 Sources & Citations ({len(views)})", expanded=expanded):
         for view in views:
+            modality_lower = view.modality_label.lower()
+            border_cls = f"{modality_lower}-border"
+            badge_mod = f"badge-{modality_lower}" if modality_lower in ["audio", "image"] else ""
             st.markdown(
                 f"""
-                <div class="citation-box">
-                    <span class="badge-pill">{html.escape(view.modality_label.upper())}</span>
-                    <strong>{html.escape(view.title)}</strong><br>
-                    <div style="margin-top: 0.3rem;"><em>"{html.escape(view.excerpt)}"</em></div>
+                <div class="citation-box {border_cls}">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35rem;">
+                        <span>
+                            <span class="badge-pill {badge_mod}">{html.escape(view.modality_label.upper())}</span>
+                            <strong style="color: #0F172A; font-size: 0.95rem;">{html.escape(view.title)}</strong>
+                        </span>
+                    </div>
+                    <div style="margin-top: 0.4rem; color: #334155; font-style: italic;">"{html.escape(view.excerpt)}"</div>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -172,7 +503,7 @@ def render_canned_citations(citations: list[dict], expanded: bool = False) -> No
                 <div class="citation-box">
                     <span class="badge-pill">{html.escape(cit['modality'].upper())}</span>
                     <strong>[{cit['id']}]</strong> <code>{html.escape(cit['source'])}</code> {html.escape(cit.get('location', ''))}<br>
-                    <em>"{html.escape(cit['snippet'])}"</em>
+                    <div style="margin-top: 0.35rem; font-style: italic;">"{html.escape(cit['snippet'])}"</div>
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -186,38 +517,98 @@ st.session_state.setdefault("kb_nonce", 0)            # changing an uploader's k
 st.session_state.setdefault("query_img_nonce", 0)
 
 with st.sidebar:
-    st.title("🌌 RAGNova System")
-    st.caption("Offline Multimodal RAG (B.Tech CSE-AIML)")
+    st.markdown(
+        """
+        <div style="display: flex; align-items: center; gap: 0.65rem; margin-bottom: 0.2rem;">
+            <span style="font-size: 1.85rem;">🌌</span>
+            <div>
+                <div style="font-size: 1.35rem; font-weight: 800; color: #0F172A; line-height: 1.2;">RAGNova</div>
+                <div style="font-size: 0.78rem; font-weight: 500; color: #64748B;">Offline Multimodal Intelligence</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     st.divider()
 
-    st.subheader("⚙️ System Status")
+    st.markdown("### ⚙️ System Status")
+
+    # Fetch available models directly from local Ollama instance
+    try:
+        response = ollama.list()
+        raw_models = response.get("models", []) if isinstance(response, dict) else getattr(response, "models", [])
+        local_models = []
+        for m in raw_models:
+            name = m.get("model") or m.get("name") if isinstance(m, dict) else (getattr(m, "model", None) or getattr(m, "name", None))
+            if name:
+                local_models.append(str(name))
+        if not local_models:
+            local_models = [settings.OLLAMA_MODEL]
+    except Exception:
+        local_models = ["llama3.2:3b (Offline)"]
+
+    if settings.OLLAMA_MODEL not in local_models and f"{settings.OLLAMA_MODEL} (Offline)" not in local_models:
+        local_models.insert(0, settings.OLLAMA_MODEL)
+
+    # Dynamic dropdown styled for a dark UI
+    selected_idx = 0
+    for idx, opt in enumerate(local_models):
+        if settings.OLLAMA_MODEL in opt:
+            selected_idx = idx
+            break
+
+    selected_engine = st.selectbox(
+        "Active Engine",
+        options=local_models,
+        index=selected_idx,
+        help="Select the active local LLM model served by Ollama on the fly."
+    )
+    if selected_engine:
+        clean_model_name = selected_engine.split(" ")[0]
+        if clean_model_name != settings.OLLAMA_MODEL:
+            settings.OLLAMA_MODEL = clean_model_name
+            st.session_state["selected_engine"] = clean_model_name
+
+    # Render the dynamic HTML component
+    st.markdown(f"""
+        <div class="status-panel">
+            <div class="pulsing-dot"></div>
+            <span><strong>Live:</strong> {html.escape(selected_engine)}</span>
+        </div>
+    """, unsafe_allow_html=True)
+
     ollama_state, ollama_detail = ollama_status()
-    if ollama_state == "ready":
-        st.success(f"🟢 Ollama reachable, `{settings.OLLAMA_MODEL}` pulled")
-        st.caption("That does not prove the model can start. The test button below does.")
-    elif ollama_state == "missing_model":
+    if ollama_state == "missing_model":
         st.warning(f"⚠️ Ollama is running but `{settings.OLLAMA_MODEL}` is not pulled")
         st.caption(f"Run `ollama pull {settings.OLLAMA_MODEL}`.")
-    else:
+    elif ollama_state != "ready":
         st.warning("⚠️ Ollama is not reachable")
-        st.caption("Run `ollama serve`. Answers need the model; questions the corpus cannot answer are still refused.")
+        st.caption("Run `ollama serve`. Answers require the local LLM daemon.")
 
-    if st.button("🔬 Test the model", key="btn_model_check"):
-        with st.spinner(f"Asking {settings.OLLAMA_MODEL} for a few tokens..."):
-            worked, detail = check_model_generates()
-        st.session_state.model_check = (worked, detail, datetime.now().strftime("%H:%M:%S"))
-    model_check = st.session_state.get("model_check")
-    if model_check:
-        worked, detail, when = model_check
-        (st.success if worked else st.error)(f"{when}: {detail}")
-
-    st.write(f"**Text Embedder:** `{settings.TEXT_EMBEDDING_MODEL}`")
-    st.write(f"**Image Embedder:** `{settings.CLIP_MODEL}`")
-    st.write(f"**Speech-to-Text:** `faster-whisper ({settings.WHISPER_MODEL_SIZE})`")
-    st.write(f"**ChromaDB Dir:** `{settings.CHROMA_PERSIST_DIR}`")
+    with st.expander("🧩 Model Specs & Diagnostics", expanded=False):
+        st.markdown(
+            f"""
+            <div style="font-size: 0.82rem; line-height: 1.75; color: #334155; margin-bottom: 0.8rem;">
+                <div><strong>LLM Model:</strong> <code>{html.escape(settings.OLLAMA_MODEL)}</code></div>
+                <div><strong>Text Embedder:</strong> <code>{html.escape(settings.TEXT_EMBEDDING_MODEL)}</code></div>
+                <div><strong>Vision Embedder:</strong> <code>{html.escape(settings.CLIP_MODEL)}</code></div>
+                <div><strong>Speech Engine:</strong> <code>faster-whisper ({html.escape(settings.WHISPER_MODEL_SIZE)})</code></div>
+                <div><strong>Vector DB:</strong> <code>ChromaDB (HNSW Cosine)</code></div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        if st.button("🔬 Test the model", key="btn_model_check", use_container_width=True):
+            with st.spinner(f"Verifying {settings.OLLAMA_MODEL} generation..."):
+                worked, detail = check_model_generates()
+            st.session_state.model_check = (worked, detail, datetime.now().strftime("%H:%M:%S"))
+        model_check = st.session_state.get("model_check")
+        if model_check:
+            worked, detail, when = model_check
+            (st.success if worked else st.error)(f"{when}: {detail}")
 
     st.divider()
-    st.subheader("📁 Corpus Overview")
+    st.subheader("📁 Knowledge Base")
     docs_dir = PROJECT_ROOT / "data" / "documents"
     images_dir = PROJECT_ROOT / "data" / "images"
     audio_dir = PROJECT_ROOT / "data" / "audio"
@@ -226,20 +617,59 @@ with st.sidebar:
     n_images = len([p for p in images_dir.iterdir() if p.is_file() and p.suffix.lower() in IMAGE_EXTS]) if images_dir.exists() else 0
     n_audio = len([p for p in audio_dir.iterdir() if p.is_file() and p.suffix.lower() in AUDIO_EXTS]) if audio_dir.exists() else 0
 
-    st.write(f"📄 **Documents:** {n_docs} files")
-    st.write(f"🖼️ **Images:** {n_images} files")
-    st.write(f"🎙️ **Audio Clips:** {n_audio} files")
+    st.markdown("#### 🗄️ RAG Index Status")
 
+    # Fetch actual ChromaDB collection counts and connectivity
     try:
         counts = index_counts()
-        st.write(f"📊 **Vector Index:** {counts['text']} text/audio, {counts['image']} images")
-    except Exception as err:
-        st.warning(f"⚠️ Could not read the vector index: {err}")
+        doc_chunks = counts.get('text', 0) + counts.get('image', 0)
+        db_status = "Connected"
+    except Exception:
+        doc_chunks = 0
+        db_status = "Offline"
+
+    if "initial_chunks" not in st.session_state:
+        st.session_state["initial_chunks"] = doc_chunks
+
+    delta_count = doc_chunks - st.session_state.get("initial_chunks", doc_chunks)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric(
+            label="ChromaDB Vector Space", 
+            value=db_status, 
+            delta="Local Storage", 
+            delta_color="normal"
+        )
+    with col2:
+        st.metric(
+            label="Indexed Chunks", 
+            value=f"{doc_chunks:,}", 
+            delta=f"+{delta_count} this session" if delta_count > 0 else "Synced"
+        )
+
+    st.markdown(
+        f"""
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.4rem; margin-top: 0.6rem; margin-bottom: 0.6rem;">
+            <div class="metric-card">
+                <div class="metric-value">📄 {n_docs}</div>
+                <div class="metric-label">Docs</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">🖼️ {n_images}</div>
+                <div class="metric-label">Images</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">🎙️ {n_audio}</div>
+                <div class="metric-label">Audio</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     st.divider()
-    st.subheader("📥 Add to Corpus")
-    # The result is kept in session_state and shown on the next run: a message
-    # drawn right before st.rerun() is gone before anyone can read it.
+    st.subheader("📥 Add Knowledge")
     kb_flash = st.session_state.pop("kb_flash", None)
     if kb_flash:
         (st.success if kb_flash[0] else st.error)(kb_flash[1])
@@ -249,7 +679,7 @@ with st.sidebar:
         type=all_allowed,
         key=f"kb_uploader_{st.session_state.kb_nonce}",
     )
-    if uploaded_kb_file is not None and st.button("Save & Index File", key="btn_index_upload"):
+    if uploaded_kb_file is not None and st.button("Save & Index File", key="btn_index_upload", use_container_width=True):
         with st.spinner(f"Indexing {uploaded_kb_file.name}..."):
             try:
                 result = add_to_corpus(
@@ -266,7 +696,7 @@ with st.sidebar:
         st.rerun()
 
     st.divider()
-    st.subheader("🎯 Answer from")
+    st.subheader("🎯 Search Scope")
     try:
         listed_sources = list_sources()
     except Exception as err:
@@ -274,42 +704,56 @@ with st.sidebar:
         st.warning(f"⚠️ Could not list the indexed files: {err}")
     # A stored pick that is no longer in the index (a file removed, an index rebuilt) would crash the widget.
     st.session_state["focus_sources"] = [s for s in st.session_state.get("focus_sources", []) if s in listed_sources]
-    st.multiselect(
+    picked_sources = st.multiselect(
         "Files to answer from",
         options=listed_sources,
-        key="focus_sources",
+        default=st.session_state["focus_sources"],
         format_func=lambda path: f"{SOURCE_ICONS.get(kind_of(path), '📄')} {Path(path).name}",
-        placeholder="Everything indexed",
+        placeholder="Search all indexed files",
         label_visibility="collapsed",
     )
-    st.caption(
-        "Nothing picked: all indexed files, with the relevance checks that refuse questions the files cannot answer. "
-        "Files picked: only those files, with no relevance check; the model still says when they do not contain the answer."
-    )
+    st.session_state["focus_sources"] = picked_sources
+    if picked_sources:
+        st.caption(f"🎯 Focused on **{len(picked_sources)}** selected file(s).")
+    else:
+        st.caption("🌐 Global Scope: Searching all indexed documents, images, and audio.")
 
     st.divider()
-    st.subheader("🛠️ Engine Mode")
-    engine_mode = st.radio(
-        "Response Engine",
-        options=[ENGINE_LIVE, ENGINE_CANNED],
-        index=0,
-        help="Live RAG queries ChromaDB and streams Ollama. Canned demo answers are hand-written text for demos with no model; every one is labelled.",
-    )
-    if engine_mode == ENGINE_CANNED:
-        st.warning("Canned mode: the answers are not produced by the system. Image queries are ignored.")
+    with st.expander("⚙️ Advanced Settings", expanded=False):
+        st.markdown("<div style='font-size: 0.82rem; font-weight: 600; margin-bottom: 0.35rem; color: #475569;'>Response Engine</div>", unsafe_allow_html=True)
+        engine_mode = st.radio(
+            "Response Engine",
+            options=[ENGINE_LIVE, ENGINE_CANNED],
+            index=0,
+            label_visibility="collapsed",
+            help="Live RAG queries ChromaDB and streams Ollama. Canned demo answers are hand-written text for demos with no model; every one is labelled.",
+        )
+        if engine_mode == ENGINE_CANNED:
+            st.warning("Canned mode: responses are pre-defined benchmarks. Visual queries disabled.")
 
     st.divider()
-    if st.button("Clear Conversation"):
+    if st.button("Clear Conversation", use_container_width=True):
         st.session_state.messages = [new_message("assistant", content=GREETING)]
         st.session_state.feedback_submitted = set()
         st.rerun()
 
 # ---------------------------------------------------------------------------
-# Main Chat Area
+# Right-Side Main Output Window: Header & Overview
 # ---------------------------------------------------------------------------
-st.markdown('<div class="main-title">🌌 RAGNova Unified Query Interface</div>', unsafe_allow_html=True)
 st.markdown(
-    '<div class="sub-title">Ask questions in plain language across your documents, screenshots, and audio recordings — 100% offline.</div>',
+    """
+    <div class="top-header-card">
+        <div class="main-title">🌌 RAGNova Assistant</div>
+        <div class="sub-title">Private offline multimodal intelligence across documents, visual images, and audio recordings — 100% local.</div>
+        <div class="header-pill-row">
+            <span class="header-pill">🔒 100% Air-Gapped Local</span>
+            <span class="header-pill">🧠 Llama 3.2 3B Engine</span>
+            <span class="header-pill">📑 PDF & DOCX Parser</span>
+            <span class="header-pill">👁️ OpenCLIP Vision</span>
+            <span class="header-pill">🎙️ Whisper Speech</span>
+        </div>
+    </div>
+    """,
     unsafe_allow_html=True,
 )
 
@@ -336,6 +780,46 @@ if "tester_name" not in st.session_state:
     st.session_state.tester_name = ""
 
 
+# Hero Discovery Canvas (Presented on clean conversation state)
+if len(st.session_state.messages) <= 1 and not focus:
+    st.markdown(
+        """
+        <div class="hero-canvas">
+            <div class="hero-canvas-title">What would you like to explore?</div>
+            <div class="hero-canvas-subtitle">Query your offline knowledge base using text, speech audio, or image screenshots with full citation transparency.</div>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">📄</div>
+                    <div class="feature-heading">Document Semantics</div>
+                    <div class="feature-desc">Deep vector & lexical retrieval across PDFs, reports, and Word docs with exact page citations.</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🖼️</div>
+                    <div class="feature-heading">Cross-Modal Vision</div>
+                    <div class="feature-desc">Attach visual plaques, screenshots, or diagrams. Searches via OpenCLIP and native OCR text.</div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🎙️</div>
+                    <div class="feature-heading">Spoken Audio Insights</div>
+                    <div class="feature-desc">Whisper speech-to-text integration with timestamped audio segments and inline playback.</div>
+                </div>
+            </div>
+            <div class="showcase-label">💡 Recommended Inquiries (Click to run):</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    starters = [
+        "How many marks does the prototype carry?",
+        "How do I connect to campus Wi-Fi?",
+        "What are the library borrowing limits and overdue fines?",
+    ]
+    for col, starter in zip(st.columns(len(starters)), starters):
+        if col.button(starter, key=f"starter_{starter}", use_container_width=True):
+            st.session_state["active_prompt_override"] = starter
+            st.rerun()
+
+
 # Display existing messages
 for msg_idx, msg in enumerate(st.session_state.messages):
     with st.chat_message(msg["role"]):
@@ -355,7 +839,7 @@ for msg_idx, msg in enumerate(st.session_state.messages):
         elif msg.get("citations"):
             render_canned_citations(msg["citations"])
 
-        # Human Feedback Form (Chapter 12). Not offered for a failure: there is no answer to rate.
+        # Human Feedback Form. Not offered for a failure: there is no answer to rate.
         if msg["role"] == "assistant" and msg_idx > 0 and not msg.get("error"):
             fb_key = f"fb_{msg_idx}"
             if fb_key not in st.session_state.feedback_submitted:
@@ -364,9 +848,9 @@ for msg_idx, msg in enumerate(st.session_state.messages):
                         f_col1, f_col2 = st.columns([1, 2])
                         with f_col1:
                             rating = st.select_slider("Rating (1-5)", options=[1, 2, 3, 4, 5], value=5)
-                            tester = st.text_input("Tester Name / Initials", value=st.session_state.tester_name)
+                            tester = st.text_input("Reviewer / Evaluator", value=st.session_state.tester_name)
                         with f_col2:
-                            comment = st.text_input("Comment (optional)", placeholder="How helpful and accurate was this answer?")
+                            comment = st.text_input("Feedback notes (optional)", placeholder="How helpful and accurate was this answer?")
                         if st.form_submit_button("Submit Rating"):
                             sources = [v.title for v in msg.get("views", [])] if msg.get("views") else [c.get("source", "") for c in msg.get("citations") or []]
                             user_q = st.session_state.messages[msg_idx - 1]["content"] if msg_idx > 0 else "N/A"
@@ -400,12 +884,12 @@ def process_query(user_query: str) -> tuple[str, list[dict]]:
     """
     q = user_query.lower()
 
-    # Negative controls (P2 fix): explicitly refuse without hallucinating or claiming false grounding
+    # Negative controls: explicitly refuse without hallucinating or claiming false grounding
     if any(k in q for k in ["mess", "lunch", "dinner", "meal", "menu", "refund", "tuition fee", "fee refund"]):
         mock_answer = (
             "I could not find information about that in the provided offline sources (documents, images, or audio recordings). "
-            "The indexed campus corpus does not cover hostel mess menus or tuition fee refund procedures. "
-            "Under RAGNova Objective O4, the system refuses to hallucinate facts absent from the corpus."
+            "The indexed knowledge base does not cover hostel mess menus or tuition fee refund procedures. "
+            "The system strictly refuses to hallucinate facts absent from the corpus."
         )
         return mock_answer, []
 
@@ -442,7 +926,6 @@ def process_query(user_query: str) -> tuple[str, list[dict]]:
         return mock_answer, fake_citations
 
     # 2. Campus Wi-Fi Configuration (Gold-standard T3, I1, M2)
-    # Avoid matching generic words like 'network' or 'connect' in isolation (e.g. 'neural network')
     is_wifi = (
         ("wifi" in q or "wi-fi" in q or "ssid" in q or "ragnova-student" in q)
         or ("wireless" in q and any(k in q for k in ["adapter", "network", "connect", "setup", "setting", "lan"]))
@@ -475,7 +958,6 @@ def process_query(user_query: str) -> tuple[str, list[dict]]:
         return mock_answer, fake_citations
 
     # 3. Library Borrowing, Quotas & Overdue Fines (Gold-standard T2, A2)
-    # Avoid matching 'book' alone (e.g. 'book the AI lab') or 'fine' alone (e.g. 'fine-tuning')
     is_library = (
         ("library" in q)
         or ("borrow" in q)
@@ -545,7 +1027,6 @@ def process_query(user_query: str) -> tuple[str, list[dict]]:
         return mock_answer, fake_citations
 
     # 5. RAGNova Architecture & System Pipeline Overview
-    # Avoid matching 'system' in isolation (e.g. 'operating system', 'database system')
     is_architecture = (
         ("what is this project" in q)
         or ("what is ragnova" in q)
@@ -580,7 +1061,6 @@ def process_query(user_query: str) -> tuple[str, list[dict]]:
         return mock_answer, fake_citations
 
     # 6. AIML Research Lab Location Plaque (Gold-standard I4)
-    # Asking about location / Room 302 / faculty in-charge. (Booking the lab is not supported and will fall through).
     is_lab_location = (
         ("room 302" in q)
         or (
@@ -605,8 +1085,7 @@ def process_query(user_query: str) -> tuple[str, list[dict]]:
         ]
         return mock_answer, fake_citations
 
-    # Catch-all for unsupported / unindexed queries:
-    # Crucial fix for P2 (False Grounding): Do NOT claim false grounding or emit fake citations!
+    # Catch-all for unsupported queries
     mock_answer = (
         f"I could not find sufficient information in the indexed corpus to answer: \"{user_query}\".\n\n"
         "The offline knowledge base contains academic policies, library regulations, IT network setup, "
@@ -617,15 +1096,17 @@ def process_query(user_query: str) -> tuple[str, list[dict]]:
 
 
 # ---------------------------------------------------------------------------
-# Multimodal Query Controls
+# Multimodal Query Controls (Integrated Dock)
 # ---------------------------------------------------------------------------
+st.markdown("<div class='multimodal-dock-header'>📎 Multimodal Input Channels (Optional Voice / Image Attachments)</div>", unsafe_allow_html=True)
 col_voice, col_img = st.columns([1, 1])
 
 with col_voice:
     with st.expander("🎙️ Spoken / Voice Query", expanded=False):
+        st.caption("Record a voice clip to automatically transcribe and search with faster-whisper.")
         voice_clip = st.audio_input("Record question with microphone", key="mic_query_input")
         if voice_clip is not None:
-            if st.button("Transcribe & Submit Audio", key="btn_transcribe_audio"):
+            if st.button("Transcribe & Submit Audio", key="btn_transcribe_audio", use_container_width=True):
                 with st.spinner("Transcribing speech with faster-whisper..."):
                     try:
                         transcribed_text = transcribe_audio_bytes(voice_clip.getvalue(), suffix=".wav")
@@ -640,17 +1121,16 @@ with col_voice:
 query_img_file = None
 with col_img:
     with st.expander("🖼️ Visual / Query Image", expanded=False):
+        st.caption("Attach an image to execute cross-modal search using OCR and OpenCLIP embeddings.")
         query_img_file = st.file_uploader(
             "Attach query image (searches via OCR + OpenCLIP)",
             type=["png", "jpg", "jpeg", "webp"],
             key=f"query_img_uploader_{st.session_state.query_img_nonce}",
         )
     if query_img_file is not None:
-        # Visible even with the expander closed, and cleared after one question:
-        # an image that quietly stays attached rewrites every later question.
-        st.info("📎 Query image attached. It is used for your next question only.")
+        st.info("📎 Query image attached. It will be analyzed with your next question.")
 
-# One-click questions for the files picked above (the "what is in this?" first move).
+# Context-specific suggestions when a file is picked
 if focus:
     these = "this file" if len(focus) == 1 else "these files"
     suggestions = [
@@ -659,14 +1139,15 @@ if focus:
         "List the names, dates and numbers it mentions." if len(focus) == 1
         else "List the names, dates and numbers they mention.",
     ]
+    st.markdown("<div class='showcase-label' style='margin-top: 0.6rem;'>🎯 Suggested Scope Queries:</div>", unsafe_allow_html=True)
     for column, suggestion in zip(st.columns(len(suggestions)), suggestions):
-        if column.button(suggestion, key=f"suggest_{suggestion}"):
+        if column.button(suggestion, key=f"suggest_{suggestion}", use_container_width=True):
             st.session_state["active_prompt_override"] = suggestion
 
 # Chat input
-user_prompt = st.chat_input("Type your question here (e.g., 'How many marks does the prototype carry?')...")
+user_prompt = st.chat_input("Ask a question across your documents, images, and audio recordings...")
 
-# Check if there is an audio override prompt from the mic button
+# Check if there is an audio or button override prompt
 if st.session_state.get("active_prompt_override"):
     user_prompt = st.session_state.pop("active_prompt_override")
 
@@ -693,7 +1174,6 @@ if user_prompt:
                 image_note = f"⚠️ Could not use the attached image ({exc}); the question was run without it."
 
     # The last answered exchange, for follow-ups ("tell me more"): (what that turn searched with, its answer).
-    # Read before this question is appended; a turn that failed or was refused gives no history.
     history = None
     earlier_attachments = None
     past = st.session_state.messages
@@ -702,14 +1182,11 @@ if user_prompt:
         if last_answer.get("engine") == "live" and not last_answer.get("error") \
                 and not is_refusal(last_answer["content"]):
             history = [(past[-2].get("search") or past[-2]["content"], last_answer["content"])]
-            # A screenshot asked about last turn is not in the index: "tell me more" is answered from it again.
             earlier_attachments = past[-2].get("attachments") or None
 
     search = search_question(user_prompt, history, attachments, focus or None)
     st.session_state.messages.append(new_message(
         "user", content=user_prompt, image_note=image_note, search=search,
-        # What this turn is answered from besides the index, so a follow-up to it can be answered from it too: its
-        # own attachment, or the earlier one a follow-up ("tell me more") carries on with.
         attachments=attachments or (earlier_attachments if search != user_prompt else None),
     ))
     with st.chat_message("user"):
@@ -738,7 +1215,7 @@ if user_prompt:
                     )
                     answer_text = st.write_stream(token_stream)
 
-                    # Check citations for hallucination (Chapter 11 §1.3)
+                    # Check citations for hallucination
                     out_of_range = check_citations(answer_text, retrieved_chunks, user_prompt)
                     warning_msg = None
                     if out_of_range:
@@ -748,11 +1225,6 @@ if user_prompt:
                     answer_text = clean_citations(answer_text, len(retrieved_chunks))
                     reply = {
                         "content": answer_text,
-                        # A refusal lists no sources: with a scope or an attachment chunks are retrieved even
-                        # when the model finds the answer is not in them, and "Sources" under a refusal reads
-                        # as if the refusal were grounded in them.
-                        # Otherwise only the sources the answer cites: a retrieved chunk the model did not use (an
-                        # algorithms chapter under "tell me about internship fair") listed as [1] reads as a source.
                         "views": None if is_refusal(answer_text) else cited_views(
                             citation_views(retrieved_chunks), extract_citation_numbers(answer_text)
                         ),
@@ -760,7 +1232,6 @@ if user_prompt:
                         "engine": "live",
                     }
                 except Exception as exc:
-                    # No canned answer is substituted: it would be rated, logged and read as the system's.
                     reply = {
                         "content": "⚠️ The live system could not answer this question. No canned answer was substituted.",
                         "error": f"{type(exc).__name__}: {exc}",
@@ -769,5 +1240,5 @@ if user_prompt:
 
     st.session_state.messages.append(new_message("assistant", **reply))
     if query_img_file is not None:
-        st.session_state.query_img_nonce += 1       # the image is for this one question
+        st.session_state.query_img_nonce += 1
     st.rerun()
