@@ -112,6 +112,14 @@ class TesseractOCREngine:
             logger.info("Configured Tesseract binary at: %s", tess_cmd)
             return True
 
+        try:
+            import winocr
+            self._winocr = winocr
+            logger.info("Configured Windows native OCR engine (winocr)")
+            return True
+        except ImportError:
+            pass
+
         logger.warning(
             "Tesseract executable not found. "
             "Set 'tesseract_cmd' in ImageIngestionConfig or TESSERACT_CMD env var."
@@ -181,13 +189,39 @@ class TesseractOCREngine:
             Contains the extracted ``text``, average ``confidence`` (0–100),
             ``words_count``, and a ``metadata`` dict with status information.
         """
-        if not self._is_available or self._pytesseract is None:
+        if not self._is_available:
             return OCRResult(
                 text="",
                 confidence=0.0,
                 words_count=0,
                 metadata={"status": "tesseract_unavailable"},
             )
+
+        if getattr(self, "_winocr", None) is not None:
+            try:
+                processed = self.preprocess_image(image)
+                res = self._winocr.recognize_pil_sync(processed, "en")
+                text = (res.get("text") or "").strip()
+                words = text.split()
+                return OCRResult(
+                    text=text,
+                    confidence=90.0,
+                    words_count=len(words),
+                    metadata={
+                        "status": "success",
+                        "engine": "winocr",
+                        "total_tokens": len(words),
+                        "avg_confidence": 90.0,
+                    },
+                )
+            except Exception as exc:
+                logger.warning("Windows native OCR failed: %s", exc)
+                return OCRResult(
+                    text="",
+                    confidence=0.0,
+                    words_count=0,
+                    metadata={"status": "error", "error": str(exc)},
+                )
 
         try:
             processed = self.preprocess_image(image)

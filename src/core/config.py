@@ -20,13 +20,26 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
 
 from dotenv import load_dotenv
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 # Loads variables from a `.env` file in the project root into the process
 # environment, if one exists. Does nothing (silently) if .env is missing —
 # which is fine, because every setting below has a sensible default.
-load_dotenv()
+load_dotenv(PROJECT_ROOT / ".env")
+
+
+def _get_project_path(name: str, default_rel: str) -> str:
+    raw = os.environ.get(name)
+    if raw is not None and raw.strip() == "":
+        return ""
+    p = Path(raw if raw is not None else default_rel)
+    if not p.is_absolute():
+        p = PROJECT_ROOT / p
+    return str(p.resolve())
 
 
 def _get_float(name: str, default: float) -> float:
@@ -193,7 +206,7 @@ class Settings:
     # Where the Chapter 11 UI appends one JSON line per piece of user
     # feedback (Chapter 12's human-feedback loop). Committed on purpose,
     # unlike chroma_db/ -- it is evidence for the mid-term report.
-    FEEDBACK_LOG_PATH: str = os.environ.get("FEEDBACK_LOG_PATH", "./feedback/feedback.jsonl")
+    FEEDBACK_LOG_PATH: str = _get_project_path("FEEDBACK_LOG_PATH", "feedback/feedback.jsonl")
 
     TEXT_EMBEDDING_MODEL: str = os.environ.get("TEXT_EMBEDDING_MODEL", "all-MiniLM-L6-v2")
     CLIP_MODEL: str = os.environ.get("CLIP_MODEL", "ViT-B-32")
@@ -209,9 +222,9 @@ class Settings:
     # numbers, depending on where it was built. With it, the transcript is
     # part of the corpus: committed, identical everywhere, and not recomputed
     # on every rebuild. Set to an empty string to disable.
-    WHISPER_TRANSCRIPT_CACHE_DIR: str = os.environ.get("WHISPER_TRANSCRIPT_CACHE_DIR", "./data/transcripts")
+    WHISPER_TRANSCRIPT_CACHE_DIR: str = _get_project_path("WHISPER_TRANSCRIPT_CACHE_DIR", "data/transcripts")
 
-    CHROMA_PERSIST_DIR: str = os.environ.get("CHROMA_PERSIST_DIR", "./chroma_db")
+    CHROMA_PERSIST_DIR: str = _get_project_path("CHROMA_PERSIST_DIR", "chroma_db")
 
     CHUNK_SIZE_WORDS: int = _get_int("CHUNK_SIZE_WORDS", 300)
     CHUNK_OVERLAP_WORDS: int = _get_int("CHUNK_OVERLAP_WORDS", 50)

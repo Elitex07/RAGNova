@@ -80,7 +80,13 @@ def _relative_to_cwd(path: Path) -> Path:
     happened to pass in — rather than relying on every future caller to
     independently remember to pass a relative path.
     """
+    from src.core.config import PROJECT_ROOT
+
     try:
-        return path.relative_to(Path.cwd())
+        return path.resolve().relative_to(PROJECT_ROOT)
     except ValueError:
-        return path  # already relative, or genuinely outside the cwd
+        pass
+    try:
+        return path.resolve().relative_to(Path.cwd())
+    except ValueError:
+        return path
